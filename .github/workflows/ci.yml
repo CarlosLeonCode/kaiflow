@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    name: Rust (fmt, clippy, test)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Toolchain version comes from rust-toolchain.toml.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.90"
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+
+  frontend:
+    name: Frontend (Vitest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # TODO(3.1): enable once tsconfig exists.
+      # - run: npx tsc --noEmit
+      # TODO(3.1): enable once ESLint is configured.
+      # - run: npm run lint
+      - run: npm test
+      # TODO(1.18): enable once tauri-specta generates bindings.ts
+      # (regenerate it, then fail on `git diff --exit-code src/shared/ipc/bindings.ts`).

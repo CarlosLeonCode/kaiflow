@@ -1,0 +1,19 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/domain",
+    "crates/application",
+    "crates/adapters-sqlite",
+    "crates/adapters-macos",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+license = "MIT"
+publish = false
+
+[workspace.dependencies]
+domain = { path = "crates/domain" }
+application = { path = "crates/application" }

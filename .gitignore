@@ -167,3 +167,6 @@ typings/
 
 # Electron-Forge
 out/
+
+# Rust
+target/
