@@ -125,6 +125,7 @@ export function settingsPatch(changes: Partial<SettingsPatchDto>): SettingsPatch
     autostart: null,
     shortcut: null,
     onboarding_completed: null,
+    tray_display: null,
     ...changes,
   };
 }

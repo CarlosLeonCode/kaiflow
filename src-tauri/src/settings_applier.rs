@@ -1,5 +1,5 @@
 //! Applies the settings that live outside the database: the OS login item (autostart,
-//! `LaunchAgent` on macOS) and the global shortcut. Called by `settings_update` and once at
+//! `LaunchAgent` on macOS), the global shortcut and the tray text. Called by `settings_update` and once at
 //! startup so the OS state follows the stored settings.
 
 use std::sync::Arc;
@@ -10,6 +10,7 @@ use tauri_plugin_autostart::ManagerExt;
 use crate::composition::SettingsApplier;
 use crate::error::AppError;
 use crate::shortcuts::ShortcutManager;
+use crate::tray_text::TrayText;
 
 /// Seam over the OS login item so reconciliation is tested without touching `LaunchAgents`.
 pub trait LoginItem: Send + Sync {
@@ -58,11 +59,20 @@ impl LoginItem for TauriLoginItem {
 pub struct ShellApplier {
     login: Box<dyn LoginItem>,
     shortcuts: Arc<ShortcutManager>,
+    tray_text: TrayText,
 }
 
 impl ShellApplier {
-    pub fn new(login: Box<dyn LoginItem>, shortcuts: Arc<ShortcutManager>) -> Self {
-        Self { login, shortcuts }
+    pub fn new(
+        login: Box<dyn LoginItem>,
+        shortcuts: Arc<ShortcutManager>,
+        tray_text: TrayText,
+    ) -> Self {
+        Self {
+            login,
+            shortcuts,
+            tray_text,
+        }
     }
 }
 
@@ -75,6 +85,10 @@ impl SettingsApplier for ShellApplier {
 
     fn set_shortcut(&self, shortcut: &str) -> Result<(), AppError> {
         self.shortcuts.apply(shortcut)
+    }
+
+    fn refresh_tray_text(&self) {
+        self.tray_text.refresh();
     }
 }
 

@@ -41,6 +41,7 @@ export function settings(overrides: Partial<SettingsDto> = {}): SettingsDto {
     autostart: false,
     shortcut: "⌃⌥⌘T",
     onboarding_completed: true,
+    tray_display: "today_total",
     ...overrides,
   };
 }

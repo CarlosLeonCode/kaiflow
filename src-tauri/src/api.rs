@@ -149,7 +149,8 @@ impl AppState {
     }
 
     /// Persists the patch, then applies what lives outside the database: `store_titles`
-    /// (engine policy), the idle threshold (sampler), autostart and the global shortcut.
+    /// (engine policy), the idle threshold (sampler), autostart, the global shortcut and the
+    /// tray text.
     ///
     /// A failing side effect never undoes the saved settings (R6.3: the rest is kept); the
     /// first failure is returned after every side effect was attempted.
@@ -157,6 +158,7 @@ impl AppState {
         let titles_changed = patch.store_titles.is_some();
         let autostart_changed = patch.autostart.is_some();
         let shortcut_changed = patch.shortcut.is_some();
+        let tray_changed = patch.tray_display.is_some();
         let settings = self.commands.update_settings(&patch.into())?;
         if titles_changed {
             self.engine.request(Command::ReloadPrivacy)?;
@@ -170,6 +172,9 @@ impl AppState {
             }
             if shortcut_changed && let Err(e) = applier.set_shortcut(&settings.shortcut) {
                 first_error.get_or_insert(e);
+            }
+            if tray_changed {
+                applier.refresh_tray_text();
             }
         }
         match first_error {
@@ -237,7 +242,7 @@ mod tests {
 
     use super::*;
     use crate::composition::{Providers, compose};
-    use crate::ipc::dto::{RetentionPatchDto, RuleSpecDto, TrackingStateDto};
+    use crate::ipc::dto::{RetentionPatchDto, RuleSpecDto, TrackingStateDto, TrayDisplayDto};
 
     struct Rig {
         state: AppState,
@@ -479,6 +484,9 @@ mod tests {
             }
             Ok(())
         }
+        fn refresh_tray_text(&self) {
+            self.calls.lock().unwrap().push("tray".into());
+        }
     }
 
     #[test]
@@ -507,6 +515,31 @@ mod tests {
             })
             .unwrap();
         assert_eq!(applier.calls.lock().unwrap().len(), 2);
+        rig.state.shutdown();
+    }
+
+    #[test]
+    fn tray_display_is_persisted_and_refreshes_the_tray_text() {
+        let rig = rig();
+        let applier = Arc::new(RecordingApplier::default());
+        rig.state.set_applier(applier.clone());
+        assert_eq!(
+            rig.state.settings_get().unwrap().tray_display,
+            TrayDisplayDto::TodayTotal
+        );
+        let updated = rig
+            .state
+            .settings_update(SettingsPatchDto {
+                tray_display: Some(TrayDisplayDto::CurrentApp),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(updated.tray_display, TrayDisplayDto::CurrentApp);
+        assert_eq!(
+            rig.state.settings_get().unwrap().tray_display,
+            TrayDisplayDto::CurrentApp
+        );
+        assert_eq!(*applier.calls.lock().unwrap(), vec!["tray".to_string()]);
         rig.state.shutdown();
     }
 

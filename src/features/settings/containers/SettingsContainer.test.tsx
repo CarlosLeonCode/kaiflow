@@ -23,6 +23,23 @@ describe("SettingsContainer", () => {
     expect(screen.getByRole("switch", { name: "Open at login" })).toBeChecked();
     expect(screen.getByRole("switch", { name: "Record window titles" })).not.toBeChecked();
     expect(screen.getByRole("button", { name: "Global shortcut ⌃⌥⌘T, change" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Show next to the icon" })).toHaveValue("today_total");
+  });
+
+  it("saves what the menu bar shows next to the icon", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockBackend({
+      get_status: () => status(),
+      settings_update: (args) => mergePatch(args.patch),
+    });
+    renderWithProviders(<SettingsContainer />);
+
+    await user.selectOptions(
+      await screen.findByRole("combobox", { name: "Show next to the icon" }),
+      "Current app (Xcode · 40m)",
+    );
+
+    await waitFor(() => expect(lastUpdate(calls)).toMatchObject({ tray_display: "current_app", theme: null }));
   });
 
   it("saves the theme immediately and applies it (light/dark/system)", async () => {

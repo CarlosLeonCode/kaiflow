@@ -33,6 +33,8 @@ tauri-plugin-updater = "2.14"
 adapters-macos = { path = "../crates/adapters-macos" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Local-day bounds for the tray text (the frontend computes its own in JS).
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 thiserror = "2"
 crossbeam-channel.workspace = true
 

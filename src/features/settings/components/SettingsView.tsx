@@ -13,7 +13,7 @@ import { Switch } from "@/shared/ui/switch";
 
 import { DegradedBanner } from "@/features/tracking/components/StatusBanners";
 
-import { idleThresholdOptions } from "../lib/options";
+import { TRAY_DISPLAY_OPTIONS, idleThresholdOptions, parseTrayDisplay } from "../lib/options";
 import { ShortcutField } from "./ShortcutField";
 
 const THEMES: readonly SegmentedOption<ThemeSetting>[] = [
@@ -69,6 +69,27 @@ export function SettingsView({
                 options={THEMES}
                 onChange={(theme) => onChange({ theme })}
               />
+            </Row>
+          </Panel>
+
+          <Panel title="Menu bar">
+            <Row
+              label="Show next to the icon"
+              description="Updates once a minute while tracking. Paused time shows ⏸."
+              controlId="setting-tray-display"
+            >
+              <Select
+                id="setting-tray-display"
+                aria-describedby="setting-tray-display-hint"
+                value={settings.tray_display}
+                onChange={(event) => onChange({ tray_display: parseTrayDisplay(event.target.value) })}
+              >
+                {TRAY_DISPLAY_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
             </Row>
           </Panel>
 

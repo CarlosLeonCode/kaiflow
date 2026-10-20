@@ -13,6 +13,9 @@ use tauri::{AppHandle, Manager, Wry};
 use crate::composition::AppState;
 use crate::windows;
 
+/// Id of the single tray icon, used to reach it after it was built.
+pub const TRAY_ID: &str = "main";
+
 const MENU_TOGGLE: &str = "toggle-tracking";
 const MENU_OPEN: &str = "open-main";
 const MENU_QUIT: &str = "quit";
@@ -93,7 +96,7 @@ pub fn install(app: &AppHandle<Wry>) -> tauri::Result<()> {
     )?;
     app.manage(TrayControls { toggle });
 
-    TrayIconBuilder::with_id("main")
+    TrayIconBuilder::with_id(TRAY_ID)
         .icon(Image::from_bytes(ICON)?)
         .icon_as_template(true)
         .tooltip("Time Track Copilot")

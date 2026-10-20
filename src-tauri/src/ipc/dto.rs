@@ -2,7 +2,7 @@
 //! `bindings.ts` is generated from them. Timestamps are UTC milliseconds as `i64`; they stay
 //! far below 2^53, so the bindings export them as TypeScript `number`.
 
-use application::commands::{DeleteOp, RuleInput, RuleSpec, Settings, SettingsPatch};
+use application::commands::{DeleteOp, RuleInput, RuleSpec, Settings, SettingsPatch, TrayDisplay};
 use application::ports::{PrivacyMode, TrackingKind, TrackingStatus};
 use application::queries::{AppTotal, BucketTotal, CategoryTotal, Range, Report, TimelineItem};
 use domain::{
@@ -449,6 +449,38 @@ impl From<PrivacyPolicy> for PrivacyRulesDto {
     }
 }
 
+/// What the menu-bar / tray text next to the icon shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum TrayDisplayDto {
+    Off,
+    TodayTotal,
+    CurrentApp,
+    TodayAndCurrent,
+}
+
+impl From<TrayDisplay> for TrayDisplayDto {
+    fn from(d: TrayDisplay) -> Self {
+        match d {
+            TrayDisplay::Off => Self::Off,
+            TrayDisplay::TodayTotal => Self::TodayTotal,
+            TrayDisplay::CurrentApp => Self::CurrentApp,
+            TrayDisplay::TodayAndCurrent => Self::TodayAndCurrent,
+        }
+    }
+}
+
+impl From<TrayDisplayDto> for TrayDisplay {
+    fn from(d: TrayDisplayDto) -> Self {
+        match d {
+            TrayDisplayDto::Off => Self::Off,
+            TrayDisplayDto::TodayTotal => Self::TodayTotal,
+            TrayDisplayDto::CurrentApp => Self::CurrentApp,
+            TrayDisplayDto::TodayAndCurrent => Self::TodayAndCurrent,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct SettingsDto {
     pub store_titles: bool,
@@ -460,6 +492,7 @@ pub struct SettingsDto {
     pub autostart: bool,
     pub shortcut: String,
     pub onboarding_completed: bool,
+    pub tray_display: TrayDisplayDto,
 }
 
 impl From<Settings> for SettingsDto {
@@ -473,6 +506,7 @@ impl From<Settings> for SettingsDto {
             autostart: s.autostart,
             shortcut: s.shortcut,
             onboarding_completed: s.onboarding_completed,
+            tray_display: s.tray_display.into(),
         }
     }
 }
@@ -496,6 +530,7 @@ pub struct SettingsPatchDto {
     pub autostart: Option<bool>,
     pub shortcut: Option<String>,
     pub onboarding_completed: Option<bool>,
+    pub tray_display: Option<TrayDisplayDto>,
 }
 
 impl From<SettingsPatchDto> for SettingsPatch {
@@ -512,6 +547,7 @@ impl From<SettingsPatchDto> for SettingsPatch {
             autostart: p.autostart,
             shortcut: p.shortcut,
             onboarding_completed: p.onboarding_completed,
+            tray_display: p.tray_display.map(Into::into),
         }
     }
 }
@@ -687,6 +723,20 @@ mod tests {
         assert_eq!(days.retention_days, Some(Some(30)));
         let untouched: SettingsPatch = SettingsPatchDto::default().into();
         assert_eq!(untouched.retention_days, None);
+        assert_eq!(untouched.tray_display, None);
+    }
+
+    #[test]
+    fn tray_display_round_trips_with_the_stored_names() {
+        for display in TrayDisplay::ALL {
+            let dto = TrayDisplayDto::from(display);
+            assert_eq!(TrayDisplay::from(dto), display);
+            // The wire name is the same one the settings table stores.
+            assert_eq!(
+                serde_json::to_string(&dto).unwrap(),
+                format!("\"{}\"", display.as_str())
+            );
+        }
     }
 
     #[test]

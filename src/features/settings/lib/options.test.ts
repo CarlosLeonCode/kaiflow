@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatThreshold, idleThresholdOptions } from "./options";
+import { TRAY_DISPLAY_OPTIONS, formatThreshold, idleThresholdOptions, parseTrayDisplay } from "./options";
 
 describe("idle threshold options", () => {
   it("offers the presets in ascending order", () => {
@@ -19,5 +19,16 @@ describe("idle threshold options", () => {
   it("formats hours, minutes and seconds", () => {
     expect(formatThreshold(7200)).toBe("2 hours");
     expect(formatThreshold(90)).toBe("90 sec");
+  });
+});
+
+describe("menu bar display options", () => {
+  it("offers every backend variant once, icon only first", () => {
+    expect(TRAY_DISPLAY_OPTIONS.map((o) => o.value)).toEqual(["off", "today_total", "current_app", "today_and_current"]);
+  });
+
+  it("falls back to today's total for unknown values", () => {
+    expect(parseTrayDisplay("current_app")).toBe("current_app");
+    expect(parseTrayDisplay("neon")).toBe("today_total");
   });
 });

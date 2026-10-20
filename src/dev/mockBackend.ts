@@ -82,6 +82,7 @@ export function installMockBackend(options: MockOptions = {}): void {
     autostart: false,
     shortcut: "⌃⌥⌘T",
     onboarding_completed: true,
+    tray_display: "today_total",
   };
   let tokenCounter = 0;
   const liveTokens = new Set<string>();

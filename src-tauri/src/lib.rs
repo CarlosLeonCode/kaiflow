@@ -12,6 +12,7 @@ pub mod platform;
 pub mod settings_applier;
 pub mod shortcuts;
 pub mod tray;
+pub mod tray_text;
 pub mod updater;
 pub mod windows;
 
@@ -86,7 +87,9 @@ pub fn run() {
 
             windows::create_all(&handle, !settings.onboarding_completed)?;
             tray::install(&handle)?;
-            apply_outside_settings(&handle, &state, &shortcut, &settings);
+            let tray_text = tray_text::TrayText::spawn(&handle);
+            app.manage(tray_text.clone());
+            apply_outside_settings(&handle, &state, &shortcut, &settings, tray_text);
             updater::spawn_schedule(&handle);
 
             // Spec R6.3 scenario: after login the app registers on its own. Before the
@@ -107,6 +110,9 @@ pub fn run() {
             api, code: None, ..
         } => api.prevent_exit(),
         RunEvent::Exit => {
+            if let Some(tray_text) = handle.try_state::<tray_text::TrayText>() {
+                tray_text.stop();
+            }
             if let Some(state) = handle.try_state::<Arc<AppState>>() {
                 state.shutdown();
             }
@@ -123,6 +129,7 @@ fn apply_outside_settings(
     state: &Arc<AppState>,
     shortcut: &crate::ipc::events::SharedShortcut,
     settings: &application::commands::Settings,
+    tray_text: tray_text::TrayText,
 ) {
     let press_handle = handle.clone();
     let shortcuts = Arc::new(ShortcutManager::new(
@@ -139,7 +146,11 @@ fn apply_outside_settings(
     if let Err(error) = reconcile(&login, settings.autostart) {
         eprintln!("autostart could not be aligned with the settings: {error}");
     }
-    state.set_applier(Arc::new(ShellApplier::new(Box::new(login), shortcuts)));
+    state.set_applier(Arc::new(ShellApplier::new(
+        Box::new(login),
+        shortcuts,
+        tray_text,
+    )));
 }
 
 #[cfg(test)]

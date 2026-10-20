@@ -1,11 +1,14 @@
 //! The engine's event sink in production: forwards every fact to the frontend (typed events)
 //! and performs the shell side effects the facts imply (design section 11): open the popover
-//! when an idle gap needs a decision, keep the tray menu in step with the tracking state.
+//! when an idle gap needs a decision, keep the tray menu and the tray text in step with the
+//! tracking state and the recorded time.
 
+use application::ports::DataKind;
 use application::ports::{DomainEvent, EventSink, TrackingKind};
-use tauri::{AppHandle, Wry};
+use tauri::{AppHandle, Manager, Wry};
 
 use crate::ipc::events::{SharedShortcut, TauriEventSink};
+use crate::tray_text::TrayText;
 use crate::{tray, windows};
 
 /// A shell-level consequence of an engine event.
@@ -16,14 +19,20 @@ pub enum ShellAction {
     ShowPopover,
     /// Tracking state changed: refresh the Pause/Resume tray entry.
     TrackingState(TrackingKind),
+    /// Status or recorded time changed: recompute the text next to the tray icon.
+    RefreshTrayText,
 }
 
 /// Pure mapping from engine events to shell actions.
 pub fn actions_for(event: &DomainEvent) -> Vec<ShellAction> {
     match event {
         DomainEvent::IdleGapPending(_) => vec![ShellAction::ShowPopover],
-        DomainEvent::TrackingStatusChanged(status) => {
-            vec![ShellAction::TrackingState(status.kind)]
+        DomainEvent::TrackingStatusChanged(status) => vec![
+            ShellAction::TrackingState(status.kind),
+            ShellAction::RefreshTrayText,
+        ],
+        DomainEvent::CurrentSegmentChanged(_) | DomainEvent::DataChanged(DataKind::Segments) => {
+            vec![ShellAction::RefreshTrayText]
         }
         _ => Vec::new(),
     }
@@ -50,6 +59,12 @@ impl Shell for TauriShell {
         match action {
             ShellAction::ShowPopover => windows::show_popover(&self.app),
             ShellAction::TrackingState(kind) => tray::set_tracking_state(&self.app, kind),
+            // Non-blocking: the worker thread does the reading and the main-thread hop.
+            ShellAction::RefreshTrayText => {
+                if let Some(tray_text) = self.app.try_state::<TrayText>() {
+                    tray_text.refresh();
+                }
+            }
         }
     }
 }
@@ -92,7 +107,7 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     use application::fakes::RecordingSink;
-    use application::ports::{DataKind, TrackingStatus};
+    use application::ports::TrackingStatus;
     use domain::{GapId, GapStatus, IdleGap, UtcMs};
 
     use super::*;
@@ -135,21 +150,33 @@ mod tests {
     }
 
     #[test]
-    fn status_changes_refresh_the_tray_entry() {
+    fn status_changes_refresh_the_tray_entry_and_text() {
         assert_eq!(
             actions_for(&DomainEvent::TrackingStatusChanged(status(
                 TrackingKind::Paused
             ))),
-            vec![ShellAction::TrackingState(TrackingKind::Paused)]
+            vec![
+                ShellAction::TrackingState(TrackingKind::Paused),
+                ShellAction::RefreshTrayText
+            ]
         );
+    }
+
+    #[test]
+    fn segment_changes_refresh_the_tray_text() {
+        for event in [
+            DomainEvent::CurrentSegmentChanged(None),
+            DomainEvent::DataChanged(DataKind::Segments),
+        ] {
+            assert_eq!(actions_for(&event), vec![ShellAction::RefreshTrayText]);
+        }
     }
 
     #[test]
     fn other_events_have_no_shell_side_effect() {
         for event in [
-            DomainEvent::DataChanged(DataKind::Segments),
+            DomainEvent::DataChanged(DataKind::Gaps),
             DomainEvent::StorageFailed("x".into()),
-            DomainEvent::CurrentSegmentChanged(None),
         ] {
             assert!(actions_for(&event).is_empty());
         }

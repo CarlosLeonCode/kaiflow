@@ -232,6 +232,7 @@ export type SettingsDto = {
 	autostart: boolean,
 	shortcut: string,
 	onboarding_completed: boolean,
+	tray_display: TrayDisplayDto,
 };
 
 /**  Partial update: absent fields stay untouched. */
@@ -244,6 +245,7 @@ export type SettingsPatchDto = {
 	autostart: boolean | null,
 	shortcut: string | null,
 	onboarding_completed: boolean | null,
+	tray_display: TrayDisplayDto | null,
 };
 
 export type ShortcutStatusChanged = ShortcutStatusDto;
@@ -282,6 +284,9 @@ export type TrackingStatusDto = {
 	degraded: boolean,
 	shortcut: ShortcutStatusDto,
 };
+
+/**  What the menu-bar / tray text next to the icon shows. */
+export type TrayDisplayDto = "off" | "today_total" | "current_app" | "today_and_current";
 
 /**  The updater found a newer signed release; the UI offers to install it. */
 export type UpdateAvailable = UpdateInfoDto;

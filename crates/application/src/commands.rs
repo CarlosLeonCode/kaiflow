@@ -96,6 +96,43 @@ struct Pending {
     issued_at: UtcMs,
 }
 
+/// What the menu-bar / tray text next to the icon shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TrayDisplay {
+    /// Icon only.
+    Off,
+    /// Today's tracked total, e.g. `3h 12m`.
+    #[default]
+    TodayTotal,
+    /// The focused app and its total today, e.g. `Xcode · 40m`.
+    CurrentApp,
+    /// Both, e.g. `3h 12m · Xcode 40m`.
+    TodayAndCurrent,
+}
+
+impl TrayDisplay {
+    pub const ALL: [Self; 4] = [
+        Self::Off,
+        Self::TodayTotal,
+        Self::CurrentApp,
+        Self::TodayAndCurrent,
+    ];
+
+    /// Stable name used in the settings table and on the wire.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::TodayTotal => "today_total",
+            Self::CurrentApp => "current_app",
+            Self::TodayAndCurrent => "today_and_current",
+        }
+    }
+
+    pub fn parse(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|d| d.as_str() == name)
+    }
+}
+
 /// All user settings with their defaults (design section 7).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Settings {
@@ -109,6 +146,7 @@ pub struct Settings {
     pub autostart: bool,
     pub shortcut: String,
     pub onboarding_completed: bool,
+    pub tray_display: TrayDisplay,
 }
 
 impl Default for Settings {
@@ -122,6 +160,7 @@ impl Default for Settings {
             autostart: false,
             shortcut: "⌃⌥⌘T".into(),
             onboarding_completed: false,
+            tray_display: TrayDisplay::default(),
         }
     }
 }
@@ -138,6 +177,7 @@ pub struct SettingsPatch {
     pub autostart: Option<bool>,
     pub shortcut: Option<String>,
     pub onboarding_completed: Option<bool>,
+    pub tray_display: Option<TrayDisplay>,
 }
 
 pub struct Commands {
@@ -260,6 +300,7 @@ impl Commands {
             autostart: self.read(KEY_AUTOSTART, parse_bool, d.autostart)?,
             shortcut: self.read(KEY_SHORTCUT, parse_string, d.shortcut)?,
             onboarding_completed: self.read(KEY_ONBOARDING, parse_bool, d.onboarding_completed)?,
+            tray_display: self.read(KEY_TRAY_DISPLAY, parse_tray_display, d.tray_display)?,
         })
     }
 
@@ -293,6 +334,9 @@ impl Commands {
         }
         if let Some(v) = patch.onboarding_completed {
             set(KEY_ONBOARDING, v.to_string())?;
+        }
+        if let Some(v) = patch.tray_display {
+            set(KEY_TRAY_DISPLAY, json_string(v.as_str()))?;
         }
         self.get_settings()
     }
@@ -450,6 +494,7 @@ const KEY_THEME: &str = "theme";
 const KEY_AUTOSTART: &str = "autostart";
 const KEY_SHORTCUT: &str = "shortcut";
 const KEY_ONBOARDING: &str = "onboarding_completed";
+const KEY_TRAY_DISPLAY: &str = "tray_display";
 
 fn parse_bool(raw: &str) -> Option<bool> {
     match raw.trim() {
@@ -494,6 +539,10 @@ fn parse_string(raw: &str) -> Option<String> {
         }
     }
     Some(out)
+}
+
+fn parse_tray_display(raw: &str) -> Option<TrayDisplay> {
+    TrayDisplay::parse(&parse_string(raw)?)
 }
 
 fn json_string(value: &str) -> String {
@@ -693,10 +742,16 @@ mod tests {
                 theme: Some("dark".into()),
                 shortcut: Some("⌃⌥⌘P".into()),
                 onboarding_completed: Some(true),
+                tray_display: Some(TrayDisplay::TodayAndCurrent),
                 ..Default::default()
             })
             .unwrap();
         assert!(!out.store_titles && out.onboarding_completed);
+        assert_eq!(out.tray_display, TrayDisplay::TodayAndCurrent);
+        assert_eq!(
+            f.settings.get("tray_display").unwrap().as_deref(),
+            Some("\"today_and_current\"")
+        );
         assert_eq!(
             (
                 out.idle_threshold_secs,
@@ -765,6 +820,27 @@ mod tests {
     fn corrupt_stored_setting_is_an_error_not_a_silent_default() {
         let f = fixture();
         f.settings.set("autostart", "maybe").unwrap();
+        assert!(matches!(
+            f.cmd.get_settings(),
+            Err(CommandError::Storage(_))
+        ));
+    }
+
+    #[test]
+    fn tray_display_names_round_trip_and_unknown_values_are_rejected() {
+        for display in TrayDisplay::ALL {
+            assert_eq!(TrayDisplay::parse(display.as_str()), Some(display));
+            assert_eq!(
+                parse_tray_display(&json_string(display.as_str())),
+                Some(display)
+            );
+        }
+        assert_eq!(Settings::default().tray_display, TrayDisplay::TodayTotal);
+        assert_eq!(parse_tray_display("\"neon\""), None);
+        assert_eq!(parse_tray_display("today_total"), None);
+
+        let f = fixture();
+        f.settings.set("tray_display", "\"neon\"").unwrap();
         assert!(matches!(
             f.cmd.get_settings(),
             Err(CommandError::Storage(_))

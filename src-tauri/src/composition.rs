@@ -78,11 +78,13 @@ impl Providers {
     }
 }
 
-/// Applies the settings that live outside the database (OS login item, global shortcut).
-/// Implemented by the shell; `settings_update` calls it after persisting the patch.
+/// Applies the settings that live outside the database (OS login item, global shortcut,
+/// tray text). Implemented by the shell; `settings_update` calls it after persisting the patch.
 pub trait SettingsApplier: Send + Sync {
     fn set_autostart(&self, enabled: bool) -> Result<(), AppError>;
     fn set_shortcut(&self, shortcut: &str) -> Result<(), AppError>;
+    /// The tray text reads `tray_display` itself; this only asks it to recompute. Never blocks.
+    fn refresh_tray_text(&self);
 }
 
 #[derive(Debug)]
