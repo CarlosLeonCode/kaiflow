@@ -11,7 +11,7 @@ use tauri_specta::Event;
 use super::dto::{
     CategoryDto, DeleteOpDto, IdleGapDto, IdleResolutionDto, PermissionStateDto, PrivacyModeDto,
     PrivacyRulesDto, RangeDto, ReportDto, RuleDto, RuleInputDto, SettingsDto, SettingsPatchDto,
-    TimelineItemDto, TrackingStatusDto,
+    TimelineItemDto, TrackingStatusDto, UpdateInfoDto,
 };
 use super::events::{DataChanged, DataKindDto};
 use crate::composition::AppState;
@@ -353,6 +353,28 @@ pub async fn export_csv(
     .map_err(|e| AppError::Internal {
         message: e.to_string(),
     })?
+}
+
+/// Asks the update server for a newer signed release. Returns it (and announces it with
+/// `update-available`), or `null` when the app is current or updates are not configured.
+#[tauri::command]
+#[specta::specta]
+pub async fn update_check(
+    app: AppHandle,
+    updates: State<'_, crate::updater::UpdaterState>,
+) -> Result<Option<UpdateInfoDto>, AppError> {
+    crate::updater::check_now(&app, updates.inner()).await
+}
+
+/// Downloads, verifies and installs the update found by the last check, then relaunches.
+#[tauri::command]
+#[specta::specta]
+pub async fn update_install(
+    app: AppHandle,
+    state: Shared<'_>,
+    updates: State<'_, crate::updater::UpdaterState>,
+) -> Result<(), AppError> {
+    crate::updater::install_pending(&app, state.inner(), updates.inner()).await
 }
 
 #[cfg(test)]

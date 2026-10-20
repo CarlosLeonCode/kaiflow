@@ -1,0 +1,138 @@
+name: Release
+
+# Pushing a tag such as v0.2.0 builds the universal macOS app, signs and notarizes it when the
+# Apple secrets exist, and publishes the DMG, the updater archive and latest.json to a GitHub
+# Release. Required secrets and the first-time setup are documented in docs/release.md.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  macos:
+    name: macOS universal (${{ github.ref_name }})
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the release configuration
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+
+          # 1. The tag must match the app version, otherwise the updater compares wrong versions.
+          app_version="$(python3 -c "import json; print(json.load(open('src-tauri/tauri.conf.json'))['version'])")"
+          if [ "v${app_version}" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match version ${app_version} in src-tauri/tauri.conf.json."
+            exit 1
+          fi
+
+          # 2. Without the updater public key the shipped app could never update itself.
+          if grep -q "REPLACE_WITH_" src-tauri/tauri.conf.json; then
+            echo "::error::plugins.updater.pubkey in src-tauri/tauri.conf.json is still the placeholder. See docs/release.md."
+            exit 1
+          fi
+
+          # 3. Updater artifacts are signed with the updater key; the build fails without it.
+          if [ -z "${TAURI_SIGNING_PRIVATE_KEY}" ]; then
+            echo "::error::Secret TAURI_SIGNING_PRIVATE_KEY is missing (updater signing key). See docs/release.md."
+            exit 1
+          fi
+
+          # 4. Developer ID signing and notarization need every Apple secret.
+          missing=""
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            if [ -z "${!name}" ]; then missing="${missing} ${name}"; fi
+          done
+          if [ -z "${missing}" ]; then
+            echo "SIGNED=true" >> "$GITHUB_ENV"
+          else
+            echo "SIGNED=false" >> "$GITHUB_ENV"
+            echo "::warning title=Unsigned build::Apple secrets missing:${missing}. Building an ad-hoc signed app that is NOT notarized. Gatekeeper will warn users and the Accessibility permission will not survive updates. The release stays a draft."
+            {
+              echo "### Unsigned build"
+              echo "Missing Apple secrets:${missing}."
+              echo "This build is ad-hoc signed and not notarized, so it was left as a **draft**. Add the secrets (docs/release.md) and re-run for a distributable release."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # Toolchain version comes from rust-toolchain.toml; both slices are needed for universal.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.90"
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+
+      - run: npm ci
+
+      - name: Build, sign, notarize and publish
+        id: tauri
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Updater signature (always required: createUpdaterArtifacts is on).
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Developer ID signing. Tauri imports the .p12 into a temporary keychain, signs with
+          # the hardened runtime (tauri.conf.json) and notarizes with the Apple ID credentials.
+          # Empty values make Tauri skip signing and notarization, so the fallback below sets
+          # an ad-hoc identity ("-") instead.
+          APPLE_CERTIFICATE: ${{ env.SIGNED == 'true' && secrets.APPLE_CERTIFICATE || '' }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ env.SIGNED == 'true' && secrets.APPLE_CERTIFICATE_PASSWORD || '' }}
+          APPLE_SIGNING_IDENTITY: ${{ env.SIGNED == 'true' && secrets.APPLE_SIGNING_IDENTITY || '-' }}
+          APPLE_ID: ${{ env.SIGNED == 'true' && secrets.APPLE_ID || '' }}
+          APPLE_PASSWORD: ${{ env.SIGNED == 'true' && secrets.APPLE_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ env.SIGNED == 'true' && secrets.APPLE_TEAM_ID || '' }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: Time Track Copilot ${{ github.ref_name }}
+          releaseBody: See the assets below. Install the DMG; installed copies update themselves.
+          # Always a draft first: it is published only after the checks below pass, so
+          # `releases/latest` (the updater endpoint) never points at an unverified build.
+          releaseDraft: true
+          prerelease: false
+          # Uploads latest.json (the updater manifest) next to the DMG and the .app.tar.gz.sig.
+          includeUpdaterJson: true
+          args: --target universal-apple-darwin
+
+      - name: Verify signature, Gatekeeper and notarization
+        if: env.SIGNED == 'true'
+        run: |
+          set -euo pipefail
+          bundle="src-tauri/target/universal-apple-darwin/release/bundle"
+          app="$(find "${bundle}/macos" -maxdepth 1 -name '*.app' -print -quit)"
+          dmg="$(find "${bundle}/dmg" -maxdepth 1 -name '*.dmg' -print -quit)"
+          codesign --verify --deep --strict --verbose=2 "${app}"
+          codesign --verify --strict --verbose=2 "${dmg}"
+          codesign -dv --verbose=4 "${app}" 2>&1 | grep -E "flags=.*runtime" # hardened runtime
+          spctl --assess --type execute --verbose=4 "${app}"
+          xcrun stapler validate "${app}"
+
+      - name: Publish the release
+        if: env.SIGNED == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "${GITHUB_REF_NAME}" --draft=false

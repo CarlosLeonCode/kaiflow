@@ -12,7 +12,7 @@ use tauri_specta::Event;
 
 use super::dto::{
     FocusDto, IdleGapDto, IdleResolutionDto, PermissionStateDto, ShortcutStatusDto,
-    TrackingStatusDto,
+    TrackingStatusDto, UpdateInfoDto,
 };
 
 /// Shortcut state shared between the commands, the shortcut registrar and this sink.
@@ -93,6 +93,10 @@ pub struct DataChanged {
 pub struct StorageFailed {
     pub message: String,
 }
+
+/// The updater found a newer signed release; the UI offers to install it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type, Event)]
+pub struct UpdateAvailable(pub UpdateInfoDto);
 
 /// Everything the backend can push, as one value so translation is testable.
 #[derive(Debug, Clone, PartialEq, Eq)]

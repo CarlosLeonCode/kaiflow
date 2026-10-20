@@ -10,6 +10,7 @@ import type {
   SettingsDto,
   SettingsPatchDto,
   TrackingStatusDto,
+  UpdateInfoDto,
 } from "./bindings";
 import { unwrap } from "./client";
 import { queryKeys } from "./queryKeys";
@@ -272,4 +273,29 @@ export function useDeleteDataMutation() {
 /** Resolves to the saved path, or `null` when the user cancelled the save dialog. */
 export function useExportCsvMutation() {
   return useMutation({ mutationFn: (range: RangeDto) => unwrap(commands.exportCsv(range)) });
+}
+
+/** The update announced by the backend, or `null`. Only the `update-available` event and a manual check write it. */
+export function useAvailableUpdate(): UpdateInfoDto | null {
+  // Never fetched: the cache entry is written by the event and the manual check only.
+  const query = useQuery<UpdateInfoDto | null>({
+    queryKey: queryKeys.update,
+    queryFn: () => null,
+    enabled: false,
+  });
+  return query.data ?? null;
+}
+
+/** Manual "Check for updates"; resolves with the update, or `null` when the app is current. */
+export function useCheckUpdateMutation() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => unwrap(commands.updateCheck()),
+    onSuccess: (update) => client.setQueryData(queryKeys.update, update),
+  });
+}
+
+/** Downloads and installs the announced update; the app relaunches on success. */
+export function useInstallUpdateMutation() {
+  return useMutation({ mutationFn: () => unwrap(commands.updateInstall()) });
 }

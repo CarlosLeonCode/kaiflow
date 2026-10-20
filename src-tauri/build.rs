@@ -37,6 +37,8 @@ const COMMANDS: &[&str] = &[
     "purge_older_than",
     "delete_all",
     "export_csv",
+    "update_check",
+    "update_install",
 ];
 
 fn main() {

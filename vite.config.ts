@@ -2,24 +2,30 @@ import { resolve } from "node:path";
 
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 
 // One HTML entry per Tauri window so the popover never loads the dashboard bundle.
-export default defineConfig({
-  plugins: [react(), tailwindcss()],
-  resolve: { alias: { "@": resolve(import.meta.dirname, "src") } },
-  clearScreen: false,
-  server: { port: 1420, strictPort: true },
-  build: {
-    outDir: "dist",
-    emptyOutDir: true,
-    target: "safari16",
-    rollupOptions: {
-      input: {
-        popover: resolve(import.meta.dirname, "popover.html"),
-        main: resolve(import.meta.dirname, "main.html"),
-        onboarding: resolve(import.meta.dirname, "onboarding.html"),
+export default defineConfig(({ mode }) => {
+  // The in-memory dev backend (`mock` mode) must never reach a shipped bundle.
+  if (mode === "production" && loadEnv(mode, process.cwd(), "VITE_").VITE_MOCK_IPC) {
+    throw new Error("VITE_MOCK_IPC is dev-only: remove it from the production build environment.");
+  }
+  return {
+    plugins: [react(), tailwindcss()],
+    resolve: { alias: { "@": resolve(import.meta.dirname, "src") } },
+    clearScreen: false,
+    server: { port: 1420, strictPort: true },
+    build: {
+      outDir: "dist",
+      emptyOutDir: true,
+      target: "safari16",
+      rollupOptions: {
+        input: {
+          popover: resolve(import.meta.dirname, "popover.html"),
+          main: resolve(import.meta.dirname, "main.html"),
+          onboarding: resolve(import.meta.dirname, "onboarding.html"),
+        },
       },
     },
-  },
+  };
 });

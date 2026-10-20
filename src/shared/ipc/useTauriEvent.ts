@@ -79,4 +79,5 @@ export function useBackendEventSync(): void {
     invalidate(queryKeys.status);
   });
   useTauriEvent(events.shortcutStatusChanged, () => invalidate(queryKeys.status));
+  useTauriEvent(events.updateAvailable, (update) => client.setQueryData(queryKeys.update, update));
 }

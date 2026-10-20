@@ -39,6 +39,8 @@
     "allow-delete-range",
     "allow-purge-older-than",
     "allow-delete-all",
-    "allow-export-csv"
+    "allow-export-csv",
+    "allow-update-check",
+    "allow-update-install"
   ]
 }

@@ -27,6 +27,9 @@ tauri-plugin-single-instance = "2.5"
 tauri-plugin-autostart = "2.7"
 tauri-plugin-global-shortcut = "2.4"
 tauri-plugin-notification = "2.7"
+# Stable 2.x line (3.x is alpha). Rust-only like every plugin: the frontend talks to the
+# `update_check` / `update_install` commands, never to the plugin.
+tauri-plugin-updater = "2.14"
 adapters-macos = { path = "../crates/adapters-macos" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

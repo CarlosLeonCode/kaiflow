@@ -1,5 +1,7 @@
 import { IpcError, useOpenAccessibilitySettingsMutation, useSettingsQuery, useStatusQuery, useUpdateSettingsMutation, errorMessage } from "@/shared/ipc";
 
+import { UpdatesPanelContainer } from "@/features/updates/containers/UpdateContainers";
+
 import { SettingsView } from "../components/SettingsView";
 
 function shortcutMessage(shortcut: string, reason: string): string {
@@ -34,6 +36,7 @@ export function SettingsContainer() {
       error={otherError ?? loadError}
       onChange={(changes) => update.mutate(changes)}
       onOpenAccessibilitySettings={() => openSettings.mutate()}
+      updates={<UpdatesPanelContainer />}
     />
   );
 }

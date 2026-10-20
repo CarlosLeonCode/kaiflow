@@ -10,7 +10,7 @@ use tauri_specta::{Builder, collect_commands, collect_events};
 
 use self::events::{
     CurrentSegmentChanged, DataChanged, IdleGapPending, IdleGapResolved, PermissionChanged,
-    ShortcutStatusChanged, StorageFailed, TrackingStatusChanged,
+    ShortcutStatusChanged, StorageFailed, TrackingStatusChanged, UpdateAvailable,
 };
 
 /// Where the generated bindings live, relative to `src-tauri/` (design section 8).
@@ -52,6 +52,8 @@ pub fn builder() -> Builder<Wry> {
             commands::purge_older_than,
             commands::delete_all,
             commands::export_csv,
+            commands::update_check,
+            commands::update_install,
         ])
         .events(collect_events![
             TrackingStatusChanged,
@@ -62,6 +64,7 @@ pub fn builder() -> Builder<Wry> {
             ShortcutStatusChanged,
             DataChanged,
             StorageFailed,
+            UpdateAvailable,
         ])
         // Timestamps are UTC milliseconds (about 1.8e12), far below 2^53.
         .dangerously_cast_bigints_to_number()

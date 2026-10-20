@@ -12,6 +12,7 @@ pub mod platform;
 pub mod settings_applier;
 pub mod shortcuts;
 pub mod tray;
+pub mod updater;
 pub mod windows;
 
 use std::path::PathBuf;
@@ -59,6 +60,7 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);
@@ -80,10 +82,12 @@ pub fn run() {
             )?);
             let settings = state.commands.get_settings()?;
             app.manage(state.clone());
+            app.manage(updater::UpdaterState::default());
 
             windows::create_all(&handle, !settings.onboarding_completed)?;
             tray::install(&handle)?;
             apply_outside_settings(&handle, &state, &shortcut, &settings);
+            updater::spawn_schedule(&handle);
 
             // Spec R6.3 scenario: after login the app registers on its own. Before the
             // onboarding is done there is no permission yet, so tracking waits for it.

@@ -535,6 +535,15 @@ impl From<DeleteOpDto> for DeleteOp {
     }
 }
 
+/// An update the updater found (R11.4). `date` is the publish date as RFC 3339 text.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct UpdateInfoDto {
+    pub version: String,
+    pub current_version: String,
+    pub notes: Option<String>,
+    pub date: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;

@@ -2,7 +2,9 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "popover",
   "description": "Menu-bar popover: status, today's totals and the idle prompt. Read/state commands only.",
-  "windows": ["popover"],
+  "windows": [
+    "popover"
+  ],
   "permissions": [
     "core:event:default",
     "allow-get-status",
@@ -18,6 +20,7 @@
     "allow-settings-get",
     "allow-permission-open-settings",
     "allow-open-main-window",
-    "allow-hide-popover"
+    "allow-hide-popover",
+    "allow-update-install"
   ]
 }

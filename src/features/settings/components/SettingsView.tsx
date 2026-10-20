@@ -1,4 +1,5 @@
 import { Monitor, Moon, Sun } from "lucide-react";
+import type { ReactNode } from "react";
 
 import type { SettingsDto, SettingsPatchDto } from "@/shared/ipc";
 import { parseTheme, type ThemeSetting } from "@/shared/lib/theme";
@@ -30,6 +31,8 @@ interface Props {
   error: string | null;
   onChange: (changes: Partial<SettingsPatchDto>) => void;
   onOpenAccessibilitySettings: () => void;
+  /** Slot after the settings: the updates panel. */
+  updates?: ReactNode;
 }
 
 /** Settings section (presentational): every control saves as soon as it changes. */
@@ -40,6 +43,7 @@ export function SettingsView({
   error,
   onChange,
   onOpenAccessibilitySettings,
+  updates,
 }: Props) {
   return (
     <Page title="Settings" subtitle="Changes apply immediately.">
@@ -131,6 +135,8 @@ export function SettingsView({
               />
             </Row>
           </Panel>
+
+          {updates}
         </div>
       )}
     </Page>

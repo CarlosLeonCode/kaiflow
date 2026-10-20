@@ -1,4 +1,5 @@
 import { IdlePromptContainer } from "@/features/idle-prompt/containers/IdlePromptContainer";
+import { UpdateBannerContainer } from "@/features/updates/containers/UpdateContainers";
 import { useEscapeToHide } from "@/features/tracking/hooks/useEscapeToHide";
 import { TrackingPopoverContainer } from "@/features/tracking/containers/TrackingPopoverContainer";
 
@@ -7,7 +8,12 @@ export function PopoverApp() {
   useEscapeToHide();
   return (
     <div className="h-full w-full">
-      <TrackingPopoverContainer notice={<IdlePromptContainer />} />
+      <TrackingPopoverContainer notice={
+          <>
+            <IdlePromptContainer />
+            <UpdateBannerContainer />
+          </>
+        } />
     </div>
   );
 }

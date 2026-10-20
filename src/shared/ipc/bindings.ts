@@ -63,6 +63,18 @@ export const commands = {
 	 *  chosen path, or `null` when the user cancelled.
 	 */
 	exportCsv: (range: RangeDto) => typedError<string | null, AppError>(__TAURI_INVOKE("export_csv", { range })),
+	/**
+	 *  Asks the update server for a newer signed release. Returns it (and announces it with
+	 *  `update-available`), or `null` when the app is current or updates are not configured.
+	 */
+	updateCheck: () => typedError<{
+	version: string,
+	current_version: string,
+	notes: string | null,
+	date: string | null,
+} | null, AppError>(__TAURI_INVOKE("update_check")),
+	/**  Downloads, verifies and installs the update found by the last check, then relaunches. */
+	updateInstall: () => typedError<null, AppError>(__TAURI_INVOKE("update_install")),
 };
 
 /** Events */
@@ -75,6 +87,7 @@ export const events = {
 	shortcutStatusChanged: makeEvent<ShortcutStatusChanged>("shortcut-status-changed"),
 	storageFailed: makeEvent<StorageFailed>("storage-failed"),
 	trackingStatusChanged: makeEvent<TrackingStatusChanged>("tracking-status-changed"),
+	updateAvailable: makeEvent<UpdateAvailable>("update-available"),
 };
 
 /* Types */
@@ -268,6 +281,17 @@ export type TrackingStatusDto = {
 	since: number | null,
 	degraded: boolean,
 	shortcut: ShortcutStatusDto,
+};
+
+/**  The updater found a newer signed release; the UI offers to install it. */
+export type UpdateAvailable = UpdateInfoDto;
+
+/**  An update the updater found (R11.4). `date` is the publish date as RFC 3339 text. */
+export type UpdateInfoDto = {
+	version: string,
+	current_version: string,
+	notes: string | null,
+	date: string | null,
 };
 
 /* Tauri Specta runtime */

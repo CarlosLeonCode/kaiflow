@@ -34,6 +34,15 @@
       "minimumSystemVersion": "13.0",
       "hardenedRuntime": true,
       "entitlements": "Entitlements.plist"
+    },
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "REPLACE_WITH_UPDATER_PUBLIC_KEY",
+      "endpoints": [
+        "https://github.com/CarlosLeonCode/time-track-copilot/releases/latest/download/latest.json"
+      ]
     }
   }
 }

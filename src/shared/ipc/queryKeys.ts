@@ -9,6 +9,8 @@ export const queryKeys = {
   rules: ["rules"] as const,
   privacy: ["privacy"] as const,
   idleGaps: ["idle-gaps"] as const,
+  /** The update the backend announced (written by the `update-available` event, never fetched). */
+  update: ["update"] as const,
   /** Prefix of every report query (use it to invalidate them all). */
   reports: ["report"] as const,
   report: (range: RangeDto, buckets: readonly RangeDto[] = []) =>
