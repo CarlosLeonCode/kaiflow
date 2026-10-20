@@ -11,8 +11,8 @@ use tauri::{AppHandle, Wry};
 use tauri_specta::Event;
 
 use super::dto::{
-    FocusDto, IdleGapDto, IdleResolutionDto, PermissionStateDto, ShortcutStatusDto,
-    TrackingStatusDto, UpdateInfoDto,
+    DegradedReasonDto, FocusDto, IdleGapDto, IdleResolutionDto, PermissionStateDto,
+    ShortcutStatusDto, TrackingStatusDto, UpdateInfoDto,
 };
 
 /// Shortcut state shared between the commands, the shortcut registrar and this sink.
@@ -128,11 +128,15 @@ impl AppEvent {
 
 /// Turns an engine fact into the frontend events it implies. A pending gap without a
 /// repository id cannot be resolved by the UI, so it produces no event.
-pub fn translate(event: DomainEvent, shortcut: &ShortcutStatusDto) -> Vec<AppEvent> {
+pub fn translate(
+    event: DomainEvent,
+    shortcut: &ShortcutStatusDto,
+    degraded_reason: DegradedReasonDto,
+) -> Vec<AppEvent> {
     match event {
         DomainEvent::TrackingStatusChanged(status) => {
             vec![AppEvent::TrackingStatusChanged(TrackingStatusChanged(
-                TrackingStatusDto::new(status, shortcut.clone()),
+                TrackingStatusDto::new(status, shortcut.clone(), degraded_reason),
             ))]
         }
         DomainEvent::CurrentSegmentChanged(focus) => vec![AppEvent::CurrentSegmentChanged(
@@ -165,11 +169,20 @@ pub fn translate(event: DomainEvent, shortcut: &ShortcutStatusDto) -> Vec<AppEve
 pub struct TauriEventSink {
     app: AppHandle<Wry>,
     shortcut: SharedShortcut,
+    degraded_reason: DegradedReasonDto,
 }
 
 impl TauriEventSink {
-    pub fn new(app: AppHandle<Wry>, shortcut: SharedShortcut) -> Self {
-        Self { app, shortcut }
+    pub fn new(
+        app: AppHandle<Wry>,
+        shortcut: SharedShortcut,
+        degraded_reason: DegradedReasonDto,
+    ) -> Self {
+        Self {
+            app,
+            shortcut,
+            degraded_reason,
+        }
     }
 }
 
@@ -180,7 +193,7 @@ impl EventSink for TauriEventSink {
             .lock()
             .unwrap_or_else(PoisonError::into_inner)
             .clone();
-        for app_event in translate(event, &shortcut) {
+        for app_event in translate(event, &shortcut, self.degraded_reason) {
             // Emitting is best effort: a window that is closing must not stop the engine.
             let _ = app_event.emit(&self.app);
         }
@@ -212,6 +225,7 @@ mod tests {
         let events = translate(
             DomainEvent::StorageFailed("disk full".into()),
             &ShortcutStatusDto::Disabled,
+            DegradedReasonDto::AccessibilityDenied,
         );
         assert_eq!(
             events,
@@ -235,6 +249,7 @@ mod tests {
                 degraded: false,
             }),
             &shortcut,
+            DegradedReasonDto::AccessibilityDenied,
         );
         let [AppEvent::TrackingStatusChanged(TrackingStatusChanged(dto))] = events.as_slice()
         else {
@@ -248,13 +263,15 @@ mod tests {
         assert!(
             translate(
                 DomainEvent::IdleGapPending(gap(None)),
-                &ShortcutStatusDto::Disabled
+                &ShortcutStatusDto::Disabled,
+                DegradedReasonDto::AccessibilityDenied
             )
             .is_empty()
         );
         let events = translate(
             DomainEvent::IdleGapPending(gap(Some(4))),
             &ShortcutStatusDto::Disabled,
+            DegradedReasonDto::AccessibilityDenied,
         );
         assert!(matches!(
             events.as_slice(),
@@ -270,6 +287,7 @@ mod tests {
                 status: GapStatus::Resolved(IdleResolution::AssignCategory(CategoryId(2))),
             },
             &ShortcutStatusDto::Disabled,
+            DegradedReasonDto::AccessibilityDenied,
         );
         assert_eq!(
             events,
@@ -292,14 +310,19 @@ mod tests {
         assert_eq!(
             translate(
                 DomainEvent::PermissionChanged(PermissionState::Denied),
-                &none
+                &none,
+                DegradedReasonDto::AccessibilityDenied
             ),
             vec![AppEvent::PermissionChanged(PermissionChanged {
                 state: PermissionStateDto::Denied
             })]
         );
         assert_eq!(
-            translate(DomainEvent::DataChanged(DataKind::Gaps), &none),
+            translate(
+                DomainEvent::DataChanged(DataKind::Gaps),
+                &none,
+                DegradedReasonDto::AccessibilityDenied
+            ),
             vec![AppEvent::DataChanged(DataChanged {
                 kind: DataKindDto::Gaps
             })]
@@ -310,7 +333,11 @@ mod tests {
             pid: 1,
             window_title: None,
         };
-        let events = translate(DomainEvent::CurrentSegmentChanged(Some(focus)), &none);
+        let events = translate(
+            DomainEvent::CurrentSegmentChanged(Some(focus)),
+            &none,
+            DegradedReasonDto::AccessibilityDenied,
+        );
         assert!(matches!(
             events.as_slice(),
             [AppEvent::CurrentSegmentChanged(CurrentSegmentChanged(Some(f)))] if f.app_id == "a"

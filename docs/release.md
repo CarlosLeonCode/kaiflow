@@ -88,6 +88,72 @@ peticion de actualizacion** y el flujo de release se detiene con un error explic
    publicada y las instalaciones existentes la detectan en su siguiente comprobacion.
 4. Antes de anunciarla, repasar `docs/checklists/release-clean-mac.md` en un Mac limpio.
 
+## Windows y Linux
+
+La app compila y rastrea en Windows y Linux (ver `docs/platform-support.md`) y CI la prueba en
+los tres sistemas, pero `release.yml` todavia publica solo macOS. `bundle.targets` en
+`src-tauri/tauri.conf.json` ya incluye todos los formatos; cada sistema genera solo los suyos:
+
+| Sistema | Paquetes | Actualizacion automatica |
+|---|---|---|
+| macOS | `.app` y DMG (sin cambios: firma Developer ID y notarizacion como arriba) | Si (`.app.tar.gz` + `.sig`) |
+| Windows | MSI (WiX) e instalador NSIS (`.exe`, por usuario, sin permisos de administrador) | Si (el instalador + `.sig`) |
+| Linux | AppImage y `.deb` | Solo AppImage (+ `.sig`); el `.deb` se actualiza reinstalando |
+
+Para publicarlos, agregar a `release.yml` un segundo job con una matriz y hacer que el paso
+que publica la release espere a todos los jobs:
+
+```yaml
+  windows-linux:
+    name: ${{ matrix.os }} (${{ github.ref_name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
+            librsvg2-dev libxdo-dev libssl-dev build-essential pkg-config
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.90"
+      - uses: Swatinem/rust-cache@v2
+      - run: npm ci
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: Time Track Copilot ${{ github.ref_name }}
+          releaseDraft: true
+          includeUpdaterJson: true
+```
+
+- `tauri-action` agrega cada plataforma al mismo `latest.json` de la release, asi que el
+  actualizador de cada sistema encuentra su entrada. Por eso la release debe seguir siendo un
+  borrador hasta que terminen todos los jobs: el paso "Publish the release" del job de macOS
+  pasa a un job propio con `needs: [macos, windows-linux]`.
+- Se usa la misma clave del actualizador (`TAURI_SIGNING_PRIVATE_KEY`) en los tres sistemas.
+- **Windows sin firma de codigo**: SmartScreen avisara al instalar ("editor desconocido")
+  hasta que el instalador se firme. Para firmarlo hace falta un certificado de firma de codigo
+  (o Azure Trusted Signing) configurado en `bundle.windows` (`certificateThumbprint` o
+  `signCommand`). La firma de macOS no cambia.
+- **Linux**: el AppImage y el `.deb` no llevan firma del sistema. El `.deb` declara
+  `libayatana-appindicator3-1` como dependencia para el icono de la bandeja.
+- El job de macOS no cambia: sigue compilando la app universal, firmando y notarizando con los
+  mismos secretos.
+
 ## Endurecimiento pendiente
 
 El plugin ofrece `requireSignedVersion` (en `plugins.updater`): exige que la firma lleve la

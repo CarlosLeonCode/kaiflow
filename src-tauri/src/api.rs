@@ -25,7 +25,11 @@ impl AppState {
 
     fn status_after(&self, command: Command) -> Result<TrackingStatusDto, AppError> {
         match self.engine.request(command)? {
-            Reply::Status(status) => Ok(TrackingStatusDto::new(status, self.shortcut_status())),
+            Reply::Status(status) => Ok(TrackingStatusDto::new(
+                status,
+                self.shortcut_status(),
+                self.permission.degraded_reason().into(),
+            )),
             other => Err(AppError::Internal {
                 message: format!("unexpected engine reply: {other:?}"),
             }),
@@ -266,7 +270,7 @@ mod tests {
                 power: Box::new(FakePower::default()),
                 permission: Arc::new(permission.clone()),
                 notifier: Box::new(RecordingNotifier::default()),
-                idle_threshold: adapters_macos::idle::IdleThreshold::default(),
+                idle_threshold: adapters_common::idle::IdleThreshold::default(),
                 sampler: None,
             },
         )
@@ -593,6 +597,57 @@ mod tests {
         rig.state.privacy_set("com.1password", None).unwrap();
         assert!(rig.state.privacy_list().unwrap().excluded_apps.is_empty());
         rig.state.shutdown();
+    }
+
+    #[test]
+    fn a_degraded_status_carries_the_platform_reason() {
+        use application::ports::{DegradedReason, PermissionProvider, SystemSignal};
+
+        use crate::ipc::dto::DegradedReasonDto;
+
+        struct WaylandSession;
+        impl PermissionProvider for WaylandSession {
+            fn accessibility(&self) -> PermissionState {
+                PermissionState::Denied
+            }
+            fn request(&self) {}
+            fn open_settings(&self) {}
+            fn degraded_reason(&self) -> DegradedReason {
+                DegradedReason::WaylandSession
+            }
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let state = compose(
+            &dir.path().join("timetrack.db"),
+            Box::new(RecordingSink::default()),
+            AppState::default_shortcut(),
+            Providers {
+                permission: Arc::new(WaylandSession),
+                ..Providers::placeholders()
+            },
+        )
+        .unwrap();
+        assert_eq!(state.get_status().unwrap().degraded_reason, None);
+
+        state
+            .engine
+            .signal(SystemSignal::PermissionChanged(PermissionState::Denied));
+        // Signals and commands travel on separate channels: wait for the signal to land.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let status = loop {
+            let status = state.get_status().unwrap();
+            if status.degraded || std::time::Instant::now() > deadline {
+                break status;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        };
+        assert!(status.degraded);
+        assert_eq!(
+            status.degraded_reason,
+            Some(DegradedReasonDto::WaylandSession)
+        );
+        state.shutdown();
     }
 
     #[test]

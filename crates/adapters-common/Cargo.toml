@@ -1,0 +1,13 @@
+[package]
+name = "adapters-common"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Platform-neutral adapter logic shared by the macOS, Windows and Linux adapters: the 2 s sampler core, idle edge detection and the power-signal fan-out."
+
+[dependencies]
+domain.workspace = true
+application.workspace = true
+crossbeam-channel.workspace = true

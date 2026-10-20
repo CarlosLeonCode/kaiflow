@@ -225,9 +225,10 @@ pub async fn app_restart(app: AppHandle, state: Shared<'_>) -> Result<(), AppErr
         Ok(())
     })
     .await?;
+    // Every platform: Tauri's restart starts the new process before this one exits.
+    tauri_plugin_single_instance::destroy(&app);
     #[cfg(target_os = "macos")]
     {
-        tauri_plugin_single_instance::destroy(&app);
         match adapters_macos::permission::spawn_relaunch() {
             Ok(()) => {
                 app.exit(0);

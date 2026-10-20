@@ -1,4 +1,4 @@
-import type { AppTotalDto, FocusDto, TrackingStateDto } from "@/shared/ipc";
+import type { AppTotalDto, DegradedReasonDto, FocusDto, TrackingStateDto } from "@/shared/ipc";
 
 /** Pure view-model helpers for the popover (no IPC, no clock). */
 
@@ -65,6 +65,13 @@ export function toggleAction(state: TrackingStateDto): ToggleAction | null {
     case "asleep":
       return null;
   }
+}
+
+/** Status line while tracking is degraded; a missing reason means macOS Accessibility. */
+export function degradedLabel(reason: DegradedReasonDto | null | undefined): string {
+  return (reason ?? "accessibility_denied") === "accessibility_denied"
+    ? "Tracking, titles off"
+    : "Tracking, windows unavailable";
 }
 
 export function stateLabel(state: TrackingStateDto): string {

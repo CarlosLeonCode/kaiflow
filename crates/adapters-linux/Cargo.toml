@@ -1,0 +1,30 @@
+[package]
+name = "adapters-linux"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Linux adapters: X11 active window and title, X11 idle counter, logind sleep/lock signals and Wayland detection. Only parsing helpers on other platforms."
+
+[features]
+default = ["logind"]
+# Sleep/wake, lock/unlock and the Wayland idle fallback over D-Bus (logind, GNOME Mutter).
+# zbus is already in the Linux dependency tree through the notification plugin, so the
+# extra build cost is small; without the feature only X11 focus and X11 idle are tracked.
+logind = ["dep:zbus"]
+
+[dependencies]
+adapters-common.workspace = true
+domain.workspace = true
+application.workspace = true
+crossbeam-channel.workspace = true
+
+# Pure-Rust X11 client (no libX11 link). 0.13 is the line Tauri's own dependencies already
+# use, so the workspace builds a single copy.
+[target.'cfg(target_os = "linux")'.dependencies]
+x11rb = { version = "0.13", default-features = false, features = ["screensaver"] }
+zbus = { version = "5", optional = true, default-features = false, features = [
+    "async-io",
+    "blocking-api",
+] }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildTopApps, elapsedSinceFetch, toggleAction } from "./derive";
+import { buildTopApps, degradedLabel, elapsedSinceFetch, toggleAction } from "./derive";
 
 const byApp = [
   { app_id: "a", app_name: "Alpha", total_ms: 60_000 },
@@ -35,6 +35,15 @@ describe("elapsedSinceFetch", () => {
     expect(elapsedSinceFetch(1_000, 4_000, true)).toBe(3_000);
     expect(elapsedSinceFetch(1_000, 4_000, false)).toBe(0);
     expect(elapsedSinceFetch(5_000, 4_000, true)).toBe(0);
+  });
+});
+
+describe("degradedLabel", () => {
+  it("names what is missing for each platform reason", () => {
+    expect(degradedLabel("accessibility_denied")).toBe("Tracking, titles off");
+    expect(degradedLabel(null)).toBe("Tracking, titles off");
+    expect(degradedLabel("wayland_session")).toBe("Tracking, windows unavailable");
+    expect(degradedLabel("no_display")).toBe("Tracking, windows unavailable");
   });
 });
 

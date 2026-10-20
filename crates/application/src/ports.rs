@@ -99,10 +99,27 @@ pub trait PowerEventsProvider {
     fn subscribe(&self, tx: Sender<SystemSignal>);
 }
 
+/// Why tracking runs degraded (`PermissionState::Denied`), so the UI can explain it and offer
+/// the right remedy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DegradedReason {
+    /// macOS Accessibility is not granted: app names only, no window titles.
+    AccessibilityDenied,
+    /// Linux Wayland session without a usable X11 active window: windows cannot be observed,
+    /// idle detection still works.
+    WaylandSession,
+    /// No display server could be reached (headless Linux session).
+    NoDisplay,
+}
+
 pub trait PermissionProvider: Send + Sync {
     fn accessibility(&self) -> PermissionState;
     fn request(&self);
     fn open_settings(&self);
+    /// What a `Denied` state means on this platform. Fixed for the life of the process.
+    fn degraded_reason(&self) -> DegradedReason {
+        DegradedReason::AccessibilityDenied
+    }
 }
 
 /// Write side, owned by the engine thread. At most one segment is open at a time.

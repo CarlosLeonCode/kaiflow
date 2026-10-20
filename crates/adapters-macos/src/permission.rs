@@ -6,20 +6,15 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+#[cfg(target_os = "macos")]
 use domain::PermissionState;
 
 /// Opens System Settings at Privacy & Security > Accessibility (verified in the phase 2 spike).
 pub const ACCESSIBILITY_SETTINGS_URL: &str =
     "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility";
 
-/// Maps the raw `AXIsProcessTrusted` answer to the domain state.
-pub fn state_from_trusted(trusted: bool) -> PermissionState {
-    if trusted {
-        PermissionState::Granted
-    } else {
-        PermissionState::Denied
-    }
-}
+/// Maps the raw `AXIsProcessTrusted` answer to the domain state (shared with every platform).
+pub use adapters_common::permission::state_from_trusted;
 
 /// `Contents/MacOS/<exe>` inside a `.app` -> the bundle root. `None` when the executable is
 /// not inside a bundle (for example `cargo run` or `tauri dev`).
@@ -109,12 +104,6 @@ mod tests {
     use application::ports::PermissionProvider;
 
     use super::*;
-
-    #[test]
-    fn trusted_maps_to_granted_and_untrusted_to_denied() {
-        assert_eq!(state_from_trusted(true), PermissionState::Granted);
-        assert_eq!(state_from_trusted(false), PermissionState::Denied);
-    }
 
     #[test]
     fn bundle_path_is_found_for_an_app_executable() {

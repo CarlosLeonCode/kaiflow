@@ -1,6 +1,6 @@
 # TimeTrack
 
-TimeTrack is a local-first macOS menu bar app that records which apps and windows you use, so you can see where your day actually goes. Nothing leaves your machine.
+TimeTrack is a local-first menu bar app that records which apps and windows you use, so you can see where your day actually goes. Nothing leaves your machine. It is built for macOS and also tracks on Windows and Linux (X11; Wayland sessions are limited), see [docs/platform-support.md](docs/platform-support.md).
 
 ## Features
 
@@ -64,7 +64,10 @@ npm run e2e
 | `crates/domain` | Pure tracking rules: segments, state machine, idle gaps, categories, privacy |
 | `crates/application` | Ports, tracking engine, queries, commands, CSV export |
 | `crates/adapters-sqlite` | SQLite schema, migrations and repositories |
+| `crates/adapters-common` | Platform-neutral sampler core, idle edge detection, signal fan-out |
 | `crates/adapters-macos` | NSWorkspace, Accessibility, idle, lock and permission adapters |
+| `crates/adapters-windows` | Win32 foreground window, WinEvent hook, idle, lock and power adapters |
+| `crates/adapters-linux` | X11 (`x11rb`) focus and idle, logind over D-Bus, Wayland detection |
 | `src-tauri` | Tauri shell: composition, typed IPC, tray, windows, updater |
 | `src` | React frontend: popover, main window, onboarding |
 

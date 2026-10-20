@@ -90,6 +90,19 @@ describe("TrackingPopoverContainer", () => {
     await waitFor(() => expect(calls.some((c) => c.cmd === "permission_open_settings")).toBe(true));
   });
 
+  it("explains a Wayland session without offering System Settings", async () => {
+    mockBackend({
+      get_status: () =>
+        status({ degraded: true, degraded_reason: "wayland_session", current: null, since: null }),
+      get_report: () => report(),
+    });
+    renderWithProviders(<TrackingPopoverContainer />);
+
+    expect(await screen.findByText("Window tracking is unavailable on Wayland")).toBeInTheDocument();
+    expect(screen.getByText(/Idle detection still works/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Open System Settings" })).not.toBeInTheDocument();
+  });
+
   it("shows the shortcut-unavailable banner with the reason (R6.3)", async () => {
     mockBackend({
       get_status: () =>

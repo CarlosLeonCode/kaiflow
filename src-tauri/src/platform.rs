@@ -1,27 +1,49 @@
-//! Chooses the OS adapters. On macOS the real observers, sampler and permission provider
-//! from `adapters-macos` are wired; other platforms keep the no-op placeholders (the ports
-//! are ready for Windows/Linux but v1 has no implementation for them).
+//! Chooses the OS adapters: `adapters-macos` (AppKit observers, Accessibility),
+//! `adapters-windows` (Win32 foreground window, WinEvent hook, session/power messages) or
+//! `adapters-linux` (X11 + logind, degraded on Wayland). All three drive the shared sampler
+//! from `adapters-common`. The no-op placeholders remain only as a last resort (unsupported
+//! OS, or macOS when not called on the main thread).
 
+use application::ports::Notifier;
 use tauri::{AppHandle, Wry};
 
 use crate::composition::Providers;
 use crate::notifications::{SystemNotifier, TauriToaster};
 
 /// Providers for the running platform. Must be called on the main thread: the AppKit
-/// observers are created and kept alive here.
+/// observers are created and kept alive here (the other platforms start their own threads).
 pub fn providers(app: &AppHandle<Wry>) -> Providers {
-    let notifier = Box::new(SystemNotifier::new(TauriToaster::new(app.clone())));
-    #[cfg(target_os = "macos")]
-    {
-        if let Some(providers) = mac::providers(notifier) {
-            return providers;
+    let notifier: Box<dyn Notifier> = Box::new(SystemNotifier::new(TauriToaster::new(app.clone())));
+    native(notifier).unwrap_or_else(|| {
+        eprintln!(
+            "no native adapters (unsupported OS or not on the main thread): tracking is idle"
+        );
+        Providers {
+            notifier: Box::new(SystemNotifier::new(TauriToaster::new(app.clone()))),
+            ..Providers::placeholders()
         }
-        eprintln!("not on the main thread: native observers disabled");
-    }
-    Providers {
-        notifier: Box::new(SystemNotifier::new(TauriToaster::new(app.clone()))),
-        ..Providers::placeholders()
-    }
+    })
+}
+
+/// `None` when not on the main thread (observers cannot be installed from elsewhere).
+#[cfg(target_os = "macos")]
+fn native(notifier: Box<dyn Notifier>) -> Option<Providers> {
+    mac::providers(notifier)
+}
+
+#[cfg(windows)]
+fn native(notifier: Box<dyn Notifier>) -> Option<Providers> {
+    Some(win::providers(notifier))
+}
+
+#[cfg(target_os = "linux")]
+fn native(notifier: Box<dyn Notifier>) -> Option<Providers> {
+    Some(linux::providers(notifier))
+}
+
+#[cfg(not(any(target_os = "macos", windows, target_os = "linux")))]
+fn native(_notifier: Box<dyn Notifier>) -> Option<Providers> {
+    None
 }
 
 #[cfg(target_os = "macos")]
@@ -80,5 +102,74 @@ mod mac {
             idle_threshold: threshold,
             sampler: Some(Box::new(move |engine, stop| sampler.spawn(engine, stop))),
         })
+    }
+}
+
+#[cfg(windows)]
+mod win {
+    use std::sync::Arc;
+
+    use adapters_common::idle::IdleThreshold;
+    use adapters_common::sampler::{Sampler, SamplerWindow, SharedFrontmost};
+    use adapters_windows::{WinPermission, WindowsPlatform};
+    use application::ports::Notifier;
+
+    use crate::composition::{Providers, SystemClock};
+
+    pub fn providers(notifier: Box<dyn Notifier>) -> Providers {
+        let platform = WindowsPlatform::start();
+        let frontmost = SharedFrontmost::new(platform.frontmost());
+        let threshold = IdleThreshold::default();
+        let sampler = Sampler::new(
+            platform.env.clone(),
+            frontmost.clone(),
+            threshold.clone(),
+            platform.activations,
+            Box::new(SystemClock),
+        );
+        Providers {
+            window: Box::new(SamplerWindow::new(frontmost, platform.env)),
+            power: Box::new(platform.power),
+            permission: Arc::new(WinPermission),
+            notifier,
+            idle_threshold: threshold,
+            sampler: Some(Box::new(move |engine, stop| sampler.spawn(engine, stop))),
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+mod linux {
+    use std::sync::Arc;
+
+    use adapters_common::idle::IdleThreshold;
+    use adapters_common::sampler::{Sampler, SamplerWindow, SharedFrontmost};
+    use adapters_linux::LinuxPlatform;
+    use application::ports::Notifier;
+
+    use crate::composition::{Providers, SystemClock};
+    use crate::notifications::WithoutRevocationNotice;
+
+    pub fn providers(notifier: Box<dyn Notifier>) -> Providers {
+        let platform = LinuxPlatform::start();
+        // A degraded Linux session is never a revoked permission (the banner explains it).
+        let notifier = Box::new(WithoutRevocationNotice(notifier));
+        let frontmost = SharedFrontmost::new(platform.frontmost());
+        let threshold = IdleThreshold::default();
+        let sampler = Sampler::new(
+            platform.env.clone(),
+            frontmost.clone(),
+            threshold.clone(),
+            platform.activations,
+            Box::new(SystemClock),
+        );
+        Providers {
+            window: Box::new(SamplerWindow::new(frontmost, platform.env)),
+            power: Box::new(platform.power),
+            permission: Arc::new(platform.permission),
+            notifier,
+            idle_threshold: threshold,
+            sampler: Some(Box::new(move |engine, stop| sampler.spawn(engine, stop))),
+        }
     }
 }

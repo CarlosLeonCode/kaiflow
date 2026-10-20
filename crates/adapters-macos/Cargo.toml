@@ -8,6 +8,7 @@ publish.workspace = true
 description = "macOS adapters: NSWorkspace observer, Accessibility permission and AX window titles, the 2 s sampler, idle and lock detection."
 
 [dependencies]
+adapters-common.workspace = true
 domain.workspace = true
 application.workspace = true
 crossbeam-channel.workspace = true

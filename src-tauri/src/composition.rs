@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 use std::thread::JoinHandle;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use adapters_macos::idle::IdleThreshold;
+use adapters_common::idle::IdleThreshold;
 use adapters_sqlite::{
     DbError, SqliteCategoryRepository, SqlitePrivacyRepository, SqliteReportRepository,
     SqliteRetentionRepository, SqliteSessionRepository, SqliteSettingsRepository,
@@ -50,7 +50,8 @@ impl Clock for SystemClock {
 pub type SamplerLauncher =
     Box<dyn FnOnce(EngineHandle, Receiver<()>) -> std::io::Result<JoinHandle<()>> + Send>;
 
-/// OS-facing ports supplied by the caller: macOS adapters in production, fakes in tests.
+/// OS-facing ports supplied by the caller: the platform adapters in production (see
+/// `platform.rs`), fakes in tests.
 pub struct Providers {
     pub window: Box<dyn ActiveWindowProvider>,
     pub power: Box<dyn PowerEventsProvider>,
@@ -59,7 +60,7 @@ pub struct Providers {
     /// Idle threshold shared with the sampler; `compose` initializes it from the settings.
     pub idle_threshold: IdleThreshold,
     /// The sampler drives focus, idle, permission checks and the heartbeat. `None` keeps a
-    /// plain 2 s heartbeat thread (tests and non-macOS builds).
+    /// plain 2 s heartbeat thread (tests and the placeholder fallback).
     pub sampler: Option<SamplerLauncher>,
 }
 

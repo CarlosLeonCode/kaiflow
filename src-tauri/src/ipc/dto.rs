@@ -3,7 +3,7 @@
 //! far below 2^53, so the bindings export them as TypeScript `number`.
 
 use application::commands::{DeleteOp, RuleInput, RuleSpec, Settings, SettingsPatch, TrayDisplay};
-use application::ports::{PrivacyMode, TrackingKind, TrackingStatus};
+use application::ports::{DegradedReason, PrivacyMode, TrackingKind, TrackingStatus};
 use application::queries::{AppTotal, BucketTotal, CategoryTotal, Range, Report, TimelineItem};
 use domain::{
     Category, CategoryId, CategoryRule, EndReason, FocusSnapshot, GapId, IdleGap, IdleResolution,
@@ -91,17 +91,48 @@ pub struct TrackingStatusDto {
     pub current: Option<FocusDto>,
     pub since: Option<i64>,
     pub degraded: bool,
+    /// Why tracking is degraded; set only while `degraded` is true.
+    pub degraded_reason: Option<DegradedReasonDto>,
     pub shortcut: ShortcutStatusDto,
 }
 
 impl TrackingStatusDto {
-    pub fn new(status: TrackingStatus, shortcut: ShortcutStatusDto) -> Self {
+    /// `reason` is the platform's explanation for a degraded state (fixed per process).
+    pub fn new(
+        status: TrackingStatus,
+        shortcut: ShortcutStatusDto,
+        reason: DegradedReasonDto,
+    ) -> Self {
         Self {
             state: status.kind.into(),
             current: status.current.map(Into::into),
             since: status.since.map(|s| s.0),
             degraded: status.degraded,
+            degraded_reason: status.degraded.then_some(reason),
             shortcut,
+        }
+    }
+}
+
+/// Why tracking runs degraded, so the UI can explain it (and only offer System Settings
+/// where a permission can fix it).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum DegradedReasonDto {
+    /// macOS Accessibility not granted: app names only.
+    AccessibilityDenied,
+    /// Linux Wayland session: windows cannot be observed, idle still works.
+    WaylandSession,
+    /// No display server reachable.
+    NoDisplay,
+}
+
+impl From<DegradedReason> for DegradedReasonDto {
+    fn from(reason: DegradedReason) -> Self {
+        match reason {
+            DegradedReason::AccessibilityDenied => Self::AccessibilityDenied,
+            DegradedReason::WaylandSession => Self::WaylandSession,
+            DegradedReason::NoDisplay => Self::NoDisplay,
         }
     }
 }
@@ -599,6 +630,39 @@ mod tests {
     }
 
     #[test]
+    fn the_degraded_reason_is_only_sent_while_degraded() {
+        let status = TrackingStatus {
+            kind: TrackingKind::Running,
+            current: None,
+            since: None,
+            degraded: false,
+        };
+        let dto = TrackingStatusDto::new(
+            status,
+            ShortcutStatusDto::Disabled,
+            DegradedReasonDto::AccessibilityDenied,
+        );
+        assert_eq!(dto.degraded_reason, None);
+    }
+
+    #[test]
+    fn degraded_reasons_map_one_to_one() {
+        for (reason, dto) in [
+            (
+                DegradedReason::AccessibilityDenied,
+                DegradedReasonDto::AccessibilityDenied,
+            ),
+            (
+                DegradedReason::WaylandSession,
+                DegradedReasonDto::WaylandSession,
+            ),
+            (DegradedReason::NoDisplay, DegradedReasonDto::NoDisplay),
+        ] {
+            assert_eq!(DegradedReasonDto::from(reason), dto);
+        }
+    }
+
+    #[test]
     fn status_maps_state_focus_and_shortcut() {
         let dto = TrackingStatusDto::new(
             TrackingStatus {
@@ -608,10 +672,12 @@ mod tests {
                 degraded: true,
             },
             ShortcutStatusDto::Disabled,
+            DegradedReasonDto::WaylandSession,
         );
         assert_eq!(dto.state, TrackingStateDto::Running);
         assert_eq!(dto.since, Some(1_000));
         assert!(dto.degraded);
+        assert_eq!(dto.degraded_reason, Some(DegradedReasonDto::WaylandSession));
         let current = dto.current.unwrap();
         assert_eq!(current.app_id, "com.apple.Safari");
         assert_eq!(current.window_title.as_deref(), Some("Docs"));

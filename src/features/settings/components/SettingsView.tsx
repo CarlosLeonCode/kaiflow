@@ -1,7 +1,7 @@
 import { Monitor, Moon, Sun } from "lucide-react";
 import type { ReactNode } from "react";
 
-import type { SettingsDto, SettingsPatchDto } from "@/shared/ipc";
+import type { DegradedReasonDto, SettingsDto, SettingsPatchDto } from "@/shared/ipc";
 import { parseTheme, type ThemeSetting } from "@/shared/lib/theme";
 import { Alert, AlertDescription } from "@/shared/ui/alert";
 import { Panel, Row } from "@/shared/ui/field";
@@ -26,6 +26,8 @@ interface Props {
   /** `undefined` while loading. */
   settings: SettingsDto | undefined;
   degraded: boolean;
+  /** Why tracking is degraded; `null` falls back to the Accessibility explanation. */
+  degradedReason?: DegradedReasonDto | null;
   shortcutError: string | null;
   /** Failure of any other setting, shown once at the top. */
   error: string | null;
@@ -39,6 +41,7 @@ interface Props {
 export function SettingsView({
   settings,
   degraded,
+  degradedReason,
   shortcutError,
   error,
   onChange,
@@ -54,7 +57,7 @@ export function SettingsView({
         </div>
       ) : (
         <div className="max-w-xl space-y-6">
-          {degraded && <DegradedBanner onOpenSettings={onOpenAccessibilitySettings} />}
+          {degraded && <DegradedBanner reason={degradedReason} onOpenSettings={onOpenAccessibilitySettings} />}
           {error && (
             <Alert variant="warning" role="alert">
               <AlertDescription>{error}</AlertDescription>

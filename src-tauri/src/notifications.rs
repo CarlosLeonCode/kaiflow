@@ -77,6 +77,20 @@ impl<T: Toaster> Notifier for SystemNotifier<T> {
     }
 }
 
+/// Forwards idle-return notifications but drops the "Accessibility was turned off" one. Used
+/// where a degraded state comes from the session (Linux on Wayland or without a display), not
+/// from a revoked permission: the in-app banner explains it, and a revocation notice at every
+/// launch would be wrong.
+pub struct WithoutRevocationNotice(pub Box<dyn Notifier>);
+
+impl Notifier for WithoutRevocationNotice {
+    fn idle_return(&self, gap: &IdleGap) {
+        self.0.idle_return(gap);
+    }
+
+    fn permission_revoked(&self) {}
+}
+
 /// Body of the idle-return notification. Never includes window titles.
 pub fn idle_message(gap: &IdleGap) -> String {
     let minutes = (gap.ended_at.0 - gap.started_at.0).max(0) / 60_000;
@@ -243,6 +257,16 @@ mod tests {
         let notifier = SystemNotifier::new(toaster.clone());
         notifier.permission_revoked();
         notifier.permission_revoked();
+        assert_eq!(toaster.shown.lock().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn the_session_wrapper_drops_only_the_revocation_alert() {
+        let toaster = FakeToaster::new(Authorization::Granted, false);
+        let notifier = WithoutRevocationNotice(Box::new(SystemNotifier::new(toaster.clone())));
+        notifier.permission_revoked();
+        assert!(toaster.shown.lock().unwrap().is_empty());
+        notifier.idle_return(&gap(6));
         assert_eq!(toaster.shown.lock().unwrap().len(), 1);
     }
 

@@ -8,7 +8,7 @@ import { useSectionShortcuts } from "@/features/shell/hooks/useSectionShortcuts"
 import { DEFAULT_SECTION, type SectionId } from "@/features/shell/lib/sections";
 import { SettingsContainer } from "@/features/settings/containers/SettingsContainer";
 import { TodayContainer } from "@/features/today/containers/TodayContainer";
-import { stateLabel } from "@/features/tracking/lib/derive";
+import { degradedLabel, stateLabel } from "@/features/tracking/lib/derive";
 import { useStatusQuery } from "@/shared/ipc";
 
 function SectionView({ section, onNavigate }: { section: SectionId; onNavigate: (next: SectionId) => void }) {
@@ -46,7 +46,7 @@ export function MainApp() {
         status={
           status.data
             ? {
-                label: status.data.degraded ? "Tracking, titles off" : stateLabel(status.data.state),
+                label: status.data.degraded ? degradedLabel(status.data.degraded_reason) : stateLabel(status.data.state),
                 running: status.data.state === "running",
                 degraded: status.data.degraded,
               }

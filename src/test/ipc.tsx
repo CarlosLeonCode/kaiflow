@@ -22,6 +22,7 @@ export function status(overrides: Partial<TrackingStatusDto> = {}): TrackingStat
     current: focus(),
     since: FIXED_NOW - 5 * 60_000,
     degraded: false,
+    degraded_reason: null,
     shortcut: { kind: "registered", shortcut: "⌃⌥⌘T" },
     ...overrides,
   };

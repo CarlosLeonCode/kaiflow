@@ -18,6 +18,7 @@ tauri-build = "2.7"
 domain.workspace = true
 application.workspace = true
 adapters-sqlite = { path = "../crates/adapters-sqlite" }
+adapters-common.workspace = true
 
 tauri = { version = "2.12", features = ["tray-icon", "image-png"] }
 # Only used from Rust (save dialog for CSV export); no window receives plugin permissions (R6.5).
@@ -30,7 +31,6 @@ tauri-plugin-notification = "2.7"
 # Stable 2.x line (3.x is alpha). Rust-only like every plugin: the frontend talks to the
 # `update_check` / `update_install` commands, never to the plugin.
 tauri-plugin-updater = "2.14"
-adapters-macos = { path = "../crates/adapters-macos" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # Local-day bounds for the tray text (the frontend computes its own in JS).
@@ -43,9 +43,17 @@ specta = { version = "=2.0.0-rc.25", features = ["derive"] }
 specta-typescript = "0.0.12"
 tauri-specta = { version = "=2.0.0-rc.25", features = ["derive", "typescript"] }
 
+# OS adapters, one per platform (`platform.rs` picks them with the same cfg gates).
 # Main-thread marker for the AppKit observers wired in `platform.rs`.
 [target.'cfg(target_os = "macos")'.dependencies]
+adapters-macos = { path = "../crates/adapters-macos" }
 objc2 = "0.6"
+
+[target.'cfg(windows)'.dependencies]
+adapters-windows = { path = "../crates/adapters-windows" }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+adapters-linux = { path = "../crates/adapters-linux" }
 
 [dev-dependencies]
 application = { workspace = true, features = ["test-fakes"] }

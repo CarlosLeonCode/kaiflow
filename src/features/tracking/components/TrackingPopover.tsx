@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import type { FocusDto, ShortcutStatusDto, TrackingStateDto } from "@/shared/ipc";
+import type { DegradedReasonDto, FocusDto, ShortcutStatusDto, TrackingStateDto } from "@/shared/ipc";
 
 import type { ToggleCommand, TopAppRow } from "../lib/derive";
 import { CurrentActivity } from "./CurrentActivity";
@@ -12,6 +12,8 @@ import { StatusHeader, TrackingFooter } from "./TrackingControls";
 export interface TrackingPopoverProps {
   state: TrackingStateDto;
   degraded: boolean;
+  /** Why tracking is degraded; `null` falls back to the Accessibility explanation. */
+  degradedReason?: DegradedReasonDto | null;
   shortcut: ShortcutStatusDto;
   current: FocusDto | null;
   currentElapsedMs: number | null;
@@ -38,7 +40,9 @@ export function TrackingPopover(props: TrackingPopoverProps) {
 
       <div className="min-h-0 flex-1 overflow-y-auto pb-3">
         <div className="space-y-2 px-4 pt-3 empty:hidden">
-          {props.degraded && <DegradedBanner onOpenSettings={props.onOpenAccessibilitySettings} />}
+          {props.degraded && (
+            <DegradedBanner reason={props.degradedReason} onOpenSettings={props.onOpenAccessibilitySettings} />
+          )}
           {shortcut.kind === "unavailable" && (
             <ShortcutBanner shortcut={shortcut.shortcut} reason={shortcut.reason} />
           )}

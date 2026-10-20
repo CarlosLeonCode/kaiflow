@@ -1,0 +1,7 @@
+# LF everywhere, also on Windows checkouts (CI runs there): generated bindings.ts is compared
+# byte for byte and `cargo fmt --check` expects LF.
+* text=auto eol=lf
+
+*.png binary
+*.icns binary
+*.ico binary

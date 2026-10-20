@@ -125,6 +125,7 @@ export function installMockBackend(options: MockOptions = {}): void {
           : null,
       since: tracking === "running" && current ? current.started_at : null,
       degraded: permission === "denied",
+      degraded_reason: permission === "denied" ? "accessibility_denied" : null,
       shortcut: { kind: "registered", shortcut: settings.shortcut },
     };
   };

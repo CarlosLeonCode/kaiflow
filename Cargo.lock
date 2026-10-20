@@ -9,9 +9,31 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fe438c63458706e03479442743baae6c88256498e6431708f6dfc520a26515d3"
 
 [[package]]
+name = "adapters-common"
+version = "0.1.0"
+dependencies = [
+ "application",
+ "crossbeam-channel",
+ "domain",
+]
+
+[[package]]
+name = "adapters-linux"
+version = "0.1.0"
+dependencies = [
+ "adapters-common",
+ "application",
+ "crossbeam-channel",
+ "domain",
+ "x11rb",
+ "zbus",
+]
+
+[[package]]
 name = "adapters-macos"
 version = "0.1.0"
 dependencies = [
+ "adapters-common",
  "application",
  "block2",
  "crossbeam-channel",
@@ -32,6 +54,17 @@ dependencies = [
  "domain",
  "rusqlite",
  "tempfile",
+]
+
+[[package]]
+name = "adapters-windows"
+version = "0.1.0"
+dependencies = [
+ "adapters-common",
+ "application",
+ "crossbeam-channel",
+ "domain",
+ "windows",
 ]
 
 [[package]]
@@ -4780,8 +4813,11 @@ dependencies = [
 name = "time-track-app"
 version = "0.1.0"
 dependencies = [
+ "adapters-common",
+ "adapters-linux",
  "adapters-macos",
  "adapters-sqlite",
+ "adapters-windows",
  "application",
  "chrono",
  "crossbeam-channel",

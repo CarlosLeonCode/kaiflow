@@ -140,6 +140,18 @@ export type DataChanged = {
 
 export type DataKindDto = "segments" | "gaps";
 
+/**
+ *  Why tracking runs degraded, so the UI can explain it (and only offer System Settings
+ *  where a permission can fix it).
+ */
+export type DegradedReasonDto = 
+/**  macOS Accessibility not granted: app names only. */
+"accessibility_denied" | 
+/**  Linux Wayland session: windows cannot be observed, idle still works. */
+"wayland_session" | 
+/**  No display server reachable. */
+"no_display";
+
 /**  Destructive operation to confirm with `prepare_delete`. */
 export type DeleteOpDto = { kind: "range"; range: RangeDto } | { kind: "older_than_days"; days: number } | { kind: "all" };
 
@@ -282,6 +294,8 @@ export type TrackingStatusDto = {
 	current: FocusDto | null,
 	since: number | null,
 	degraded: boolean,
+	/**  Why tracking is degraded; set only while `degraded` is true. */
+	degraded_reason: DegradedReasonDto | null,
 	shortcut: ShortcutStatusDto,
 };
 

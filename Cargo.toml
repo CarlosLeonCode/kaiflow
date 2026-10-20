@@ -4,7 +4,10 @@ members = [
     "crates/domain",
     "crates/application",
     "crates/adapters-sqlite",
+    "crates/adapters-common",
     "crates/adapters-macos",
+    "crates/adapters-windows",
+    "crates/adapters-linux",
     "src-tauri",
 ]
 
@@ -18,6 +21,7 @@ publish = false
 [workspace.dependencies]
 domain = { path = "crates/domain" }
 application = { path = "crates/application" }
+adapters-common = { path = "crates/adapters-common" }
 
 # select! over signals, IPC commands and ticks in the engine thread (design section 6).
 crossbeam-channel = "0.5"

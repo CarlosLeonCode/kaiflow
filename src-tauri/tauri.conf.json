@@ -20,7 +20,11 @@
     "active": true,
     "targets": [
       "app",
-      "dmg"
+      "dmg",
+      "msi",
+      "nsis",
+      "appimage",
+      "deb"
     ],
     "category": "Productivity",
     "icon": [
@@ -30,6 +34,13 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "linux": {
+      "deb": {
+        "depends": [
+          "libayatana-appindicator3-1"
+        ]
+      }
+    },
     "macOS": {
       "minimumSystemVersion": "13.0",
       "hardenedRuntime": true,

@@ -46,6 +46,7 @@ export function TrackingPopoverContainer({ notice }: { notice?: ReactNode }) {
     <TrackingPopover
       state={data?.state ?? "stopped"}
       degraded={data?.degraded ?? false}
+      degradedReason={data?.degraded_reason ?? null}
       shortcut={data?.shortcut ?? { kind: "disabled" }}
       current={data?.current ?? null}
       currentElapsedMs={data?.since != null ? Math.max(0, now - data.since) : null}

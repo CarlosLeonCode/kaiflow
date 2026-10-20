@@ -1,6 +1,7 @@
-//! TEMPORARY stand-ins for the macOS providers. They are replaced by the `adapters-macos`
-//! implementations in the next batch (tasks 2.3-2.6, 2.8); until then the app runs and the
-//! whole IPC surface works, but nothing observes the real desktop.
+//! Last-resort stand-ins for the OS providers, used only when no native adapter can run
+//! (an unsupported OS, or macOS when `platform::providers` is not on the main thread) and as
+//! the base for tests. The app and the whole IPC surface keep working, but nothing observes
+//! the real desktop.
 
 use application::ports::{
     ActiveWindowProvider, IdleProvider, Notifier, PermissionProvider, PowerEventsProvider,

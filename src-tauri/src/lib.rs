@@ -75,9 +75,14 @@ pub fn run() {
             let shortcut = AppState::default_shortcut();
             // `setup` runs on the main thread, where the AppKit observers must be created.
             let providers = platform::providers(&handle);
+            let degraded_reason = providers.permission.degraded_reason().into();
             let state = Arc::new(compose(
                 &data_dir.join(DB_FILE),
-                Box::new(event_sink::tauri_sink(&handle, shortcut.clone())),
+                Box::new(event_sink::tauri_sink(
+                    &handle,
+                    shortcut.clone(),
+                    degraded_reason,
+                )),
                 shortcut.clone(),
                 providers,
             )?);

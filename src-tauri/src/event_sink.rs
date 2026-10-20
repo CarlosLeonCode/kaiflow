@@ -7,6 +7,7 @@ use application::ports::DataKind;
 use application::ports::{DomainEvent, EventSink, TrackingKind};
 use tauri::{AppHandle, Manager, Wry};
 
+use crate::ipc::dto::DegradedReasonDto;
 use crate::ipc::events::{SharedShortcut, TauriEventSink};
 use crate::tray_text::TrayText;
 use crate::{tray, windows};
@@ -91,13 +92,14 @@ impl<I: EventSink, S: Shell> EventSink for ShellEventSink<I, S> {
     }
 }
 
-/// Production sink for `app`.
+/// Production sink for `app`. `degraded_reason` explains a degraded status on this platform.
 pub fn tauri_sink(
     app: &AppHandle<Wry>,
     shortcut: SharedShortcut,
+    degraded_reason: DegradedReasonDto,
 ) -> ShellEventSink<TauriEventSink, TauriShell> {
     ShellEventSink::new(
-        TauriEventSink::new(app.clone(), shortcut),
+        TauriEventSink::new(app.clone(), shortcut, degraded_reason),
         TauriShell::new(app.clone()),
     )
 }

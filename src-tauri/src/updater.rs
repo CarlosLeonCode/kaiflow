@@ -128,7 +128,6 @@ pub async fn install_pending(
         .await
         .map_err(internal)?;
     // Same reason as `app_restart`: the new instance must not defer to this one.
-    #[cfg(target_os = "macos")]
     tauri_plugin_single_instance::destroy(app);
     app.restart()
 }

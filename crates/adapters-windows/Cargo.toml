@@ -1,0 +1,29 @@
+[package]
+name = "adapters-windows"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Windows adapters: foreground window and title, WinEvent hook, idle counter, lock/unlock and sleep/wake. Empty library on other platforms."
+
+[dependencies]
+adapters-common.workspace = true
+domain.workspace = true
+application.workspace = true
+crossbeam-channel.workspace = true
+
+# Only Win32 APIs that need no OS permission. Features are opt-in per module in `windows`.
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62.2", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_Storage_FileSystem",
+    "Win32_System_LibraryLoader",
+    "Win32_System_RemoteDesktop",
+    "Win32_System_SystemInformation",
+    "Win32_System_Threading",
+    "Win32_UI_Accessibility",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+] }

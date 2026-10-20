@@ -32,6 +32,7 @@ export function SettingsContainer() {
     <SettingsView
       settings={settings.data}
       degraded={status.data?.degraded ?? false}
+      degradedReason={status.data?.degraded_reason ?? null}
       shortcutError={shortcutError}
       error={otherError ?? loadError}
       onChange={(changes) => update.mutate(changes)}

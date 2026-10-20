@@ -13,21 +13,10 @@ use application::ports::SystemSignal;
 /// Entries kept at most; terminated apps are removed on `didTerminate`, this is a safety net.
 const MAX_IDENTITIES: usize = 512;
 /// Pending activations kept for the sampler; older ones are irrelevant (it re-reads focus).
+#[cfg(target_os = "macos")]
 const ACTIVATION_QUEUE: usize = 64;
 
-/// What the engine needs to know about an application (design section 3, `FocusSnapshot`).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AppIdentity {
-    pub bundle_id: String,
-    pub name: String,
-}
-
-/// An application became frontmost.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Activation {
-    pub pid: i32,
-    pub identity: AppIdentity,
-}
+pub use adapters_common::activation::{Activation, AppIdentity};
 
 /// Shared `pid -> identity` cache fed by the notifications and read by the sampler thread.
 #[derive(Debug, Clone, Default)]
@@ -187,7 +176,7 @@ mod mac {
             let app = NSWorkspace::sharedWorkspace().frontmostApplication()?;
             let (pid, identity) = read_app(&app)?;
             self.identities.record(pid, identity.clone());
-            Some(Activation { pid, identity })
+            Some(Activation::of_process(pid, identity))
         }
 
         /// Installs the observers. Must run on the main thread because the blocks are
@@ -213,7 +202,7 @@ mod mac {
                     };
                     identities.record(pid, identity.clone());
                     // Full queue: the sampler is behind and re-reads the focus on its tick.
-                    let _ = activations.try_send(Activation { pid, identity });
+                    let _ = activations.try_send(Activation::of_process(pid, identity));
                 },
             ));
 
