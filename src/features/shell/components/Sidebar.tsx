@@ -39,8 +39,12 @@ export function Sidebar({ active, onSelect, status }: Props) {
               aria-current={current ? "page" : undefined}
               aria-keyshortcuts={`Meta+${section.digit}`}
               onClick={() => onSelect(section.id)}
+              // No color transition: the highlight must switch in the same frame as the
+              // section. An animated background is sampled from the animation timeline, which
+              // only advances while the webview paints, so a throttled or just-shown window
+              // kept showing the previous item highlighted.
               className={cn(
-                "flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-left text-sm transition-colors",
+                "flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-left text-sm",
                 current
                   ? "bg-accent font-medium text-foreground"
                   : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",

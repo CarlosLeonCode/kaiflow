@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatClock, formatDuration, localDayRange } from "./time";
+import { formatAxisDuration, formatClock, formatDuration, formatHour, formatTimeOfDay, localDayRange } from "./time";
 
 describe("localDayRange", () => {
   it("spans local midnight to the next local midnight around now", () => {
@@ -30,5 +30,39 @@ describe("durations", () => {
   it("formats the live clock", () => {
     expect(formatClock(0)).toBe("0:00:00");
     expect(formatClock(3_725_000)).toBe("1:02:05");
+  });
+});
+
+describe("formatAxisDuration", () => {
+  it("drops zero minutes so axis labels stay short", () => {
+    expect(formatAxisDuration(10 * 3_600_000)).toBe("10h");
+    expect(formatAxisDuration(5 * 3_600_000)).toBe("5h");
+    expect(formatAxisDuration(90 * 60_000)).toBe("1h 30m");
+    expect(formatAxisDuration(30 * 60_000)).toBe("30m");
+    expect(formatAxisDuration(150_000)).toBe("2m 30s");
+    expect(formatAxisDuration(45_000)).toBe("45s");
+    expect(formatAxisDuration(0)).toBe("0");
+  });
+});
+
+describe("clock times", () => {
+  // Built from local fields so the expectations hold in any time zone.
+  const early = new Date(2026, 9, 20, 1, 21).getTime();
+  const late = new Date(2026, 9, 20, 23, 54).getTime();
+  const after = new Date(2026, 9, 21, 0, 6).getTime();
+  const ampm = (text: string) => text.replace(/\s/g, " ");
+
+  it("has no leading zero in 12-hour locales, like the rest of the range", () => {
+    expect(ampm(formatTimeOfDay(early, "en-US"))).toBe("1:21 AM");
+    expect(ampm(formatTimeOfDay(late, "en-US"))).toBe("11:54 PM");
+    expect(ampm(formatTimeOfDay(after, "en-US"))).toBe("12:06 AM");
+  });
+
+  it("keeps the 24-hour convention in 24-hour locales", () => {
+    expect(formatTimeOfDay(late, "de-DE")).toBe("23:54");
+  });
+
+  it("formats axis hours", () => {
+    expect(ampm(formatHour(new Date(2026, 9, 20, 4).getTime(), "en-US"))).toBe("4 AM");
   });
 });

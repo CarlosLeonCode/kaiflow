@@ -43,3 +43,11 @@ test.describe("idle prompt", () => {
     await expect(page.getByTestId("today-total")).toHaveText("4:37:00");
   });
 });
+
+test("uses one clock format for the range and the expiry", async ({ page }) => {
+  await openWindow(page, "popover");
+
+  // en-US: no leading zero, same shape on both sides of the range and in the footer.
+  await expect(card(page)).toContainText(/12:43\sPM – 12:55\sPM/);
+  await expect(card(page)).toContainText(/discarded at [1-9]\d?:\d{2}\s[AP]M\./);
+});

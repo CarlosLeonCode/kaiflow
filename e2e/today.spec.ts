@@ -31,3 +31,22 @@ test.describe("Today", () => {
     await expectNoA11yViolations(page);
   });
 });
+
+test("timeline tick labels stay on one line inside the axis", async ({ page }) => {
+  await openSection(page, "Today");
+  const axis = page.getByTestId("timeline-axis");
+  await expect(axis.locator("span").first()).toBeVisible();
+
+  const result = await axis.evaluate((el) => {
+    const bounds = el.getBoundingClientRect();
+    return [...el.querySelectorAll("span")].map((span) => {
+      const box = span.getBoundingClientRect();
+      return {
+        text: span.textContent,
+        singleLine: box.height <= parseFloat(getComputedStyle(span).lineHeight) + 1,
+        inside: box.left >= bounds.left - 0.5 && box.right <= bounds.right + 0.5,
+      };
+    });
+  });
+  for (const tick of result) expect(tick, tick.text ?? "").toMatchObject({ singleLine: true, inside: true });
+});

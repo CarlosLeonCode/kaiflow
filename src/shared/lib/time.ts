@@ -47,9 +47,32 @@ export function formatClock(ms: number): string {
   return `${hours}:${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
 }
 
-/** Local `HH:MM` in the user's locale. */
-export function formatTimeOfDay(ms: number): string {
-  return new Date(ms).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+/**
+ * Compact axis duration: whole hours as `10h`, otherwise `1h 30m`, `30m` or `45s`. Chart axes
+ * use round values, so this is shorter than `formatDuration` (`10h 00m`) and never wraps.
+ */
+export function formatAxisDuration(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / SECOND));
+  if (total === 0) return "0";
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const seconds = total % 60;
+  if (hours > 0) return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`;
+  if (minutes > 0) return seconds === 0 ? `${minutes}m` : `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+}
+
+/**
+ * Local time of day in the user's locale (`1:21 AM`, `13:21`). The hour is `numeric`, so
+ * 12-hour locales get no leading zero; every clock time in the UI goes through this helper.
+ */
+export function formatTimeOfDay(ms: number, locale?: string): string {
+  return new Date(ms).toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" });
+}
+
+/** Local hour only (`4 AM`, `16`), for axis ticks. */
+export function formatHour(ms: number, locale?: string): string {
+  return new Date(ms).toLocaleTimeString(locale, { hour: "numeric" });
 }
 
 export { HOUR, MINUTE, SECOND };

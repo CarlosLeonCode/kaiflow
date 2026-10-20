@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { tuneCategoryColor } from "@/shared/lib/color";
-import { formatDuration } from "@/shared/lib/time";
+import { formatAxisDuration, formatDuration } from "@/shared/lib/time";
 
 import { niceCeiling, type Bar } from "../lib/summary";
 
@@ -82,10 +82,11 @@ export function StackedBars({ bars, dark, label }: Props) {
       <div className="flex gap-2">
         <div
           aria-hidden="true"
-          className="tabular flex h-40 w-8 shrink-0 flex-col justify-between text-right text-2xs text-muted-foreground"
+          data-testid="history-y-axis"
+          className="tabular flex h-40 w-12 shrink-0 flex-col justify-between whitespace-nowrap text-right text-2xs text-muted-foreground"
         >
-          <span className="-mt-1">{formatDuration(ceiling)}</span>
-          <span>{formatDuration(ceiling / 2)}</span>
+          <span className="-mt-1">{formatAxisDuration(ceiling)}</span>
+          <span>{formatAxisDuration(ceiling / 2)}</span>
           <span className="-mb-1">0</span>
         </div>
         <svg
@@ -169,7 +170,8 @@ export function StackedBars({ bars, dark, label }: Props) {
         </svg>
       </div>
 
-      <div className="ml-10 mt-1 flex" aria-hidden="true">
+      {/* Offset = y-axis width (w-12) + gap (gap-2), so labels sit under their bars. */}
+      <div className="ml-14 mt-1 flex" aria-hidden="true">
         {bars.map((bar, index) => (
           <span
             key={bar.range.from}

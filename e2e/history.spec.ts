@@ -48,3 +48,17 @@ test.describe("History", () => {
     await expectNoA11yViolations(page);
   });
 });
+
+test("y-axis labels are compact and stay on one line", async ({ page }) => {
+  await openSection(page, "History");
+  await expect(page.getByText("Mar 16 – 22, 2026")).toBeVisible();
+
+  const labels = page.getByTestId("history-y-axis").locator("span");
+  for (const label of await labels.all()) {
+    await expect(label).toHaveText(/^(0|\d+h( \d+m)?|\d+m( \d+s)?|\d+s)$/);
+    const lines = await label.evaluate((el) => el.getClientRects().length);
+    const box = await label.evaluate((el) => ({ h: el.getBoundingClientRect().height, lh: parseFloat(getComputedStyle(el).lineHeight) }));
+    expect(lines).toBe(1);
+    expect(box.h).toBeLessThanOrEqual(box.lh + 1);
+  }
+});

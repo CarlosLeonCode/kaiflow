@@ -61,6 +61,32 @@ describe("MainApp shell", () => {
     expect(await screen.findByRole("heading", { name: "Today" })).toBeInTheDocument();
   });
 
+  it("highlights exactly the rendered section, immediately and without a color transition", async () => {
+    const user = userEvent.setup();
+    backend();
+    renderWithProviders(<MainApp />);
+    const nav = screen.getByRole("navigation", { name: "Sections" });
+    const current = () => within(nav).getAllByRole("button").filter((b) => b.getAttribute("aria-current") === "page");
+
+    const steps: [() => Promise<void>, string][] = [
+      [() => user.click(within(nav).getByRole("button", { name: /Categories/ })), "Categories"],
+      [() => user.click(within(nav).getByRole("button", { name: /History/ })), "History"],
+      [() => user.keyboard("{Meta>}3{/Meta}"), "Categories"],
+      [() => user.keyboard("{Meta>}1{/Meta}"), "Today"],
+    ];
+    for (const [act, name] of steps) {
+      await act();
+      // Same render as the section switch: no waiting for data or animation.
+      expect(current().map((b) => b.textContent?.replace(/⌘\d/, ""))).toEqual([name]);
+      expect(await screen.findByRole("heading", { level: 1, name })).toBeInTheDocument();
+    }
+    // Regression: an animated background made the previous item look selected while the
+    // webview was not painting (the highlight is sampled from the animation timeline).
+    for (const button of within(nav).getAllByRole("button")) {
+      expect(button.className).not.toMatch(/\btransition/);
+    }
+  });
+
   it("renders History, Categories and Privacy", async () => {
     const user = userEvent.setup();
     backend();

@@ -1,6 +1,6 @@
 import type { AppTotalDto, CategoryTotalDto, RangeDto, ReportDto } from "@/shared/ipc";
 import { appLabel, categoryLabel } from "@/shared/lib/labels";
-import { MINUTE } from "@/shared/lib/time";
+import { formatHour, formatTimeOfDay, MINUTE } from "@/shared/lib/time";
 
 import type { Period } from "./periods";
 
@@ -46,7 +46,7 @@ function axisLabel(period: Period, from: number): string {
   const date = new Date(from);
   switch (period) {
     case "day":
-      return date.toLocaleTimeString(undefined, { hour: "numeric" });
+      return formatHour(from);
     case "week":
       return date.toLocaleDateString(undefined, { weekday: "short" });
     case "month":
@@ -57,7 +57,7 @@ function axisLabel(period: Period, from: number): string {
 function fullLabel(period: Period, from: number): string {
   const date = new Date(from);
   return period === "day"
-    ? date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })
+    ? formatTimeOfDay(from)
     : date.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 }
 

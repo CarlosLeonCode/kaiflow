@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { type CSSProperties, useState } from "react";
 
 import type { RangeDto } from "@/shared/ipc";
 import { tuneCategoryColor } from "@/shared/lib/color";
-import { formatDuration } from "@/shared/lib/time";
+import { formatDuration, formatHour } from "@/shared/lib/time";
 
 import { axisTicks, type TimelineBlock } from "../lib/today";
 
@@ -16,8 +16,18 @@ interface Props {
   dark: boolean;
 }
 
-function hourLabel(ms: number): string {
-  return new Date(ms).toLocaleTimeString(undefined, { hour: "numeric" });
+/** Ticks closer than this (in %) to an edge are anchored to it instead of centered. */
+const EDGE_PCT = 4;
+
+/**
+ * Edge ticks are anchored with `left: 0` / `right: 0` instead of a centered `left: pct%`:
+ * an absolutely positioned label near the right edge gets only the remaining width as its
+ * shrink-to-fit width (a translate does not change layout), so it wrapped ("4 / AM").
+ */
+function tickPosition(pct: number): CSSProperties {
+  if (pct <= EDGE_PCT) return { left: 0 };
+  if (pct >= 100 - EDGE_PCT) return { right: 0 };
+  return { left: `${pct}%`, transform: "translateX(-50%)" };
 }
 
 /**
@@ -88,18 +98,14 @@ export function DayTimeline({ window, blocks, now, dark }: Props) {
         )}
       </svg>
 
-      <div className="relative mt-1 h-4" aria-hidden="true">
-        {ticks.map((tick, index) => (
+      <div className="relative mt-1 h-4" aria-hidden="true" data-testid="timeline-axis">
+        {ticks.map((tick) => (
           <span
             key={tick.at}
-            className="tabular absolute -translate-x-1/2 text-2xs text-muted-foreground"
-            style={{
-              left: `${tick.pct}%`,
-              ...(index === 0 ? { transform: "none" } : {}),
-              ...(index === ticks.length - 1 && tick.pct > 96 ? { transform: "translateX(-100%)" } : {}),
-            }}
+            className="tabular absolute top-0 whitespace-nowrap text-2xs text-muted-foreground"
+            style={tickPosition(tick.pct)}
           >
-            {hourLabel(tick.at)}
+            {formatHour(tick.at)}
           </span>
         ))}
       </div>
