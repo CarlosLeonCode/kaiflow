@@ -7,3 +7,6 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+
+# Title-pattern rules (design section 2); needed for R9.4 validation.
+regex = "1"

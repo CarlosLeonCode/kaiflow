@@ -1,9 +1,17 @@
-//! The `domain` crate. Intentionally empty until its implementation task lands.
+//! Pure domain model: no Tauri, no OS, no I/O (R1.7).
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn crate_compiles() {
-        assert_eq!(2 + 2, 4);
-    }
-}
+pub mod category;
+pub mod focus;
+pub mod privacy;
+pub mod report;
+pub mod segment;
+pub mod time;
+
+pub use category::{Category, CategoryRule, InvalidPattern, RuleKind, UNCATEGORIZED, categorize};
+pub use focus::FocusSnapshot;
+pub use privacy::{PrivacyPolicy, apply_privacy};
+pub use report::{ClippedSpan, clip_to_range, split_at_boundaries};
+pub use segment::{
+    CategoryId, EndReason, IdleResolution, Segment, SegmentError, SegmentId, SegmentSource,
+};
+pub use time::UtcMs;
