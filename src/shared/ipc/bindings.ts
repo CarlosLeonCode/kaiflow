@@ -39,6 +39,11 @@ export const commands = {
 	 *  released first, otherwise the new instance would defer to this one and exit.
 	 */
 	appRestart: () => typedError<null, AppError>(__TAURI_INVOKE("app_restart")),
+	/**
+	 *  Opens and focuses the main window (the popover's "Open dashboard" action). The window
+	 *  work is queued for the main thread and never waited for.
+	 */
+	openMainWindow: () => typedError<null, AppError>(__TAURI_INVOKE("open_main_window")),
 	prepareDelete: (op: DeleteOpDto) => typedError<string, AppError>(__TAURI_INVOKE("prepare_delete", { op })),
 	deleteRange: (range: RangeDto, confirmToken: string) => typedError<number, AppError>(__TAURI_INVOKE("delete_range", { range, confirmToken })),
 	purgeOlderThan: (days: number, confirmToken: string) => typedError<number, AppError>(__TAURI_INVOKE("purge_older_than", { days, confirmToken })),

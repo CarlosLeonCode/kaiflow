@@ -1,0 +1,132 @@
+@import "tailwindcss";
+
+/* Dark mode is driven by a `dark` class on <html>, resolved from the theme setting and
+   `prefers-color-scheme` (see shared/lib/theme.ts). */
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Dense utility scale: 13px body, 4px grid spacing. */
+  --text-2xs: 11px;
+  --text-2xs--line-height: 14px;
+  --text-xs: 12px;
+  --text-xs--line-height: 16px;
+  --text-sm: 13px;
+  --text-sm--line-height: 18px;
+  --text-base: 13px;
+  --text-base--line-height: 18px;
+  --text-lg: 15px;
+  --text-lg--line-height: 20px;
+  --text-xl: 20px;
+  --text-xl--line-height: 24px;
+  --text-display: 34px;
+  --text-display--line-height: 38px;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-destructive: var(--destructive);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-success: var(--success);
+  --color-ring: var(--ring);
+}
+
+:root {
+  color-scheme: light;
+  --background: #ffffff;
+  --foreground: #1d1d1f;
+  --surface: #f6f6f7;
+  --muted: #efeff1;
+  --muted-foreground: #6b6b73;
+  --border: #e4e4e8;
+  --accent: #ececef;
+  --primary: #0a64d8;
+  --primary-foreground: #ffffff;
+  --destructive: #d93025;
+  --warning: #fdf3dc;
+  --warning-foreground: #7a4b00;
+  --success: #1f9d55;
+  --ring: #0a64d8;
+}
+
+.dark {
+  color-scheme: dark;
+  --background: #1e1e20;
+  --foreground: #f2f2f4;
+  --surface: #26262a;
+  --muted: #2e2e33;
+  --muted-foreground: #9a9aa4;
+  --border: #38383e;
+  --accent: #34343a;
+  --primary: #4c9aff;
+  --primary-foreground: #08121f;
+  --destructive: #ff6b60;
+  --warning: #3a2f14;
+  --warning-foreground: #f2c76b;
+  --success: #3ccf82;
+  --ring: #4c9aff;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 18px;
+    -webkit-font-smoothing: antialiased;
+    /* A desktop utility, not a web page: no text selection by default, no rubber-banding. */
+    -webkit-user-select: none;
+    user-select: none;
+    cursor: default;
+    overflow: hidden;
+  }
+
+  [data-selectable] {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  button {
+    cursor: default;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}

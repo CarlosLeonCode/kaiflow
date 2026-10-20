@@ -29,6 +29,7 @@ const COMMANDS: &[&str] = &[
     "permission_request",
     "permission_open_settings",
     "app_restart",
+    "open_main_window",
     "prepare_delete",
     "delete_range",
     "purge_older_than",
@@ -43,8 +44,10 @@ fn main() {
     tauri_build::try_build(attributes).expect("failed to run tauri-build");
 }
 
-/// TEMPORARY until the Vite frontend (task 3.1) writes `dist/`: `tauri::generate_context!`
-/// needs `frontendDist` to exist, so seed it with the placeholder entry pages.
+/// Fallback for a clean checkout where `npm run build` has not produced `dist/` yet:
+/// `tauri::generate_context!` needs `frontendDist` to exist, so seed it with the (unbuilt)
+/// entry pages. `tauri build` always runs `beforeBuildCommand` first, which overwrites them
+/// with the real Vite output, and an existing page is never replaced.
 fn ensure_placeholder_frontend() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
     let dist = root.join("dist");

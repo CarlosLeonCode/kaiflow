@@ -31,6 +31,7 @@
     "allow-permission-request",
     "allow-permission-open-settings",
     "allow-app-restart",
+    "allow-open-main-window",
     "allow-prepare-delete",
     "allow-delete-range",
     "allow-purge-older-than",

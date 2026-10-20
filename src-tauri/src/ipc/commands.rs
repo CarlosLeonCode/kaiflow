@@ -241,6 +241,18 @@ pub async fn app_restart(app: AppHandle, state: Shared<'_>) -> Result<(), AppErr
     app.restart()
 }
 
+/// Opens and focuses the main window (the popover's "Open dashboard" action). The window
+/// work is queued for the main thread and never waited for.
+#[tauri::command]
+#[specta::specta]
+pub async fn open_main_window(app: AppHandle) -> Result<(), AppError> {
+    let target = app.clone();
+    app.run_on_main_thread(move || crate::windows::show_main(&target))
+        .map_err(|e| AppError::Internal {
+            message: e.to_string(),
+        })
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn prepare_delete(state: Shared<'_>, op: DeleteOpDto) -> Result<String, AppError> {

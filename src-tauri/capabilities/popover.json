@@ -14,6 +14,9 @@
     "allow-list-pending-idle-gaps",
     "allow-resolve-idle-gap",
     "allow-categories-list",
-    "allow-permission-status"
+    "allow-permission-status",
+    "allow-settings-get",
+    "allow-permission-open-settings",
+    "allow-open-main-window"
   ]
 }

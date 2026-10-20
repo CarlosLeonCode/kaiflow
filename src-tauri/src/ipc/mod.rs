@@ -44,6 +44,7 @@ pub fn builder() -> Builder<Wry> {
             commands::permission_request,
             commands::permission_open_settings,
             commands::app_restart,
+            commands::open_main_window,
             commands::prepare_delete,
             commands::delete_range,
             commands::purge_older_than,

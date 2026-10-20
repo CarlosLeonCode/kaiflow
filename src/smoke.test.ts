@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 
 describe("test runner smoke", () => {
   it("renders DOM nodes and queries them with Testing Library", () => {
-    document.body.innerHTML = "<button>Start</button>";
+    const button = document.createElement("button");
+    button.textContent = "Start";
+    document.body.replaceChildren(button);
 
     expect(screen.getByRole("button", { name: "Start" })).toBeInTheDocument();
   });
