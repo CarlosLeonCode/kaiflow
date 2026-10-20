@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-privacy-list"
+description = "Enables the privacy_list command without any pre-configured scope."
+commands.allow = ["privacy_list"]
+
+[[permission]]
+identifier = "deny-privacy-list"
+description = "Denies the privacy_list command without any pre-configured scope."
+commands.deny = ["privacy_list"]

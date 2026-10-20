@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-permission-request"
+description = "Enables the permission_request command without any pre-configured scope."
+commands.allow = ["permission_request"]
+
+[[permission]]
+identifier = "deny-permission-request"
+description = "Denies the permission_request command without any pre-configured scope."
+commands.deny = ["permission_request"]

@@ -1,0 +1,40 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main",
+  "description": "Main window: every app command. Plugins are never granted to windows.",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:event:default",
+    "allow-get-status",
+    "allow-start",
+    "allow-pause",
+    "allow-resume",
+    "allow-stop",
+    "allow-get-report",
+    "allow-get-timeline",
+    "allow-list-pending-idle-gaps",
+    "allow-resolve-idle-gap",
+    "allow-categories-list",
+    "allow-categories-create",
+    "allow-categories-update",
+    "allow-categories-delete",
+    "allow-rules-list",
+    "allow-rules-upsert",
+    "allow-rules-delete",
+    "allow-privacy-list",
+    "allow-privacy-set",
+    "allow-settings-get",
+    "allow-settings-update",
+    "allow-permission-status",
+    "allow-permission-request",
+    "allow-permission-open-settings",
+    "allow-app-restart",
+    "allow-prepare-delete",
+    "allow-delete-range",
+    "allow-purge-older-than",
+    "allow-delete-all",
+    "allow-export-csv"
+  ]
+}

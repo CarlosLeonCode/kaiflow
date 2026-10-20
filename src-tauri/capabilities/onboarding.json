@@ -1,0 +1,17 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "onboarding",
+  "description": "First-run window: Accessibility permission and the title switch.",
+  "windows": ["onboarding"],
+  "permissions": [
+    "core:event:default",
+    "allow-get-status",
+    "allow-start",
+    "allow-permission-status",
+    "allow-permission-request",
+    "allow-permission-open-settings",
+    "allow-app-restart",
+    "allow-settings-get",
+    "allow-settings-update"
+  ]
+}

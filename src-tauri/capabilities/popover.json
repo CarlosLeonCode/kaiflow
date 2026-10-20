@@ -1,0 +1,19 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "popover",
+  "description": "Menu-bar popover: status, today's totals and the idle prompt. Read/state commands only.",
+  "windows": ["popover"],
+  "permissions": [
+    "core:event:default",
+    "allow-get-status",
+    "allow-start",
+    "allow-pause",
+    "allow-resume",
+    "allow-stop",
+    "allow-get-report",
+    "allow-list-pending-idle-gaps",
+    "allow-resolve-idle-gap",
+    "allow-categories-list",
+    "allow-permission-status"
+  ]
+}

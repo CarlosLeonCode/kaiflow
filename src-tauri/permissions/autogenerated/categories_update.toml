@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-categories-update"
+description = "Enables the categories_update command without any pre-configured scope."
+commands.allow = ["categories_update"]
+
+[[permission]]
+identifier = "deny-categories-update"
+description = "Denies the categories_update command without any pre-configured scope."
+commands.deny = ["categories_update"]

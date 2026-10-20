@@ -1,0 +1,736 @@
+//! Wire types of the IPC contract (design section 8). Every type derives `specta::Type`, so
+//! `bindings.ts` is generated from them. Timestamps are UTC milliseconds as `i64`; they stay
+//! far below 2^53, so the bindings export them as TypeScript `number`.
+
+use application::commands::{DeleteOp, RuleInput, RuleSpec, Settings, SettingsPatch};
+use application::ports::{PrivacyMode, TrackingKind, TrackingStatus};
+use application::queries::{AppTotal, BucketTotal, CategoryTotal, Range, Report, TimelineItem};
+use domain::{
+    Category, CategoryId, CategoryRule, EndReason, FocusSnapshot, GapId, IdleGap, IdleResolution,
+    PermissionState, PrivacyPolicy, RuleKind, SegmentSource, UtcMs,
+};
+use serde::{Deserialize, Serialize};
+use specta::Type;
+
+/// Half-open UTC range `[from, to)` computed by the frontend (local day bounds, DST included).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct RangeDto {
+    pub from: i64,
+    pub to: i64,
+}
+
+impl From<RangeDto> for Range {
+    fn from(r: RangeDto) -> Self {
+        Range {
+            from: UtcMs(r.from),
+            to: UtcMs(r.to),
+        }
+    }
+}
+
+impl From<Range> for RangeDto {
+    fn from(r: Range) -> Self {
+        Self {
+            from: r.from.0,
+            to: r.to.0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct FocusDto {
+    pub app_id: String,
+    pub app_name: String,
+    pub window_title: Option<String>,
+}
+
+impl From<FocusSnapshot> for FocusDto {
+    fn from(f: FocusSnapshot) -> Self {
+        Self {
+            app_id: f.app_id,
+            app_name: f.app_name,
+            window_title: f.window_title,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum TrackingStateDto {
+    Stopped,
+    Running,
+    Paused,
+    Idle,
+    Asleep,
+}
+
+impl From<TrackingKind> for TrackingStateDto {
+    fn from(k: TrackingKind) -> Self {
+        match k {
+            TrackingKind::Stopped => Self::Stopped,
+            TrackingKind::Running => Self::Running,
+            TrackingKind::Paused => Self::Paused,
+            TrackingKind::Idle => Self::Idle,
+            TrackingKind::Asleep => Self::Asleep,
+        }
+    }
+}
+
+/// Global shortcut state (R6.3); `Unavailable` keeps tracking untouched.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ShortcutStatusDto {
+    Registered { shortcut: String },
+    Unavailable { shortcut: String, reason: String },
+    Disabled,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct TrackingStatusDto {
+    pub state: TrackingStateDto,
+    pub current: Option<FocusDto>,
+    pub since: Option<i64>,
+    pub degraded: bool,
+    pub shortcut: ShortcutStatusDto,
+}
+
+impl TrackingStatusDto {
+    pub fn new(status: TrackingStatus, shortcut: ShortcutStatusDto) -> Self {
+        Self {
+            state: status.kind.into(),
+            current: status.current.map(Into::into),
+            since: status.since.map(|s| s.0),
+            degraded: status.degraded,
+            shortcut,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum PermissionStateDto {
+    Granted,
+    Denied,
+}
+
+impl From<PermissionState> for PermissionStateDto {
+    fn from(p: PermissionState) -> Self {
+        match p {
+            PermissionState::Granted => Self::Granted,
+            PermissionState::Denied => Self::Denied,
+        }
+    }
+}
+
+/// Same enum as the domain and the database (design section 3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum IdleResolutionDto {
+    Discard,
+    AssignPrevious,
+    AssignCategory { category_id: i64 },
+}
+
+impl From<IdleResolutionDto> for IdleResolution {
+    fn from(r: IdleResolutionDto) -> Self {
+        match r {
+            IdleResolutionDto::Discard => Self::Discard,
+            IdleResolutionDto::AssignPrevious => Self::AssignPrevious,
+            IdleResolutionDto::AssignCategory { category_id } => {
+                Self::AssignCategory(CategoryId(category_id))
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct IdleGapDto {
+    pub id: i64,
+    pub started_at: i64,
+    pub ended_at: i64,
+    pub prev_focus: Option<FocusDto>,
+    pub expires_at: i64,
+}
+
+impl IdleGapDto {
+    /// Gaps without a repository id cannot be resolved, so they are not exposed.
+    pub fn from_gap(gap: IdleGap) -> Option<Self> {
+        let GapId(id) = gap.id?;
+        Some(Self {
+            id,
+            started_at: gap.started_at.0,
+            ended_at: gap.ended_at.0,
+            prev_focus: gap.prev_focus.map(Into::into),
+            expires_at: gap.expires_at.0,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct AppTotalDto {
+    /// `None` for time assigned manually to a category.
+    pub app_id: Option<String>,
+    pub app_name: String,
+    pub total_ms: i64,
+}
+
+impl From<AppTotal> for AppTotalDto {
+    fn from(a: AppTotal) -> Self {
+        Self {
+            app_id: a.app_id,
+            app_name: a.app_name,
+            total_ms: a.total_ms,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct CategoryTotalDto {
+    pub category_id: i64,
+    pub name: String,
+    pub color: String,
+    pub total_ms: i64,
+}
+
+impl From<CategoryTotal> for CategoryTotalDto {
+    fn from(c: CategoryTotal) -> Self {
+        Self {
+            category_id: c.category_id.0,
+            name: c.name,
+            color: c.color,
+            total_ms: c.total_ms,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct BucketTotalDto {
+    pub range: RangeDto,
+    pub total_ms: i64,
+}
+
+impl From<BucketTotal> for BucketTotalDto {
+    fn from(b: BucketTotal) -> Self {
+        Self {
+            range: b.range.into(),
+            total_ms: b.total_ms,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct ReportDto {
+    pub by_app: Vec<AppTotalDto>,
+    pub by_category: Vec<CategoryTotalDto>,
+    pub by_bucket: Vec<BucketTotalDto>,
+    pub total_ms: i64,
+}
+
+impl From<Report> for ReportDto {
+    fn from(r: Report) -> Self {
+        Self {
+            by_app: r.by_app.into_iter().map(Into::into).collect(),
+            by_category: r.by_category.into_iter().map(Into::into).collect(),
+            by_bucket: r.by_bucket.into_iter().map(Into::into).collect(),
+            total_ms: r.total_ms,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum EndReasonDto {
+    FocusChange,
+    Idle,
+    Sleep,
+    Lock,
+    Pause,
+    Stop,
+    Shutdown,
+    Recovered,
+}
+
+impl From<EndReason> for EndReasonDto {
+    fn from(r: EndReason) -> Self {
+        match r {
+            EndReason::FocusChange => Self::FocusChange,
+            EndReason::Idle => Self::Idle,
+            EndReason::Sleep => Self::Sleep,
+            EndReason::Lock => Self::Lock,
+            EndReason::Pause => Self::Pause,
+            EndReason::Stop => Self::Stop,
+            EndReason::Shutdown => Self::Shutdown,
+            EndReason::Recovered => Self::Recovered,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum SegmentSourceDto {
+    Tracked,
+    IdleAssigned,
+}
+
+impl From<SegmentSource> for SegmentSourceDto {
+    fn from(s: SegmentSource) -> Self {
+        match s {
+            SegmentSource::Tracked => Self::Tracked,
+            SegmentSource::IdleAssigned => Self::IdleAssigned,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct TimelineItemDto {
+    pub segment_id: i64,
+    pub start: i64,
+    pub end: i64,
+    pub app_id: Option<String>,
+    pub app_name: Option<String>,
+    pub window_title: Option<String>,
+    pub category_id: i64,
+    pub category_name: String,
+    pub category_color: String,
+    pub source: SegmentSourceDto,
+    pub end_reason: Option<EndReasonDto>,
+    pub open: bool,
+}
+
+impl From<TimelineItem> for TimelineItemDto {
+    fn from(t: TimelineItem) -> Self {
+        Self {
+            segment_id: t.segment_id.0,
+            start: t.start.0,
+            end: t.end.0,
+            app_id: t.app_id,
+            app_name: t.app_name,
+            window_title: t.window_title,
+            category_id: t.category_id.0,
+            category_name: t.category_name,
+            category_color: t.category_color,
+            source: t.source.into(),
+            end_reason: t.end_reason.map(Into::into),
+            open: t.open,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct CategoryDto {
+    pub id: i64,
+    pub name: String,
+    pub color: String,
+    pub sort_order: i32,
+}
+
+impl From<Category> for CategoryDto {
+    fn from(c: Category) -> Self {
+        Self {
+            id: c.id.0,
+            name: c.name,
+            color: c.color,
+            sort_order: c.sort_order,
+        }
+    }
+}
+
+impl From<CategoryDto> for Category {
+    fn from(c: CategoryDto) -> Self {
+        Self {
+            id: CategoryId(c.id),
+            name: c.name,
+            color: c.color,
+            sort_order: c.sort_order,
+        }
+    }
+}
+
+/// What a rule matches; used both to read and to write rules.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum RuleSpecDto {
+    App {
+        app_id: String,
+    },
+    TitlePattern {
+        pattern: String,
+        app_id: Option<String>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct RuleDto {
+    pub id: i64,
+    pub category_id: i64,
+    pub spec: RuleSpecDto,
+    pub priority: i32,
+}
+
+impl From<CategoryRule> for RuleDto {
+    fn from(r: CategoryRule) -> Self {
+        let spec = match r.kind {
+            RuleKind::App(app_id) => RuleSpecDto::App { app_id },
+            RuleKind::TitlePattern { regex, app_id } => RuleSpecDto::TitlePattern {
+                pattern: regex.as_str().to_owned(),
+                app_id,
+            },
+        };
+        Self {
+            id: r.id,
+            category_id: r.category_id.0,
+            spec,
+            priority: r.priority,
+        }
+    }
+}
+
+/// Rule coming from the UI; `id <= 0` creates it. Patterns are validated in Rust (R9.4).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct RuleInputDto {
+    pub id: i64,
+    pub category_id: i64,
+    pub spec: RuleSpecDto,
+    pub priority: i32,
+}
+
+impl From<RuleInputDto> for RuleInput {
+    fn from(r: RuleInputDto) -> Self {
+        Self {
+            id: r.id,
+            category_id: CategoryId(r.category_id),
+            kind: match r.spec {
+                RuleSpecDto::App { app_id } => RuleSpec::App(app_id),
+                RuleSpecDto::TitlePattern { pattern, app_id } => {
+                    RuleSpec::TitlePattern { pattern, app_id }
+                }
+            },
+            priority: r.priority,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum PrivacyModeDto {
+    Exclude,
+    RedactTitle,
+}
+
+impl From<PrivacyModeDto> for PrivacyMode {
+    fn from(m: PrivacyModeDto) -> Self {
+        match m {
+            PrivacyModeDto::Exclude => Self::Exclude,
+            PrivacyModeDto::RedactTitle => Self::RedactTitle,
+        }
+    }
+}
+
+/// Per-app privacy rules plus the global title switch, apps sorted for stable output.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct PrivacyRulesDto {
+    pub store_titles: bool,
+    pub excluded_apps: Vec<String>,
+    pub redacted_apps: Vec<String>,
+}
+
+impl From<PrivacyPolicy> for PrivacyRulesDto {
+    fn from(p: PrivacyPolicy) -> Self {
+        let sorted = |set: std::collections::HashSet<String>| {
+            let mut apps: Vec<String> = set.into_iter().collect();
+            apps.sort();
+            apps
+        };
+        Self {
+            store_titles: p.store_titles,
+            excluded_apps: sorted(p.excluded_apps),
+            redacted_apps: sorted(p.redacted_apps),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct SettingsDto {
+    pub store_titles: bool,
+    pub idle_threshold_secs: u32,
+    pub idle_prompt_timeout_secs: u32,
+    /// `None` keeps data indefinitely.
+    pub retention_days: Option<u32>,
+    pub theme: String,
+    pub autostart: bool,
+    pub shortcut: String,
+    pub onboarding_completed: bool,
+}
+
+impl From<Settings> for SettingsDto {
+    fn from(s: Settings) -> Self {
+        Self {
+            store_titles: s.store_titles,
+            idle_threshold_secs: s.idle_threshold_secs,
+            idle_prompt_timeout_secs: s.idle_prompt_timeout_secs,
+            retention_days: s.retention_days,
+            theme: s.theme,
+            autostart: s.autostart,
+            shortcut: s.shortcut,
+            onboarding_completed: s.onboarding_completed,
+        }
+    }
+}
+
+/// How a patch changes retention; a tagged enum avoids the `Option<Option<_>>` ambiguity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum RetentionPatchDto {
+    Forever,
+    Days { days: u32 },
+}
+
+/// Partial update: absent fields stay untouched.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct SettingsPatchDto {
+    pub store_titles: Option<bool>,
+    pub idle_threshold_secs: Option<u32>,
+    pub idle_prompt_timeout_secs: Option<u32>,
+    pub retention: Option<RetentionPatchDto>,
+    pub theme: Option<String>,
+    pub autostart: Option<bool>,
+    pub shortcut: Option<String>,
+    pub onboarding_completed: Option<bool>,
+}
+
+impl From<SettingsPatchDto> for SettingsPatch {
+    fn from(p: SettingsPatchDto) -> Self {
+        Self {
+            store_titles: p.store_titles,
+            idle_threshold_secs: p.idle_threshold_secs,
+            idle_prompt_timeout_secs: p.idle_prompt_timeout_secs,
+            retention_days: p.retention.map(|r| match r {
+                RetentionPatchDto::Forever => None,
+                RetentionPatchDto::Days { days } => Some(days),
+            }),
+            theme: p.theme,
+            autostart: p.autostart,
+            shortcut: p.shortcut,
+            onboarding_completed: p.onboarding_completed,
+        }
+    }
+}
+
+/// Destructive operation to confirm with `prepare_delete`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum DeleteOpDto {
+    Range { range: RangeDto },
+    OlderThanDays { days: u32 },
+    All,
+}
+
+impl From<DeleteOpDto> for DeleteOp {
+    fn from(op: DeleteOpDto) -> Self {
+        match op {
+            DeleteOpDto::Range { range } => Self::Range(range.into()),
+            DeleteOpDto::OlderThanDays { days } => Self::OlderThanDays(days),
+            DeleteOpDto::All => Self::All,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use application::queries::Range as AppRange;
+    use domain::{CategoryRule, SegmentId};
+
+    use super::*;
+
+    fn focus() -> FocusSnapshot {
+        FocusSnapshot {
+            app_id: "com.apple.Safari".into(),
+            app_name: "Safari".into(),
+            pid: 42,
+            window_title: Some("Docs".into()),
+        }
+    }
+
+    #[test]
+    fn status_maps_state_focus_and_shortcut() {
+        let dto = TrackingStatusDto::new(
+            TrackingStatus {
+                kind: TrackingKind::Running,
+                current: Some(focus()),
+                since: Some(UtcMs(1_000)),
+                degraded: true,
+            },
+            ShortcutStatusDto::Disabled,
+        );
+        assert_eq!(dto.state, TrackingStateDto::Running);
+        assert_eq!(dto.since, Some(1_000));
+        assert!(dto.degraded);
+        let current = dto.current.unwrap();
+        assert_eq!(current.app_id, "com.apple.Safari");
+        assert_eq!(current.window_title.as_deref(), Some("Docs"));
+    }
+
+    #[test]
+    fn every_tracking_kind_has_a_state() {
+        let pairs = [
+            (TrackingKind::Stopped, TrackingStateDto::Stopped),
+            (TrackingKind::Running, TrackingStateDto::Running),
+            (TrackingKind::Paused, TrackingStateDto::Paused),
+            (TrackingKind::Idle, TrackingStateDto::Idle),
+            (TrackingKind::Asleep, TrackingStateDto::Asleep),
+        ];
+        for (kind, expected) in pairs {
+            assert_eq!(TrackingStateDto::from(kind), expected);
+        }
+    }
+
+    #[test]
+    fn range_round_trips() {
+        let dto = RangeDto { from: 10, to: 20 };
+        let range: AppRange = dto.into();
+        assert_eq!(range.from, UtcMs(10));
+        assert_eq!(RangeDto::from(range), dto);
+    }
+
+    #[test]
+    fn idle_resolution_uses_the_single_shared_enum() {
+        assert_eq!(
+            IdleResolution::from(IdleResolutionDto::Discard),
+            IdleResolution::Discard
+        );
+        assert_eq!(
+            IdleResolution::from(IdleResolutionDto::AssignPrevious),
+            IdleResolution::AssignPrevious
+        );
+        assert_eq!(
+            IdleResolution::from(IdleResolutionDto::AssignCategory { category_id: 7 }),
+            IdleResolution::AssignCategory(CategoryId(7))
+        );
+    }
+
+    #[test]
+    fn idle_resolution_wire_format_is_tagged() {
+        let json =
+            serde_json::to_string(&IdleResolutionDto::AssignCategory { category_id: 3 }).unwrap();
+        assert_eq!(json, r#"{"kind":"assign_category","category_id":3}"#);
+        let parsed: IdleResolutionDto = serde_json::from_str(r#"{"kind":"discard"}"#).unwrap();
+        assert_eq!(parsed, IdleResolutionDto::Discard);
+    }
+
+    #[test]
+    fn gap_without_id_is_not_exposed() {
+        let gap = IdleGap {
+            id: None,
+            started_at: UtcMs(1),
+            ended_at: UtcMs(2),
+            prev_focus: None,
+            status: domain::GapStatus::Pending,
+            expires_at: UtcMs(3),
+        };
+        assert!(IdleGapDto::from_gap(gap.clone()).is_none());
+        let dto = IdleGapDto::from_gap(IdleGap {
+            id: Some(GapId(9)),
+            prev_focus: Some(focus()),
+            ..gap
+        })
+        .unwrap();
+        assert_eq!(dto.id, 9);
+        assert_eq!(dto.expires_at, 3);
+        assert_eq!(dto.prev_focus.unwrap().app_name, "Safari");
+    }
+
+    #[test]
+    fn timeline_item_maps_enums_and_ids() {
+        let dto = TimelineItemDto::from(TimelineItem {
+            segment_id: SegmentId(5),
+            start: UtcMs(1),
+            end: UtcMs(9),
+            app_id: None,
+            app_name: None,
+            window_title: None,
+            category_id: CategoryId(2),
+            category_name: "Work".into(),
+            category_color: "#fff".into(),
+            source: SegmentSource::IdleAssigned,
+            end_reason: Some(EndReason::Idle),
+            open: false,
+        });
+        assert_eq!(dto.segment_id, 5);
+        assert_eq!(dto.source, SegmentSourceDto::IdleAssigned);
+        assert_eq!(dto.end_reason, Some(EndReasonDto::Idle));
+    }
+
+    #[test]
+    fn settings_patch_translates_retention() {
+        let forever: SettingsPatch = SettingsPatchDto {
+            retention: Some(RetentionPatchDto::Forever),
+            ..Default::default()
+        }
+        .into();
+        assert_eq!(forever.retention_days, Some(None));
+        let days: SettingsPatch = SettingsPatchDto {
+            retention: Some(RetentionPatchDto::Days { days: 30 }),
+            ..Default::default()
+        }
+        .into();
+        assert_eq!(days.retention_days, Some(Some(30)));
+        let untouched: SettingsPatch = SettingsPatchDto::default().into();
+        assert_eq!(untouched.retention_days, None);
+    }
+
+    #[test]
+    fn rule_conversions_keep_patterns_and_apps() {
+        let rule = CategoryRule::title_pattern(4, CategoryId(2), "^Inbox", None, 5).unwrap();
+        let dto = RuleDto::from(rule);
+        assert_eq!(
+            dto.spec,
+            RuleSpecDto::TitlePattern {
+                pattern: "^Inbox".into(),
+                app_id: None
+            }
+        );
+        let input = RuleInput::from(RuleInputDto {
+            id: 0,
+            category_id: 2,
+            spec: RuleSpecDto::App {
+                app_id: "com.x".into(),
+            },
+            priority: 1,
+        });
+        assert_eq!(input.kind, RuleSpec::App("com.x".into()));
+        assert_eq!(input.category_id, CategoryId(2));
+    }
+
+    #[test]
+    fn privacy_rules_are_sorted() {
+        let policy = PrivacyPolicy {
+            store_titles: false,
+            excluded_apps: HashSet::from(["b".to_owned(), "a".to_owned()]),
+            redacted_apps: HashSet::new(),
+        };
+        let dto = PrivacyRulesDto::from(policy);
+        assert_eq!(dto.excluded_apps, ["a", "b"]);
+        assert!(!dto.store_titles);
+    }
+
+    #[test]
+    fn delete_op_maps_every_variant() {
+        assert_eq!(DeleteOp::from(DeleteOpDto::All), DeleteOp::All);
+        assert_eq!(
+            DeleteOp::from(DeleteOpDto::OlderThanDays { days: 9 }),
+            DeleteOp::OlderThanDays(9)
+        );
+        let range = DeleteOp::from(DeleteOpDto::Range {
+            range: RangeDto { from: 1, to: 2 },
+        });
+        assert_eq!(
+            range,
+            DeleteOp::Range(AppRange {
+                from: UtcMs(1),
+                to: UtcMs(2)
+            })
+        );
+    }
+}

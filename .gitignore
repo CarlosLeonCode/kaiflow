@@ -170,3 +170,7 @@ out/
 
 # Rust
 target/
+
+# Frontend build output (also seeded with placeholder pages by src-tauri/build.rs)
+dist/
+src-tauri/gen/

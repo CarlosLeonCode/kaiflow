@@ -6,7 +6,8 @@
   "description": "Time tracking application for improving productivity and focus.",
   "scripts": {
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "tauri": "tauri"
   },
   "author": {
     "name": "CarlosLeonCode",
@@ -14,9 +15,13 @@
   },
   "license": "MIT",
   "devDependencies": {
+    "@tauri-apps/cli": "^2.12.3",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
     "jsdom": "^26.1.0",
     "vitest": "^5.0.5"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.12.4"
   }
 }
