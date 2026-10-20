@@ -1,7 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { commands } from "./bindings";
-import type { IdleResolutionDto, RangeDto, TrackingStatusDto } from "./bindings";
+import type {
+  IdleResolutionDto,
+  RangeDto,
+  SettingsDto,
+  SettingsPatchDto,
+  TrackingStatusDto,
+} from "./bindings";
 import { unwrap } from "./client";
 import { queryKeys } from "./queryKeys";
 
@@ -18,6 +24,21 @@ export function useReportQuery(range: RangeDto, buckets: readonly RangeDto[] = [
   return useQuery({
     queryKey: queryKeys.report(range, buckets),
     queryFn: () => unwrap(commands.getReport(range, [...buckets])),
+  });
+}
+
+export function useTimelineQuery(range: RangeDto) {
+  return useQuery({
+    queryKey: queryKeys.timeline(range),
+    queryFn: () => unwrap(commands.getTimeline(range)),
+  });
+}
+
+/** Live Accessibility state; refreshed by `permission-changed` and when the window regains focus. */
+export function usePermissionQuery() {
+  return useQuery({
+    queryKey: queryKeys.permission,
+    queryFn: () => unwrap(commands.permissionStatus()),
   });
 }
 
@@ -76,4 +97,48 @@ export function useOpenMainWindowMutation() {
 
 export function useOpenAccessibilitySettingsMutation() {
   return useMutation({ mutationFn: () => unwrap(commands.permissionOpenSettings()) });
+}
+
+/** `settings_update` takes a full patch; every field left `null` stays untouched. */
+export function settingsPatch(changes: Partial<SettingsPatchDto>): SettingsPatchDto {
+  return {
+    store_titles: null,
+    idle_threshold_secs: null,
+    idle_prompt_timeout_secs: null,
+    retention: null,
+    theme: null,
+    autostart: null,
+    shortcut: null,
+    onboarding_completed: null,
+    ...changes,
+  };
+}
+
+/**
+ * Saves settings and caches the merged result. The backend stores the patch even when the
+ * shortcut cannot be registered (it answers with `shortcut_unavailable`), so a failure
+ * refetches both settings and status instead of leaving a stale cache.
+ */
+export function useUpdateSettingsMutation() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (changes: Partial<SettingsPatchDto>): Promise<SettingsDto> =>
+      unwrap(commands.settingsUpdate(settingsPatch(changes))),
+    onSuccess: (saved) => {
+      client.setQueryData(queryKeys.settings, saved);
+      void client.invalidateQueries({ queryKey: queryKeys.status });
+    },
+    onError: () => {
+      void client.invalidateQueries({ queryKey: queryKeys.settings });
+      void client.invalidateQueries({ queryKey: queryKeys.status });
+    },
+  });
+}
+
+export function useRestartAppMutation() {
+  return useMutation({ mutationFn: () => unwrap(commands.appRestart()) });
+}
+
+export function useCloseOnboardingMutation() {
+  return useMutation({ mutationFn: () => unwrap(commands.closeOnboarding()) });
 }

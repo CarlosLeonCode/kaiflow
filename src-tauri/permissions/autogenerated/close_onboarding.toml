@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-close-onboarding"
+description = "Enables the close_onboarding command without any pre-configured scope."
+commands.allow = ["close_onboarding"]
+
+[[permission]]
+identifier = "deny-close-onboarding"
+description = "Denies the close_onboarding command without any pre-configured scope."
+commands.deny = ["close_onboarding"]

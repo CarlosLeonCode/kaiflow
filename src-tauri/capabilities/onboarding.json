@@ -11,6 +11,7 @@
     "allow-permission-request",
     "allow-permission-open-settings",
     "allow-app-restart",
+    "allow-close-onboarding",
     "allow-settings-get",
     "allow-settings-update"
   ]

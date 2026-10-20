@@ -57,10 +57,12 @@ export function useBackendEventSync(): void {
   useTauriEvent(events.trackingStatusChanged, (status) => {
     client.setQueryData(queryKeys.status, status);
     invalidate(queryKeys.reports);
+    invalidate(queryKeys.timelines);
   });
   useTauriEvent(events.currentSegmentChanged, () => {
     invalidate(queryKeys.status);
     invalidate(queryKeys.reports);
+    invalidate(queryKeys.timelines);
   });
   useTauriEvent(events.dataChanged, () => {
     invalidate(queryKeys.reports);

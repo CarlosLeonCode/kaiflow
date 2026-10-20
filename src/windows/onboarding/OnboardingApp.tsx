@@ -1,8 +1,6 @@
-/** First-run shell: the guided steps land in task 3.4. */
+import { OnboardingContainer } from "@/features/onboarding/containers/OnboardingContainer";
+
+/** First-run window (560 x 640): welcome, title switch + Accessibility, finish. */
 export function OnboardingApp() {
-  return (
-    <main className="flex h-full items-center justify-center text-muted-foreground">
-      Welcome to Time Track Copilot
-    </main>
-  );
+  return <OnboardingContainer />;
 }

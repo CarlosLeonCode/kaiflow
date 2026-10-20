@@ -45,6 +45,14 @@ export function settings(overrides: Partial<SettingsDto> = {}): SettingsDto {
   };
 }
 
+/** What the backend answers to `settings_update`: stored settings with the non-null patch fields applied. */
+export function mergePatch(patch: unknown, base: SettingsDto = settings()): SettingsDto {
+  const changes = Object.fromEntries(
+    Object.entries(patch as Record<string, unknown>).filter(([, value]) => value !== null),
+  );
+  return { ...base, ...changes } as SettingsDto;
+}
+
 export type Handlers = Record<string, (args: Record<string, unknown>) => unknown>;
 
 export interface Call {

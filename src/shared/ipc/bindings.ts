@@ -44,6 +44,11 @@ export const commands = {
 	 *  work is queued for the main thread and never waited for.
 	 */
 	openMainWindow: () => typedError<null, AppError>(__TAURI_INVOKE("open_main_window")),
+	/**
+	 *  Closes the onboarding window once the user finished (or dismissed) the guided steps. The
+	 *  window never gets `core:window` permissions (R6.5), so the backend does it.
+	 */
+	closeOnboarding: () => typedError<null, AppError>(__TAURI_INVOKE("close_onboarding")),
 	prepareDelete: (op: DeleteOpDto) => typedError<string, AppError>(__TAURI_INVOKE("prepare_delete", { op })),
 	deleteRange: (range: RangeDto, confirmToken: string) => typedError<number, AppError>(__TAURI_INVOKE("delete_range", { range, confirmToken })),
 	purgeOlderThan: (days: number, confirmToken: string) => typedError<number, AppError>(__TAURI_INVOKE("purge_older_than", { days, confirmToken })),

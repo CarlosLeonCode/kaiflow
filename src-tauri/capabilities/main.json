@@ -1,12 +1,13 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
-  "description": "Main window: every app command. Plugins are never granted to windows.",
+  "description": "Main window: every app command plus dragging the overlay title bar. Plugins are never granted to windows.",
   "windows": [
     "main"
   ],
   "permissions": [
     "core:event:default",
+    "core:window:allow-start-dragging",
     "allow-get-status",
     "allow-start",
     "allow-pause",
@@ -32,6 +33,7 @@
     "allow-permission-open-settings",
     "allow-app-restart",
     "allow-open-main-window",
+    "allow-close-onboarding",
     "allow-prepare-delete",
     "allow-delete-range",
     "allow-purge-older-than",

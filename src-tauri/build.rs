@@ -30,6 +30,7 @@ const COMMANDS: &[&str] = &[
     "permission_open_settings",
     "app_restart",
     "open_main_window",
+    "close_onboarding",
     "prepare_delete",
     "delete_range",
     "purge_older_than",

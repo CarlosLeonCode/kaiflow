@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 
 export type ThemeSetting = "light" | "dark" | "system";
 
@@ -32,4 +32,19 @@ export function useTheme(theme: ThemeSetting): void {
     media.addEventListener("change", onChange);
     return () => media.removeEventListener("change", onChange);
   }, [theme]);
+}
+
+function subscribeToDarkClass(onChange: () => void): () => void {
+  const observer = new MutationObserver(onChange);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+  return () => observer.disconnect();
+}
+
+/** True while the resolved theme is dark (follows the `dark` class on <html>). */
+export function useIsDark(): boolean {
+  return useSyncExternalStore(
+    subscribeToDarkClass,
+    () => document.documentElement.classList.contains("dark"),
+    () => false,
+  );
 }

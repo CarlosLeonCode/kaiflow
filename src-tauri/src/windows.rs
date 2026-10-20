@@ -72,7 +72,17 @@ pub fn create_all(app: &AppHandle<Wry>, show_onboarding: bool) -> tauri::Result<
 }
 
 fn build(app: &AppHandle<Wry>, spec: &WindowSpec) -> tauri::Result<WebviewWindow<Wry>> {
-    WebviewWindowBuilder::new(app, spec.label, WebviewUrl::App(spec.page.into()))
+    let builder = WebviewWindowBuilder::new(app, spec.label, WebviewUrl::App(spec.page.into()));
+    // The dashboard draws its own title area: traffic lights float over the sidebar.
+    #[cfg(target_os = "macos")]
+    let builder = if spec.label == MAIN {
+        builder
+            .title_bar_style(tauri::TitleBarStyle::Overlay)
+            .hidden_title(true)
+    } else {
+        builder
+    };
+    builder
         .title(spec.title)
         .inner_size(spec.width, spec.height)
         .decorations(spec.decorations)
@@ -152,6 +162,13 @@ fn place_and_show(window: &WebviewWindow<Wry>, tray_rect: Option<Rect>) {
 fn popover_origin(icon_x: f64, icon_y: f64, icon_w: f64, icon_h: f64, width: f64) -> (i32, i32) {
     let x = (icon_x + icon_w / 2.0 - width / 2.0).max(0.0);
     (x.round() as i32, (icon_y + icon_h).round() as i32)
+}
+
+/// Closes the onboarding window (it is created again only if onboarding is still pending).
+pub fn close_onboarding(app: &AppHandle<Wry>) {
+    if let Some(window) = app.get_webview_window(ONBOARDING) {
+        let _ = window.close();
+    }
 }
 
 /// Opens (and focuses) the main window, e.g. from the popover or the tray menu.

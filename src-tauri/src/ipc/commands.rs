@@ -253,6 +253,18 @@ pub async fn open_main_window(app: AppHandle) -> Result<(), AppError> {
         })
 }
 
+/// Closes the onboarding window once the user finished (or dismissed) the guided steps. The
+/// window never gets `core:window` permissions (R6.5), so the backend does it.
+#[tauri::command]
+#[specta::specta]
+pub async fn close_onboarding(app: AppHandle) -> Result<(), AppError> {
+    let target = app.clone();
+    app.run_on_main_thread(move || crate::windows::close_onboarding(&target))
+        .map_err(|e| AppError::Internal {
+            message: e.to_string(),
+        })
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn prepare_delete(state: Shared<'_>, op: DeleteOpDto) -> Result<String, AppError> {
