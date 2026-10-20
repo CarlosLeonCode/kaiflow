@@ -1,68 +1,83 @@
 # TimeTrack
 
-**TimeTrack** is a free, lightweight desktop app that helps you track your time effortlessly, stay focused, and improve your productivity — all from your local machine.
+TimeTrack is a local-first macOS menu bar app that records which apps and windows you use, so you can see where your day actually goes. Nothing leaves your machine.
 
-<img width="892" height="691" alt="image" src="https://github.com/user-attachments/assets/5ea096f2-809a-4be8-b1cf-3f2542e80636" />
----
+## Features
 
-## ✨ Features
+- Menu bar popover with today's total, the current app and a pause/resume shortcut
+- Today view with a timeline colored by category, totals by app and by category
+- History by day, week and month, with CSV export
+- Categories with rules by app or by window-title pattern
+- Idle detection: when you come back, choose to discard the time or assign it
+- Privacy controls: excluded apps, hidden titles, delete by range or everything
+- Light and dark themes, keyboard shortcuts, automatic updates
 
-- ⏱️ Simple task-based time tracking  
-- 📊 Daily activity summaries  
-- 🔒 100% local – no data leaves your device  
-- 🪟 Cross-platform (Windows, macOS, Linux)  
-- 🚫 No accounts, no distractions
+## How tracking works on macOS
 
----
+- The frontmost app's name comes from `NSWorkspace` and needs no permission.
+- Window titles are read through the Accessibility API. Grant it once in
+  System Settings → Privacy & Security → Accessibility. Without it, TimeTrack
+  still records app names.
+- Screen Recording is never requested.
+- Data is stored in SQLite under `~/Library/Application Support/com.carlosleon.timetrack/`.
 
-## 🚀 Getting Started
+## Development
 
-### Clone the repo
-
-```bash
-git clone https://github.com/your-username/timetrack.git
-cd timetrack
-```
-
-### Install dependencies
+Requirements: Rust 1.90+, Node.js 22.12+, Xcode command line tools.
 
 ```bash
 npm install
 ```
 
-### Start the Electron app
-
 ```bash
-npm run start
+npm run tauri dev
 ```
 
----
-
-## 🛠 Tech Stack
-
-- [Electron](https://www.electronjs.org/)  
-- [Node.js](https://nodejs.org/)  
-- [TypeScript](https://www.typescriptlang.org/)  
-- [Tailwind CSS](https://tailwindcss.com/) *(optional)*
-
----
-
-## 📦 Build for Production
+UI only, with a mocked backend (no Rust build needed):
 
 ```bash
-npm run make
+npm run dev:mock
 ```
 
-This uses [Electron Forge](https://www.electronforge.io/) to package the app.
+Then open `http://localhost:1420/main.html` or `http://localhost:1420/popover.html`.
 
----
+Accessibility grants are tied to the app's signature. Under `tauri dev` the grant goes to your terminal, so test permissions with a signed build: see [scripts/create-dev-identity.md](scripts/create-dev-identity.md) and `scripts/dev-sign.sh`.
 
-## 🤝 Contributing
+## Tests
 
-We welcome contributions! Please read the [CONTRIBUTING.md](CONTRIBUTING.md) before submitting a pull request.
+```bash
+cargo test --workspace
+```
 
----
+```bash
+npm test
+```
 
-## 📄 License
+```bash
+npm run e2e
+```
+
+## Project layout
+
+| Path | Contents |
+|---|---|
+| `crates/domain` | Pure tracking rules: segments, state machine, idle gaps, categories, privacy |
+| `crates/application` | Ports, tracking engine, queries, commands, CSV export |
+| `crates/adapters-sqlite` | SQLite schema, migrations and repositories |
+| `crates/adapters-macos` | NSWorkspace, Accessibility, idle, lock and permission adapters |
+| `src-tauri` | Tauri shell: composition, typed IPC, tray, windows, updater |
+| `src` | React frontend: popover, main window, onboarding |
+
+## Releases
+
+Releases are built by `.github/workflows/release.yml` on `v*` tags. Signing, notarization and updater keys are described in [docs/release.md](docs/release.md).
+
+The original Electron prototype is preserved at the `electron-final` tag.
+
+## Contributing
+
+Please read [CONTRIBUTING.md](.github/CONTRIBUTING.md) before contributing.
+
+## License
 
 [MIT](LICENSE)

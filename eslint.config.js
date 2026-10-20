@@ -5,7 +5,7 @@ import tseslint from "typescript-eslint";
 
 export default tseslint.config(
   {
-    ignores: ["dist", "legacy", "node_modules", "src-tauri", "crates", "target", "src/shared/ipc/bindings.ts"],
+    ignores: ["dist", "node_modules", "src-tauri", "crates", "target", "src/shared/ipc/bindings.ts"],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

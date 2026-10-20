@@ -6,8 +6,8 @@ Quien la ejecuta: el usuario, sobre una compilacion **firmada** con la identidad
 ejecuciones no sirven para este gate.
 
 Marcar cada punto con `[x]` y anotar fecha, version de macOS y observaciones. El Gate 2 se
-supera cuando todos los puntos obligatorios estan marcados. Solo entonces puede retirarse
-`legacy/electron/` (tarea 4.5).
+supera cuando todos los puntos obligatorios estan marcados. El prototipo Electron ya fue
+retirado; si este gate falla, puede recuperarse desde el tag `electron-final`.
 
 - Fecha: ____ / macOS: ____ / Equipo: ____ / Commit: ____
 
