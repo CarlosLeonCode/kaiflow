@@ -140,6 +140,7 @@ pub trait CategoryRepository: Send + Sync {
     fn delete(&self, id: CategoryId) -> PortResult<()>;
     fn list_rules(&self) -> PortResult<Vec<CategoryRule>>;
     /// Returns the persisted rule id.
+    /// `rule.id <= 0` inserts a new rule; a positive id updates that rule (error if missing).
     fn save_rule(&self, rule: &CategoryRule) -> PortResult<i64>;
     fn delete_rule(&self, id: i64) -> PortResult<()>;
 }
@@ -149,6 +150,17 @@ pub trait PrivacyRepository: Send + Sync {
     fn load_policy(&self) -> PortResult<PrivacyPolicy>;
     /// `None` removes the rule.
     fn set_mode(&self, app_id: &str, mode: Option<PrivacyMode>) -> PortResult<()>;
+}
+
+/// Data deletion (R10.4). Callers confirm with the user first and stop tracking before
+/// `delete_all`; deleting only touches tracked time, never categories, rules or settings.
+pub trait RetentionRepository: Send + Sync {
+    /// Deletes closed segments that started in `[from, to)`; returns how many.
+    fn delete_range(&self, from: UtcMs, to: UtcMs) -> PortResult<usize>;
+    /// Deletes closed segments (and resolved gaps) that ended before `cutoff`.
+    fn purge_older_than(&self, cutoff: UtcMs) -> PortResult<usize>;
+    /// Deletes every segment and gap, then compacts the store so nothing lingers on disk.
+    fn delete_all(&self) -> PortResult<()>;
 }
 
 pub trait EventSink: Send {

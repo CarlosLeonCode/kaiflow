@@ -20,6 +20,20 @@ fn reason_to_sql(reason: EndReason) -> &'static str {
     }
 }
 
+pub(crate) fn reason_from_sql(reason: &str) -> Result<EndReason, PortError> {
+    Ok(match reason {
+        "focus_change" => EndReason::FocusChange,
+        "idle" => EndReason::Idle,
+        "sleep" => EndReason::Sleep,
+        "lock" => EndReason::Lock,
+        "pause" => EndReason::Pause,
+        "stop" => EndReason::Stop,
+        "shutdown" => EndReason::Shutdown,
+        "recovered" => EndReason::Recovered,
+        other => return Err(PortError(format!("invalid end reason: {other}"))),
+    })
+}
+
 /// (status column, category column) for a gap status.
 fn status_to_sql(status: GapStatus) -> (&'static str, Option<i64>) {
     match status {

@@ -278,6 +278,33 @@ impl ReportRepository for FakeStore {
     }
 }
 
+impl RetentionRepository for FakeStore {
+    fn delete_range(&self, from: UtcMs, to: UtcMs) -> PortResult<usize> {
+        let mut s = self.0.lock().unwrap();
+        let before = s.segments.len();
+        s.segments
+            .retain(|g| g.ended_at.is_none() || g.started_at < from || g.started_at >= to);
+        Ok(before - s.segments.len())
+    }
+
+    fn purge_older_than(&self, cutoff: UtcMs) -> PortResult<usize> {
+        let mut s = self.0.lock().unwrap();
+        let before = s.segments.len();
+        s.segments
+            .retain(|g| g.ended_at.is_none_or(|e| e >= cutoff));
+        s.gaps
+            .retain(|g| g.status == GapStatus::Pending || g.ended_at >= cutoff);
+        Ok(before - s.segments.len())
+    }
+
+    fn delete_all(&self) -> PortResult<()> {
+        let mut s = self.0.lock().unwrap();
+        s.segments.clear();
+        s.gaps.clear();
+        Ok(())
+    }
+}
+
 #[derive(Clone, Default)]
 pub struct FakeSettings(Arc<Mutex<HashMap<String, String>>>);
 
@@ -438,6 +465,18 @@ mod tests {
         let seg = &store.segments()[0];
         assert_eq!(seg.ended_at, Some(UtcMs(9)));
         assert_eq!(seg.end_reason, Some(EndReason::Recovered));
+    }
+
+    #[test]
+    fn retention_keeps_open_segments_and_recent_data() {
+        let mut store = FakeStore::default();
+        store.open_segment(&focus(), UtcMs(1)).unwrap();
+        store.close_open_segment(UtcMs(5), EndReason::Stop).unwrap();
+        store.open_segment(&focus(), UtcMs(10)).unwrap();
+        assert_eq!(store.purge_older_than(UtcMs(6)), Ok(1));
+        assert_eq!(store.delete_range(UtcMs(0), UtcMs(100)), Ok(0));
+        store.delete_all().unwrap();
+        assert!(store.segments().is_empty());
     }
 
     #[test]

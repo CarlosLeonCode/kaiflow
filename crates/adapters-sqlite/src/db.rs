@@ -2,6 +2,7 @@
 
 use std::fmt;
 use std::path::Path;
+use std::sync::{Mutex, MutexGuard};
 
 use application::ports::PortError;
 use rusqlite::Connection;
@@ -39,6 +40,15 @@ impl From<std::io::Error> for DbError {
 
 pub(crate) fn port_err(e: rusqlite::Error) -> PortError {
     PortError(e.to_string())
+}
+
+/// Locks a shared connection, turning poisoning into a port error.
+pub(crate) fn lock<'a>(
+    conn: &'a Mutex<Connection>,
+    what: &str,
+) -> Result<MutexGuard<'a, Connection>, PortError> {
+    conn.lock()
+        .map_err(|_| PortError(format!("{what} connection poisoned")))
 }
 
 fn apply_pragmas(conn: &Connection) -> Result<(), DbError> {
