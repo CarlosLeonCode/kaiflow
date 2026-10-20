@@ -32,7 +32,11 @@ export const commands = {
 	permissionOpenSettings: () => typedError<null, AppError>(__TAURI_INVOKE("permission_open_settings")),
 	/**
 	 *  Relaunches the app (Accessibility sometimes needs it after the grant). Closes the open
-	 *  segment first because `restart` does not run the normal exit path.
+	 *  segment first because the relaunch does not run the normal exit path.
+	 * 
+	 *  Inside a `.app` a brand new instance is started through LaunchServices (new pid, so the
+	 *  AX client cache is rebuilt); Tauri's `restart` keeps the pid. The single-instance lock is
+	 *  released first, otherwise the new instance would defer to this one and exit.
 	 */
 	appRestart: () => typedError<null, AppError>(__TAURI_INVOKE("app_restart")),
 	prepareDelete: (op: DeleteOpDto) => typedError<string, AppError>(__TAURI_INVOKE("prepare_delete", { op })),

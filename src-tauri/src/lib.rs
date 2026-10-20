@@ -4,8 +4,13 @@
 pub mod api;
 pub mod composition;
 pub mod error;
+pub mod event_sink;
 pub mod ipc;
+pub mod notifications;
 pub mod placeholders;
+pub mod platform;
+pub mod settings_applier;
+pub mod shortcuts;
 pub mod tray;
 pub mod windows;
 
@@ -13,10 +18,11 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use specta_typescript::Typescript;
-use tauri::{Manager, RunEvent};
+use tauri::{AppHandle, Manager, RunEvent, Wry};
 
-use crate::composition::{AppState, Providers, compose};
-use crate::ipc::events::TauriEventSink;
+use crate::composition::{AppState, compose};
+use crate::settings_applier::{ShellApplier, TauriLoginItem, reconcile};
+use crate::shortcuts::{ShortcutManager, TauriRegistrar, announce_to_frontend};
 
 const DB_FILE: &str = "timetrack.db";
 
@@ -39,8 +45,20 @@ pub fn run() {
     }
 
     let app = tauri::Builder::default()
-        // Plugins are registered here and only invoked from Rust (R6.5).
+        // Single-instance must be the first plugin (R6.4): a second launch focuses the
+        // running app instead of starting another engine.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            windows::show_main(app);
+        }))
+        // Plugins are registered here and only invoked from Rust (R6.5): no capability file
+        // grants any plugin permission to a window.
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
             builder.mount_events(app);
@@ -49,20 +67,31 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
+            let handle = app.handle().clone();
             let data_dir = app.path().app_data_dir()?;
             let shortcut = AppState::default_shortcut();
-            let sink = TauriEventSink::new(app.handle().clone(), shortcut.clone());
+            // `setup` runs on the main thread, where the AppKit observers must be created.
+            let providers = platform::providers(&handle);
             let state = Arc::new(compose(
                 &data_dir.join(DB_FILE),
-                Box::new(sink),
-                shortcut,
-                Providers::placeholders(),
+                Box::new(event_sink::tauri_sink(&handle, shortcut.clone())),
+                shortcut.clone(),
+                providers,
             )?);
-            let onboarding_pending = !state.commands.get_settings()?.onboarding_completed;
-            app.manage(state);
+            let settings = state.commands.get_settings()?;
+            app.manage(state.clone());
 
-            windows::create_all(app.handle(), onboarding_pending)?;
-            tray::install(app.handle())?;
+            windows::create_all(&handle, !settings.onboarding_completed)?;
+            tray::install(&handle)?;
+            apply_outside_settings(&handle, &state, &shortcut, &settings);
+
+            // Spec R6.3 scenario: after login the app registers on its own. Before the
+            // onboarding is done there is no permission yet, so tracking waits for it.
+            if settings.onboarding_completed
+                && let Err(error) = state.start()
+            {
+                eprintln!("could not start tracking at launch: {error}");
+            }
             Ok(())
         })
         .build(tauri::generate_context!())
@@ -80,6 +109,33 @@ pub fn run() {
         }
         _ => {}
     });
+}
+
+/// Registers the global shortcut and aligns the login item with the stored settings, then
+/// installs the applier `settings_update` uses from now on. Failures only degrade the
+/// feature: the shortcut status carries the reason and the rest of the app keeps working.
+fn apply_outside_settings(
+    handle: &AppHandle<Wry>,
+    state: &Arc<AppState>,
+    shortcut: &crate::ipc::events::SharedShortcut,
+    settings: &application::commands::Settings,
+) {
+    let press_handle = handle.clone();
+    let shortcuts = Arc::new(ShortcutManager::new(
+        Box::new(TauriRegistrar::new(handle.clone())),
+        shortcut.clone(),
+        announce_to_frontend(handle.clone()),
+        Arc::new(move || tray::toggle_tracking(&press_handle)),
+    ));
+    if let Err(error) = shortcuts.apply(&settings.shortcut) {
+        eprintln!("{error}");
+    }
+
+    let login = TauriLoginItem::new(handle.clone());
+    if let Err(error) = reconcile(&login, settings.autostart) {
+        eprintln!("autostart could not be aligned with the settings: {error}");
+    }
+    state.set_applier(Arc::new(ShellApplier::new(Box::new(login), shortcuts)));
 }
 
 #[cfg(test)]

@@ -22,6 +22,12 @@ adapters-sqlite = { path = "../crates/adapters-sqlite" }
 tauri = { version = "2.12", features = ["tray-icon", "image-png"] }
 # Only used from Rust (save dialog for CSV export); no window receives plugin permissions (R6.5).
 tauri-plugin-dialog = "2.8"
+# Also Rust-only. Single-instance must be registered first (design section 10).
+tauri-plugin-single-instance = "2.5"
+tauri-plugin-autostart = "2.7"
+tauri-plugin-global-shortcut = "2.4"
+tauri-plugin-notification = "2.7"
+adapters-macos = { path = "../crates/adapters-macos" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
@@ -31,6 +37,10 @@ crossbeam-channel.workspace = true
 specta = { version = "=2.0.0-rc.25", features = ["derive"] }
 specta-typescript = "0.0.12"
 tauri-specta = { version = "=2.0.0-rc.25", features = ["derive", "typescript"] }
+
+# Main-thread marker for the AppKit observers wired in `platform.rs`.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
 
 [dev-dependencies]
 application = { workspace = true, features = ["test-fakes"] }

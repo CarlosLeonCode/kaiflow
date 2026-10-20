@@ -111,6 +111,25 @@ pub fn toggle_popover(app: &AppHandle<Wry>, tray_rect: Option<Rect>) {
         let _ = window.hide();
         return;
     }
+    place_and_show(&window, tray_rect);
+}
+
+/// Opens the popover without toggling (idle-return card, notification click). Safe to call
+/// from any thread: the work is queued for the main thread and never waited for.
+pub fn show_popover(app: &AppHandle<Wry>) {
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        let Some(window) = handle.get_webview_window(POPOVER) else {
+            return;
+        };
+        let rect = handle
+            .tray_by_id("main")
+            .and_then(|tray| tray.rect().ok().flatten());
+        place_and_show(&window, rect);
+    });
+}
+
+fn place_and_show(window: &WebviewWindow<Wry>, tray_rect: Option<Rect>) {
     if let Some(rect) = tray_rect {
         let scale = window.scale_factor().unwrap_or(1.0);
         let icon_pos = rect.position.to_physical::<f64>(scale);

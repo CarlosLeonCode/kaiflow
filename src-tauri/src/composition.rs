@@ -4,10 +4,11 @@
 
 use std::fmt;
 use std::path::Path;
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 use std::thread::JoinHandle;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use adapters_macos::idle::IdleThreshold;
 use adapters_sqlite::{
     DbError, SqliteCategoryRepository, SqlitePrivacyRepository, SqliteReportRepository,
     SqliteRetentionRepository, SqliteSessionRepository, SqliteSettingsRepository,
@@ -15,13 +16,14 @@ use adapters_sqlite::{
 use application::commands::Commands;
 use application::engine::{Command, Engine, EngineHandle, Ports};
 use application::ports::{
-    ActiveWindowProvider, CategoryRepository, Clock, EventSink, IdleProvider, Notifier,
-    PermissionProvider, PortResult, PowerEventsProvider, PrivacyMode, PrivacyRepository,
+    ActiveWindowProvider, CategoryRepository, Clock, EventSink, Notifier, PermissionProvider,
+    PortResult, PowerEventsProvider, PrivacyMode, PrivacyRepository,
 };
 use application::queries::Queries;
 use crossbeam_channel::{Receiver, Sender, bounded};
 use domain::{PrivacyPolicy, UtcMs};
 
+use crate::error::AppError;
 use crate::ipc::dto::ShortcutStatusDto;
 use crate::ipc::events::SharedShortcut;
 
@@ -43,30 +45,44 @@ impl Clock for SystemClock {
     }
 }
 
+/// Starts the OS sampler thread once the engine exists. It receives the engine handle and
+/// the stop channel (closed on shutdown) and returns the thread to join.
+pub type SamplerLauncher =
+    Box<dyn FnOnce(EngineHandle, Receiver<()>) -> std::io::Result<JoinHandle<()>> + Send>;
+
 /// OS-facing ports supplied by the caller: macOS adapters in production, fakes in tests.
 pub struct Providers {
     pub window: Box<dyn ActiveWindowProvider>,
-    /// Read by the sampler (task 2.4); the engine itself does not poll it.
-    pub idle: Box<dyn IdleProvider>,
     pub power: Box<dyn PowerEventsProvider>,
     pub permission: Arc<dyn PermissionProvider>,
     pub notifier: Box<dyn Notifier>,
+    /// Idle threshold shared with the sampler; `compose` initializes it from the settings.
+    pub idle_threshold: IdleThreshold,
+    /// The sampler drives focus, idle, permission checks and the heartbeat. `None` keeps a
+    /// plain 2 s heartbeat thread (tests and non-macOS builds).
+    pub sampler: Option<SamplerLauncher>,
 }
 
 impl Providers {
-    /// TEMPORARY no-op providers until the macOS adapters are wired (next batch).
+    /// No-op providers for platforms without a native adapter, and the base for tests.
     pub fn placeholders() -> Self {
-        use crate::placeholders::{
-            AssumeGranted, NoActiveWindow, NoIdle, NoPowerEvents, SilentNotifier,
-        };
+        use crate::placeholders::{AssumeGranted, NoActiveWindow, NoPowerEvents, SilentNotifier};
         Self {
             window: Box::new(NoActiveWindow),
-            idle: Box::new(NoIdle),
             power: Box::new(NoPowerEvents),
             permission: Arc::new(AssumeGranted),
             notifier: Box::new(SilentNotifier),
+            idle_threshold: IdleThreshold::default(),
+            sampler: None,
         }
     }
+}
+
+/// Applies the settings that live outside the database (OS login item, global shortcut).
+/// Implemented by the shell; `settings_update` calls it after persisting the patch.
+pub trait SettingsApplier: Send + Sync {
+    fn set_autostart(&self, enabled: bool) -> Result<(), AppError>;
+    fn set_shortcut(&self, shortcut: &str) -> Result<(), AppError>;
 }
 
 #[derive(Debug)]
@@ -102,7 +118,11 @@ pub struct AppState {
     pub permission: Arc<dyn PermissionProvider>,
     pub shortcut: SharedShortcut,
     pub clock: SystemClock,
+    pub idle_threshold: IdleThreshold,
+    /// Installed by the shell after composition (it needs the `AppHandle`).
+    applier: OnceLock<Arc<dyn SettingsApplier>>,
     background: Mutex<Option<Background>>,
+    sampler: Mutex<Option<SamplerLauncher>>,
 }
 
 struct Background {
@@ -150,6 +170,9 @@ pub fn compose(
         notifier: providers.notifier,
     });
     providers.power.subscribe(handle.signals());
+    if let Ok(settings) = commands.get_settings() {
+        providers.idle_threshold.set(settings.idle_threshold_secs);
+    }
     let engine_thread = engine.spawn().map_err(ComposeError::Thread)?;
 
     let state = AppState {
@@ -160,7 +183,10 @@ pub fn compose(
         permission: providers.permission,
         shortcut,
         clock: SystemClock,
+        idle_threshold: providers.idle_threshold,
+        applier: OnceLock::new(),
         background: Mutex::new(None),
+        sampler: Mutex::new(providers.sampler),
     };
     state.start_background(engine_thread)?;
     Ok(state)
@@ -179,24 +205,43 @@ impl PrivacyRepository for SharedPrivacy {
 }
 
 impl AppState {
+    /// The applier can be installed once; a second call is ignored.
+    pub fn set_applier(&self, applier: Arc<dyn SettingsApplier>) {
+        let _ = self.applier.set(applier);
+    }
+
+    pub fn applier(&self) -> Option<&Arc<dyn SettingsApplier>> {
+        self.applier.get()
+    }
+
     pub fn default_shortcut() -> SharedShortcut {
         Arc::new(Mutex::new(ShortcutStatusDto::Disabled))
     }
 
     fn start_background(&self, engine_thread: JoinHandle<()>) -> Result<(), ComposeError> {
         let (stop, stop_rx) = bounded::<()>(0);
-        let ticker = {
-            let engine = self.engine.clone();
-            let stop_rx = stop_rx.clone();
-            std::thread::Builder::new()
-                .name("ticker".into())
-                .spawn(move || {
-                    // TEMPORARY: the macOS sampler (task 2.4) takes over the heartbeat.
-                    while wait_or_stop(&stop_rx, TICK_EVERY) {
-                        engine.tick();
-                    }
-                })
-                .map_err(ComposeError::Thread)?
+        let launcher = self
+            .sampler
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take();
+        let ticker = match launcher {
+            // The sampler also sends the heartbeat, so no separate ticker is needed.
+            Some(launch) => {
+                launch(self.engine.clone(), stop_rx.clone()).map_err(ComposeError::Thread)?
+            }
+            None => {
+                let engine = self.engine.clone();
+                let stop_rx = stop_rx.clone();
+                std::thread::Builder::new()
+                    .name("ticker".into())
+                    .spawn(move || {
+                        while wait_or_stop(&stop_rx, TICK_EVERY) {
+                            engine.tick();
+                        }
+                    })
+                    .map_err(ComposeError::Thread)?
+            }
         };
         let purge = {
             let commands = self.commands.clone();

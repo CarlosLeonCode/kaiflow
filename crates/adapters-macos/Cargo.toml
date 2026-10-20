@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
-description = "macOS adapters: NSWorkspace observer, Accessibility permission and (later) AX sampling, idle and lock detection."
+description = "macOS adapters: NSWorkspace observer, Accessibility permission and AX window titles, the 2 s sampler, idle and lock detection."
 
 [dependencies]
 domain.workspace = true
@@ -21,6 +21,7 @@ objc2-foundation = { version = "0.3", default-features = false, features = [
     "block2",
     "NSArray",
     "NSDictionary",
+    "NSDistributedNotificationCenter",
     "NSNotification",
     "NSObject",
     "NSOperation",
@@ -42,6 +43,13 @@ objc2-core-foundation = { version = "0.3", default-features = false, features = 
 ] }
 objc2-application-services = { version = "0.3", default-features = false, features = [
     "std",
+    "AXError",
     "AXUIElement",
     "HIServices",
+    "libc",
+] }
+objc2-core-graphics = { version = "0.3", default-features = false, features = [
+    "std",
+    "CGEventSource",
+    "CGEventTypes",
 ] }

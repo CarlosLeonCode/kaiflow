@@ -212,11 +212,32 @@ pub async fn permission_open_settings(state: Shared<'_>) -> Result<(), AppError>
 }
 
 /// Relaunches the app (Accessibility sometimes needs it after the grant). Closes the open
-/// segment first because `restart` does not run the normal exit path.
+/// segment first because the relaunch does not run the normal exit path.
+///
+/// Inside a `.app` a brand new instance is started through LaunchServices (new pid, so the
+/// AX client cache is rebuilt); Tauri's `restart` keeps the pid. The single-instance lock is
+/// released first, otherwise the new instance would defer to this one and exit.
 #[tauri::command]
 #[specta::specta]
-pub fn app_restart(app: AppHandle, state: Shared<'_>) -> Result<(), AppError> {
-    state.shutdown();
+pub async fn app_restart(app: AppHandle, state: Shared<'_>) -> Result<(), AppError> {
+    run(state, |s| {
+        s.shutdown();
+        Ok(())
+    })
+    .await?;
+    #[cfg(target_os = "macos")]
+    {
+        tauri_plugin_single_instance::destroy(&app);
+        match adapters_macos::permission::spawn_relaunch() {
+            Ok(()) => {
+                app.exit(0);
+                return Ok(());
+            }
+            Err(reason) => {
+                eprintln!("relaunch through LaunchServices failed ({reason}); restarting in place")
+            }
+        }
+    }
     app.restart()
 }
 

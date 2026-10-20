@@ -148,15 +148,34 @@ impl AppState {
         Ok(self.commands.get_settings()?.into())
     }
 
-    /// Persists the patch and applies `store_titles` immediately. Autostart, shortcut and
-    /// idle threshold are applied by their owners in later tasks (2.4, 2.7).
+    /// Persists the patch, then applies what lives outside the database: `store_titles`
+    /// (engine policy), the idle threshold (sampler), autostart and the global shortcut.
+    ///
+    /// A failing side effect never undoes the saved settings (R6.3: the rest is kept); the
+    /// first failure is returned after every side effect was attempted.
     pub fn settings_update(&self, patch: SettingsPatchDto) -> Result<SettingsDto, AppError> {
         let titles_changed = patch.store_titles.is_some();
+        let autostart_changed = patch.autostart.is_some();
+        let shortcut_changed = patch.shortcut.is_some();
         let settings = self.commands.update_settings(&patch.into())?;
         if titles_changed {
             self.engine.request(Command::ReloadPrivacy)?;
         }
-        Ok(settings.into())
+        self.idle_threshold.set(settings.idle_threshold_secs);
+
+        let mut first_error = None;
+        if let Some(applier) = self.applier() {
+            if autostart_changed && let Err(e) = applier.set_autostart(settings.autostart) {
+                first_error.get_or_insert(e);
+            }
+            if shortcut_changed && let Err(e) = applier.set_shortcut(&settings.shortcut) {
+                first_error.get_or_insert(e);
+            }
+        }
+        match first_error {
+            Some(error) => Err(error),
+            None => Ok(settings.into()),
+        }
     }
 
     pub fn permission_status(&self) -> PermissionStateDto {
@@ -211,7 +230,7 @@ mod tests {
     use std::sync::Arc;
 
     use application::fakes::{
-        FakeIdle, FakePermission, FakePower, FakeWindow, RecordingNotifier, RecordingSink,
+        FakePermission, FakePower, FakeWindow, RecordingNotifier, RecordingSink,
     };
     use application::ports::{DomainEvent, TrackingKind};
     use domain::{FocusSnapshot, PermissionState};
@@ -239,10 +258,11 @@ mod tests {
             AppState::default_shortcut(),
             Providers {
                 window: Box::new(window.clone()),
-                idle: Box::new(FakeIdle::default()),
                 power: Box::new(FakePower::default()),
                 permission: Arc::new(permission.clone()),
                 notifier: Box::new(RecordingNotifier::default()),
+                idle_threshold: adapters_macos::idle::IdleThreshold::default(),
+                sampler: None,
             },
         )
         .unwrap();
@@ -429,6 +449,86 @@ mod tests {
         assert_eq!(updated.retention_days, Some(30));
         assert_eq!(updated.idle_threshold_secs, 300);
         assert_eq!(rig.state.settings_get().unwrap(), updated);
+        rig.state.shutdown();
+    }
+
+    #[derive(Default)]
+    struct RecordingApplier {
+        calls: std::sync::Mutex<Vec<String>>,
+        taken: bool,
+    }
+
+    impl crate::composition::SettingsApplier for RecordingApplier {
+        fn set_autostart(&self, enabled: bool) -> Result<(), AppError> {
+            self.calls
+                .lock()
+                .unwrap()
+                .push(format!("autostart:{enabled}"));
+            Ok(())
+        }
+        fn set_shortcut(&self, shortcut: &str) -> Result<(), AppError> {
+            self.calls
+                .lock()
+                .unwrap()
+                .push(format!("shortcut:{shortcut}"));
+            if self.taken {
+                return Err(AppError::ShortcutUnavailable {
+                    shortcut: shortcut.into(),
+                    reason: "in use".into(),
+                });
+            }
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn settings_update_applies_threshold_autostart_and_shortcut() {
+        let rig = rig();
+        let applier = Arc::new(RecordingApplier::default());
+        rig.state.set_applier(applier.clone());
+        rig.state
+            .settings_update(SettingsPatchDto {
+                idle_threshold_secs: Some(120),
+                autostart: Some(true),
+                shortcut: Some("⌃⌥⌘P".into()),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(rig.state.idle_threshold.get(), 120);
+        assert_eq!(
+            *applier.calls.lock().unwrap(),
+            vec!["autostart:true".to_string(), "shortcut:⌃⌥⌘P".to_string()]
+        );
+        // Untouched fields are not re-applied.
+        rig.state
+            .settings_update(SettingsPatchDto {
+                theme: Some("dark".into()),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(applier.calls.lock().unwrap().len(), 2);
+        rig.state.shutdown();
+    }
+
+    #[test]
+    fn a_taken_shortcut_reports_the_error_but_keeps_the_other_settings() {
+        let rig = rig();
+        rig.state.set_applier(Arc::new(RecordingApplier {
+            taken: true,
+            ..Default::default()
+        }));
+        let err = rig
+            .state
+            .settings_update(SettingsPatchDto {
+                theme: Some("dark".into()),
+                shortcut: Some("⌃⌥⌘P".into()),
+                ..Default::default()
+            })
+            .unwrap_err();
+        assert!(matches!(err, AppError::ShortcutUnavailable { .. }));
+        let saved = rig.state.settings_get().unwrap();
+        assert_eq!(saved.theme, "dark");
+        assert_eq!(saved.shortcut, "⌃⌥⌘P");
         rig.state.shutdown();
     }
 
