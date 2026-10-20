@@ -49,6 +49,11 @@ export const commands = {
 	 *  window never gets `core:window` permissions (R6.5), so the backend does it.
 	 */
 	closeOnboarding: () => typedError<null, AppError>(__TAURI_INVOKE("close_onboarding")),
+	/**
+	 *  Hides the popover (Escape key). Same reason as `close_onboarding`: the popover window gets
+	 *  no `core:window` permission (R6.5), so the backend does it.
+	 */
+	hidePopover: () => typedError<null, AppError>(__TAURI_INVOKE("hide_popover")),
 	prepareDelete: (op: DeleteOpDto) => typedError<string, AppError>(__TAURI_INVOKE("prepare_delete", { op })),
 	deleteRange: (range: RangeDto, confirmToken: string) => typedError<number, AppError>(__TAURI_INVOKE("delete_range", { range, confirmToken })),
 	purgeOlderThan: (days: number, confirmToken: string) => typedError<number, AppError>(__TAURI_INVOKE("purge_older_than", { days, confirmToken })),

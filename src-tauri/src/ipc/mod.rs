@@ -46,6 +46,7 @@ pub fn builder() -> Builder<Wry> {
             commands::app_restart,
             commands::open_main_window,
             commands::close_onboarding,
+            commands::hide_popover,
             commands::prepare_delete,
             commands::delete_range,
             commands::purge_older_than,

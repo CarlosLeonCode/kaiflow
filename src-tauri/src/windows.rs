@@ -46,6 +46,9 @@ pub const MAIN_SPEC: WindowSpec = WindowSpec {
     resizable: true,
 };
 
+/// Smallest size at which the dashboard stays usable (sidebar + a readable content column).
+pub const MAIN_MIN_SIZE: (f64, f64) = (760.0, 520.0);
+
 pub const ONBOARDING_SPEC: WindowSpec = WindowSpec {
     label: ONBOARDING,
     page: "onboarding.html",
@@ -79,6 +82,11 @@ fn build(app: &AppHandle<Wry>, spec: &WindowSpec) -> tauri::Result<WebviewWindow
         builder
             .title_bar_style(tauri::TitleBarStyle::Overlay)
             .hidden_title(true)
+    } else {
+        builder
+    };
+    let builder = if spec.label == MAIN {
+        builder.min_inner_size(MAIN_MIN_SIZE.0, MAIN_MIN_SIZE.1)
     } else {
         builder
     };
@@ -164,6 +172,13 @@ fn popover_origin(icon_x: f64, icon_y: f64, icon_w: f64, icon_h: f64, width: f64
     (x.round() as i32, (icon_y + icon_h).round() as i32)
 }
 
+/// Hides the popover (Escape from the webview, which has no `core:window` permission).
+pub fn hide_popover(app: &AppHandle<Wry>) {
+    if let Some(window) = app.get_webview_window(POPOVER) {
+        let _ = window.hide();
+    }
+}
+
 /// Closes the onboarding window (it is created again only if onboarding is still pending).
 pub fn close_onboarding(app: &AppHandle<Wry>) {
     if let Some(window) = app.get_webview_window(ONBOARDING) {
@@ -191,6 +206,13 @@ mod tests {
             (ONBOARDING_SPEC.width, ONBOARDING_SPEC.height),
             (560.0, 640.0)
         );
+    }
+
+    #[test]
+    fn the_minimum_size_fits_inside_the_default_one() {
+        const {
+            assert!(MAIN_MIN_SIZE.0 < MAIN_SPEC.width && MAIN_MIN_SIZE.1 < MAIN_SPEC.height);
+        }
     }
 
     #[test]

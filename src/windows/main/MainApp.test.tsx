@@ -12,6 +12,9 @@ function backend() {
     get_report: () => report(),
     get_timeline: () => [],
     settings_get: () => settings(),
+    categories_list: () => [{ id: 1, name: "Sin categoría", color: "#6b7280", sort_order: 0 }],
+    rules_list: () => [],
+    privacy_list: () => ({ store_titles: true, excluded_apps: [], redacted_apps: [] }),
   });
 }
 
@@ -49,7 +52,7 @@ describe("MainApp shell", () => {
     renderWithProviders(<MainApp />);
 
     await user.keyboard("{Meta>}3{/Meta}");
-    expect(await screen.findByRole("heading", { name: "Categories" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Categories" })).toBeInTheDocument();
     await user.keyboard("{Meta>}5{/Meta}");
     expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
     await user.keyboard("{Meta>}k{/Meta}");
@@ -58,16 +61,28 @@ describe("MainApp shell", () => {
     expect(await screen.findByRole("heading", { name: "Today" })).toBeInTheDocument();
   });
 
-  it("shows placeholders for the sections of the next batch", async () => {
+  it("renders History, Categories and Privacy", async () => {
     const user = userEvent.setup();
     backend();
     renderWithProviders(<MainApp />);
 
     for (const name of ["History", "Categories", "Privacy"]) {
       await user.click(screen.getByRole("button", { name: new RegExp(name) }));
-      expect(await screen.findByRole("heading", { name })).toBeInTheDocument();
-      expect(screen.getByText("Coming soon")).toBeInTheDocument();
+      expect(await screen.findByRole("heading", { level: 1, name })).toBeInTheDocument();
     }
+    expect(screen.queryByText("Coming soon")).not.toBeInTheDocument();
+  });
+
+  it("Privacy links to Settings for the global title switch", async () => {
+    const user = userEvent.setup();
+    backend();
+    renderWithProviders(<MainApp />);
+
+    await user.click(screen.getByRole("button", { name: /Privacy/ }));
+    await user.click(await screen.findByRole("button", { name: "Change in Settings" }));
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Settings" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Settings/ })).toHaveAttribute("aria-current", "page");
   });
 
   it("shows the tracking status at the bottom of the sidebar", async () => {

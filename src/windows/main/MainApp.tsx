@@ -1,10 +1,8 @@
 import { useCallback, useState } from "react";
 
-import {
-  CategoriesPlaceholder,
-  HistoryPlaceholder,
-  PrivacyPlaceholder,
-} from "@/features/shell/components/placeholders";
+import { CategoriesContainer } from "@/features/categories/containers/CategoriesContainer";
+import { HistoryContainer } from "@/features/history/containers/HistoryContainer";
+import { PrivacyContainer } from "@/features/privacy/containers/PrivacyContainer";
 import { Sidebar } from "@/features/shell/components/Sidebar";
 import { useSectionShortcuts } from "@/features/shell/hooks/useSectionShortcuts";
 import { DEFAULT_SECTION, type SectionId } from "@/features/shell/lib/sections";
@@ -13,16 +11,16 @@ import { TodayContainer } from "@/features/today/containers/TodayContainer";
 import { stateLabel } from "@/features/tracking/lib/derive";
 import { useStatusQuery } from "@/shared/ipc";
 
-function SectionView({ section }: { section: SectionId }) {
+function SectionView({ section, onNavigate }: { section: SectionId; onNavigate: (next: SectionId) => void }) {
   switch (section) {
     case "today":
       return <TodayContainer />;
     case "history":
-      return <HistoryPlaceholder />;
+      return <HistoryContainer />;
     case "categories":
-      return <CategoriesPlaceholder />;
+      return <CategoriesContainer />;
     case "privacy":
-      return <PrivacyPlaceholder />;
+      return <PrivacyContainer onOpenSettings={() => onNavigate("settings")} />;
     case "settings":
       return <SettingsContainer />;
   }
@@ -56,7 +54,7 @@ export function MainApp() {
         }
       />
       <main aria-label="Dashboard" className="min-w-0 flex-1 bg-background">
-        <SectionView section={section} />
+        <SectionView section={section} onNavigate={select} />
       </main>
     </div>
   );

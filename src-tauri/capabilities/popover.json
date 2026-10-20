@@ -17,6 +17,7 @@
     "allow-permission-status",
     "allow-settings-get",
     "allow-permission-open-settings",
-    "allow-open-main-window"
+    "allow-open-main-window",
+    "allow-hide-popover"
   ]
 }

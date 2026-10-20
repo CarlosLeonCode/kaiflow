@@ -31,6 +31,7 @@ const COMMANDS: &[&str] = &[
     "app_restart",
     "open_main_window",
     "close_onboarding",
+    "hide_popover",
     "prepare_delete",
     "delete_range",
     "purge_older_than",

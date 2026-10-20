@@ -253,6 +253,18 @@ pub async fn open_main_window(app: AppHandle) -> Result<(), AppError> {
         })
 }
 
+/// Hides the popover (Escape key). Same reason as `close_onboarding`: the popover window gets
+/// no `core:window` permission (R6.5), so the backend does it.
+#[tauri::command]
+#[specta::specta]
+pub async fn hide_popover(app: AppHandle) -> Result<(), AppError> {
+    let target = app.clone();
+    app.run_on_main_thread(move || crate::windows::hide_popover(&target))
+        .map_err(|e| AppError::Internal {
+            message: e.to_string(),
+        })
+}
+
 /// Closes the onboarding window once the user finished (or dismissed) the guided steps. The
 /// window never gets `core:window` permissions (R6.5), so the backend does it.
 #[tauri::command]

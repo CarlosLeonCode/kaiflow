@@ -18,6 +18,15 @@ export function localDayRange(now: number): RangeDto {
   return { from, to };
 }
 
+/**
+ * Local midnight of the day `days` away from the day containing `ms` (negative = past).
+ * Calendar arithmetic, never `ms + n * 24h`, so DST days stay correct.
+ */
+export function addLocalDays(ms: number, days: number): number {
+  const date = new Date(ms);
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days).getTime();
+}
+
 /** `1h 24m`, `24m`, `45s`. Rounds down to the second; never negative. */
 export function formatDuration(ms: number): string {
   const total = Math.max(0, Math.floor(ms / SECOND));

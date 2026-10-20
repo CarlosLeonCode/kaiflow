@@ -1,9 +1,12 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 
 import { commands } from "./bindings";
 import type {
+  CategoryDto,
+  DeleteOpDto,
   IdleResolutionDto,
   RangeDto,
+  RuleInputDto,
   SettingsDto,
   SettingsPatchDto,
   TrackingStatusDto,
@@ -24,6 +27,17 @@ export function useReportQuery(range: RangeDto, buckets: readonly RangeDto[] = [
   return useQuery({
     queryKey: queryKeys.report(range, buckets),
     queryFn: () => unwrap(commands.getReport(range, [...buckets])),
+  });
+}
+
+/** One report per range, sharing cache keys with `useReportQuery` (no buckets). `enabled: false` skips them all. */
+export function useReportsQuery(ranges: readonly RangeDto[], enabled = true) {
+  return useQueries({
+    queries: ranges.map((range) => ({
+      queryKey: queryKeys.report(range),
+      queryFn: () => unwrap(commands.getReport(range, [])),
+      enabled,
+    })),
   });
 }
 
@@ -127,6 +141,8 @@ export function useUpdateSettingsMutation() {
     onSuccess: (saved) => {
       client.setQueryData(queryKeys.settings, saved);
       void client.invalidateQueries({ queryKey: queryKeys.status });
+      // The privacy page mirrors `store_titles` and the retention policy.
+      void client.invalidateQueries({ queryKey: queryKeys.privacy });
     },
     onError: () => {
       void client.invalidateQueries({ queryKey: queryKeys.settings });
@@ -141,4 +157,119 @@ export function useRestartAppMutation() {
 
 export function useCloseOnboardingMutation() {
   return useMutation({ mutationFn: () => unwrap(commands.closeOnboarding()) });
+}
+
+export function useHidePopoverMutation() {
+  return useMutation({ mutationFn: () => unwrap(commands.hidePopover()) });
+}
+
+/** Category and rule edits change how existing segments are grouped (R9.2): refresh everything derived. */
+function invalidateCategorization(client: QueryClient): Promise<unknown> {
+  return Promise.all(
+    [queryKeys.categories, queryKeys.rules, queryKeys.reports, queryKeys.timelines].map((queryKey) =>
+      client.invalidateQueries({ queryKey }),
+    ),
+  );
+}
+
+export function useRulesQuery() {
+  return useQuery({
+    queryKey: queryKeys.rules,
+    queryFn: () => unwrap(commands.rulesList()),
+  });
+}
+
+export function useCreateCategoryMutation() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { name: string; color: string }) =>
+      unwrap(commands.categoriesCreate(input.name, input.color)),
+    onSuccess: () => invalidateCategorization(client),
+  });
+}
+
+export function useUpdateCategoryMutation() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (category: CategoryDto) => unwrap(commands.categoriesUpdate(category)),
+    onSuccess: () => invalidateCategorization(client),
+  });
+}
+
+export function useDeleteCategoryMutation() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => unwrap(commands.categoriesDelete(id)),
+    onSuccess: () => invalidateCategorization(client),
+  });
+}
+
+/** Creates (`id <= 0`) or updates one or several rules; the backend validates title patterns. */
+export function useUpsertRulesMutation() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (rules: readonly RuleInputDto[]) =>
+      Promise.all(rules.map((rule) => unwrap(commands.rulesUpsert(rule)))),
+    onSettled: () => invalidateCategorization(client),
+  });
+}
+
+export function useDeleteRuleMutation() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => unwrap(commands.rulesDelete(id)),
+    onSuccess: () => invalidateCategorization(client),
+  });
+}
+
+export function usePrivacyQuery() {
+  return useQuery({
+    queryKey: queryKeys.privacy,
+    queryFn: () => unwrap(commands.privacyList()),
+  });
+}
+
+/** `mode: null` removes the app's rule. Future data only (R10.5). */
+export function useSetPrivacyMutation() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { appId: string; mode: "exclude" | "redact_title" | null }) =>
+      unwrap(commands.privacySet(input.appId, input.mode)),
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.privacy }),
+  });
+}
+
+/** Step one of every destructive operation: the backend answers with a single-use confirm token. */
+export function usePrepareDeleteMutation() {
+  return useMutation({ mutationFn: (op: DeleteOpDto) => unwrap(commands.prepareDelete(op)) });
+}
+
+/** Step two: runs the operation the token was issued for. Resolves to the number of removed segments. */
+export function useDeleteDataMutation() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { op: DeleteOpDto; token: string }): Promise<number> => {
+      const { op, token } = input;
+      switch (op.kind) {
+        case "range":
+          return unwrap(commands.deleteRange(op.range, token));
+        case "older_than_days":
+          return unwrap(commands.purgeOlderThan(op.days, token));
+        case "all":
+          await unwrap(commands.deleteAll(token));
+          return 0;
+      }
+    },
+    onSuccess: () =>
+      Promise.all([
+        client.invalidateQueries({ queryKey: queryKeys.reports }),
+        client.invalidateQueries({ queryKey: queryKeys.timelines }),
+        client.invalidateQueries({ queryKey: queryKeys.idleGaps }),
+      ]),
+  });
+}
+
+/** Resolves to the saved path, or `null` when the user cancelled the save dialog. */
+export function useExportCsvMutation() {
+  return useMutation({ mutationFn: (range: RangeDto) => unwrap(commands.exportCsv(range)) });
 }

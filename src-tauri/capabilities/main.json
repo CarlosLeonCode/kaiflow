@@ -34,6 +34,7 @@
     "allow-app-restart",
     "allow-open-main-window",
     "allow-close-onboarding",
+    "allow-hide-popover",
     "allow-prepare-delete",
     "allow-delete-range",
     "allow-purge-older-than",

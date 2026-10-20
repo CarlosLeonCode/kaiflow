@@ -6,6 +6,8 @@ export const queryKeys = {
   settings: ["settings"] as const,
   permission: ["permission"] as const,
   categories: ["categories"] as const,
+  rules: ["rules"] as const,
+  privacy: ["privacy"] as const,
   idleGaps: ["idle-gaps"] as const,
   /** Prefix of every report query (use it to invalidate them all). */
   reports: ["report"] as const,
