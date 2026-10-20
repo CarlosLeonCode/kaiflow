@@ -1,9 +1,10 @@
-//! The `adapters-sqlite` crate. Intentionally empty until its implementation task lands.
+//! SQLite adapter (rusqlite, bundled). Write repositories live here; read-side ones follow.
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn crate_compiles() {
-        assert_eq!(2 + 2, 4);
-    }
-}
+pub mod db;
+pub mod migrations;
+mod session_repo;
+mod settings_repo;
+
+pub use db::{DbError, open, open_in_memory};
+pub use session_repo::SqliteSessionRepository;
+pub use settings_repo::SqliteSettingsRepository;

@@ -20,3 +20,7 @@ application = { path = "crates/application" }
 
 # select! over signals, IPC commands and ticks in the engine thread (design section 6).
 crossbeam-channel = "0.5"
+
+# SQLite with the library compiled in, so the app does not depend on the system version (design section 7).
+rusqlite = { version = "0.40", features = ["bundled"] }
+tempfile = "3"
