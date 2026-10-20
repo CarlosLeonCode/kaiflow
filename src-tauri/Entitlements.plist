@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!--
+    Intentionally empty. The app is NOT sandboxed (the Accessibility API cannot be used from
+    the App Sandbox) and, per the phase 2 spike (docs/spikes/phase-2-macos.md), the hardened
+    runtime needs no exception for AXIsProcessTrusted, NSWorkspace notifications or
+    CGEventSource. Add keys here only when a verified need appears.
+  -->
+</dict>
+</plist>

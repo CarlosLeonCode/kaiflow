@@ -1,9 +1,5 @@
-//! The `adapters-macos` crate. Intentionally empty until its implementation task lands.
+//! macOS adapters (design sections 5 and 6). Everything that touches AppKit or the C
+//! frameworks is behind `cfg(target_os = "macos")` so the workspace builds elsewhere.
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn crate_compiles() {
-        assert_eq!(2 + 2, 4);
-    }
-}
+pub mod permission;
+pub mod workspace_observer;

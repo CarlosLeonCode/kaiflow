@@ -5,5 +5,43 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
+description = "macOS adapters: NSWorkspace observer, Accessibility permission and (later) AX sampling, idle and lock detection."
 
 [dependencies]
+domain.workspace = true
+application.workspace = true
+crossbeam-channel.workspace = true
+
+# Versions verified in docs/spikes/phase-2-macos.md. Features are opt-in per type in objc2 0.3.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+block2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = [
+    "std",
+    "block2",
+    "NSArray",
+    "NSDictionary",
+    "NSNotification",
+    "NSObject",
+    "NSOperation",
+    "NSString",
+    "NSValue",
+] }
+objc2-app-kit = { version = "0.3", default-features = false, features = [
+    "std",
+    "libc",
+    "NSRunningApplication",
+    "NSWorkspace",
+] }
+objc2-core-foundation = { version = "0.3", default-features = false, features = [
+    "std",
+    "CFBase",
+    "CFDictionary",
+    "CFNumber",
+    "CFString",
+] }
+objc2-application-services = { version = "0.3", default-features = false, features = [
+    "std",
+    "AXUIElement",
+    "HIServices",
+] }
