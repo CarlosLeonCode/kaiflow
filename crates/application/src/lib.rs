@@ -1,9 +1,7 @@
-//! The `application` crate. Intentionally empty until its implementation task lands.
+//! Application layer: ports, effect execution and the single engine thread.
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn crate_compiles() {
-        assert_eq!(2 + 2, 4);
-    }
-}
+pub mod effects_executor;
+pub mod engine;
+#[cfg(any(test, feature = "test-fakes"))]
+pub mod fakes;
+pub mod ports;

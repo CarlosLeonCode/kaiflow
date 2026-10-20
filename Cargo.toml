@@ -17,3 +17,6 @@ publish = false
 [workspace.dependencies]
 domain = { path = "crates/domain" }
 application = { path = "crates/application" }
+
+# select! over signals, IPC commands and ticks in the engine thread (design section 6).
+crossbeam-channel = "0.5"

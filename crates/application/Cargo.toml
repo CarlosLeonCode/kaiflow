@@ -6,4 +6,10 @@ rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[features]
+# In-memory fakes for every port; also compiled for this crate's own tests.
+test-fakes = []
+
 [dependencies]
+domain.workspace = true
+crossbeam-channel.workspace = true
