@@ -12,7 +12,7 @@ function backend() {
     get_report: () => report(),
     get_timeline: () => [],
     settings_get: () => settings(),
-    categories_list: () => [{ id: 1, name: "Sin categoría", color: "#6b7280", sort_order: 0 }],
+    activities_list: () => [{ id: 1, name: "Unassigned", color: "#6b7280", sort_order: 0 }],
     rules_list: () => [],
     privacy_list: () => ({ store_titles: true, excluded_apps: [], redacted_apps: [] }),
   });
@@ -27,7 +27,7 @@ describe("MainApp shell", () => {
     expect(within(nav).getAllByRole("button").map((b) => b.textContent?.replace(/⌘\d/, ""))).toEqual([
       "Today",
       "History",
-      "Categories",
+      "Activities",
       "Privacy",
       "Settings",
     ]);
@@ -52,7 +52,7 @@ describe("MainApp shell", () => {
     renderWithProviders(<MainApp />);
 
     await user.keyboard("{Meta>}3{/Meta}");
-    expect(await screen.findByRole("heading", { level: 1, name: "Categories" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Activities" })).toBeInTheDocument();
     await user.keyboard("{Meta>}5{/Meta}");
     expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
     await user.keyboard("{Meta>}k{/Meta}");
@@ -69,9 +69,9 @@ describe("MainApp shell", () => {
     const current = () => within(nav).getAllByRole("button").filter((b) => b.getAttribute("aria-current") === "page");
 
     const steps: [() => Promise<void>, string][] = [
-      [() => user.click(within(nav).getByRole("button", { name: /Categories/ })), "Categories"],
+      [() => user.click(within(nav).getByRole("button", { name: /Activities/ })), "Activities"],
       [() => user.click(within(nav).getByRole("button", { name: /History/ })), "History"],
-      [() => user.keyboard("{Meta>}3{/Meta}"), "Categories"],
+      [() => user.keyboard("{Meta>}3{/Meta}"), "Activities"],
       [() => user.keyboard("{Meta>}1{/Meta}"), "Today"],
     ];
     for (const [act, name] of steps) {
@@ -87,12 +87,12 @@ describe("MainApp shell", () => {
     }
   });
 
-  it("renders History, Categories and Privacy", async () => {
+  it("renders History, Activities and Privacy", async () => {
     const user = userEvent.setup();
     backend();
     renderWithProviders(<MainApp />);
 
-    for (const name of ["History", "Categories", "Privacy"]) {
+    for (const name of ["History", "Activities", "Privacy"]) {
       await user.click(screen.getByRole("button", { name: new RegExp(name) }));
       expect(await screen.findByRole("heading", { level: 1, name })).toBeInTheDocument();
     }

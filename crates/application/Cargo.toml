@@ -13,3 +13,5 @@ test-fakes = []
 [dependencies]
 domain.workspace = true
 crossbeam-channel.workspace = true
+serde.workspace = true
+serde_json.workspace = true

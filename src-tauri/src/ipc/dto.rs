@@ -4,10 +4,11 @@
 
 use application::commands::{DeleteOp, RuleInput, RuleSpec, Settings, SettingsPatch, TrayDisplay};
 use application::ports::{DegradedReason, PrivacyMode, TrackingKind, TrackingStatus};
-use application::queries::{AppTotal, BucketTotal, CategoryTotal, Range, Report, TimelineItem};
+use application::queries::{ActivityTotal, AppTotal, BucketTotal, Range, Report, TimelineItem};
+use application::settings_blobs::UiSettings;
 use domain::{
-    Category, CategoryId, CategoryRule, EndReason, FocusSnapshot, GapId, IdleGap, IdleResolution,
-    PermissionState, PrivacyPolicy, RuleKind, SegmentSource, UtcMs,
+    Activity, ActivityId, ActivityRule, EndReason, FocusSnapshot, GapId, IdleGap, IdleResolution,
+    PermissionState, PrivacyPolicy, Productivity, RuleKind, SegmentSource, UtcMs,
 };
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -159,7 +160,7 @@ impl From<PermissionState> for PermissionStateDto {
 pub enum IdleResolutionDto {
     Discard,
     AssignPrevious,
-    AssignCategory { category_id: i64 },
+    AssignActivity { activity_id: i64 },
 }
 
 impl From<IdleResolutionDto> for IdleResolution {
@@ -167,8 +168,8 @@ impl From<IdleResolutionDto> for IdleResolution {
         match r {
             IdleResolutionDto::Discard => Self::Discard,
             IdleResolutionDto::AssignPrevious => Self::AssignPrevious,
-            IdleResolutionDto::AssignCategory { category_id } => {
-                Self::AssignCategory(CategoryId(category_id))
+            IdleResolutionDto::AssignActivity { activity_id } => {
+                Self::AssignActivity(ActivityId(activity_id))
             }
         }
     }
@@ -199,7 +200,7 @@ impl IdleGapDto {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct AppTotalDto {
-    /// `None` for time assigned manually to a category.
+    /// `None` for time assigned manually to an activity.
     pub app_id: Option<String>,
     pub app_name: String,
     pub total_ms: i64,
@@ -216,17 +217,17 @@ impl From<AppTotal> for AppTotalDto {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
-pub struct CategoryTotalDto {
-    pub category_id: i64,
+pub struct ActivityTotalDto {
+    pub activity_id: i64,
     pub name: String,
     pub color: String,
     pub total_ms: i64,
 }
 
-impl From<CategoryTotal> for CategoryTotalDto {
-    fn from(c: CategoryTotal) -> Self {
+impl From<ActivityTotal> for ActivityTotalDto {
+    fn from(c: ActivityTotal) -> Self {
         Self {
-            category_id: c.category_id.0,
+            activity_id: c.activity_id.0,
             name: c.name,
             color: c.color,
             total_ms: c.total_ms,
@@ -252,7 +253,7 @@ impl From<BucketTotal> for BucketTotalDto {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct ReportDto {
     pub by_app: Vec<AppTotalDto>,
-    pub by_category: Vec<CategoryTotalDto>,
+    pub by_activity: Vec<ActivityTotalDto>,
     pub by_bucket: Vec<BucketTotalDto>,
     pub total_ms: i64,
 }
@@ -261,7 +262,7 @@ impl From<Report> for ReportDto {
     fn from(r: Report) -> Self {
         Self {
             by_app: r.by_app.into_iter().map(Into::into).collect(),
-            by_category: r.by_category.into_iter().map(Into::into).collect(),
+            by_activity: r.by_activity.into_iter().map(Into::into).collect(),
             by_bucket: r.by_bucket.into_iter().map(Into::into).collect(),
             total_ms: r.total_ms,
         }
@@ -320,9 +321,9 @@ pub struct TimelineItemDto {
     pub app_id: Option<String>,
     pub app_name: Option<String>,
     pub window_title: Option<String>,
-    pub category_id: i64,
-    pub category_name: String,
-    pub category_color: String,
+    pub activity_id: i64,
+    pub activity_name: String,
+    pub activity_color: String,
     pub source: SegmentSourceDto,
     pub end_reason: Option<EndReasonDto>,
     pub open: bool,
@@ -337,9 +338,9 @@ impl From<TimelineItem> for TimelineItemDto {
             app_id: t.app_id,
             app_name: t.app_name,
             window_title: t.window_title,
-            category_id: t.category_id.0,
-            category_name: t.category_name,
-            category_color: t.category_color,
+            activity_id: t.activity_id.0,
+            activity_name: t.activity_name,
+            activity_color: t.activity_color,
             source: t.source.into(),
             end_reason: t.end_reason.map(Into::into),
             open: t.open,
@@ -348,31 +349,66 @@ impl From<TimelineItem> for TimelineItemDto {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
-pub struct CategoryDto {
+pub struct ActivityDto {
     pub id: i64,
     pub name: String,
     pub color: String,
     pub sort_order: i32,
+    pub productivity: ProductivityDto,
+    pub preset_key: Option<String>,
 }
 
-impl From<Category> for CategoryDto {
-    fn from(c: Category) -> Self {
+/// How an activity counts toward the focus ratio.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum ProductivityDto {
+    Productive,
+    Neutral,
+    Distracting,
+}
+
+impl From<Productivity> for ProductivityDto {
+    fn from(p: Productivity) -> Self {
+        match p {
+            Productivity::Productive => Self::Productive,
+            Productivity::Neutral => Self::Neutral,
+            Productivity::Distracting => Self::Distracting,
+        }
+    }
+}
+
+impl From<ProductivityDto> for Productivity {
+    fn from(p: ProductivityDto) -> Self {
+        match p {
+            ProductivityDto::Productive => Self::Productive,
+            ProductivityDto::Neutral => Self::Neutral,
+            ProductivityDto::Distracting => Self::Distracting,
+        }
+    }
+}
+
+impl From<Activity> for ActivityDto {
+    fn from(c: Activity) -> Self {
         Self {
             id: c.id.0,
             name: c.name,
             color: c.color,
             sort_order: c.sort_order,
+            productivity: c.productivity.into(),
+            preset_key: c.preset_key,
         }
     }
 }
 
-impl From<CategoryDto> for Category {
-    fn from(c: CategoryDto) -> Self {
+impl From<ActivityDto> for Activity {
+    fn from(c: ActivityDto) -> Self {
         Self {
-            id: CategoryId(c.id),
+            id: ActivityId(c.id),
             name: c.name,
             color: c.color,
             sort_order: c.sort_order,
+            productivity: c.productivity.into(),
+            preset_key: c.preset_key,
         }
     }
 }
@@ -393,13 +429,13 @@ pub enum RuleSpecDto {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct RuleDto {
     pub id: i64,
-    pub category_id: i64,
+    pub activity_id: i64,
     pub spec: RuleSpecDto,
     pub priority: i32,
 }
 
-impl From<CategoryRule> for RuleDto {
-    fn from(r: CategoryRule) -> Self {
+impl From<ActivityRule> for RuleDto {
+    fn from(r: ActivityRule) -> Self {
         let spec = match r.kind {
             RuleKind::App(app_id) => RuleSpecDto::App { app_id },
             RuleKind::TitlePattern { regex, app_id } => RuleSpecDto::TitlePattern {
@@ -409,7 +445,7 @@ impl From<CategoryRule> for RuleDto {
         };
         Self {
             id: r.id,
-            category_id: r.category_id.0,
+            activity_id: r.activity_id.0,
             spec,
             priority: r.priority,
         }
@@ -420,7 +456,7 @@ impl From<CategoryRule> for RuleDto {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct RuleInputDto {
     pub id: i64,
-    pub category_id: i64,
+    pub activity_id: i64,
     pub spec: RuleSpecDto,
     pub priority: i32,
 }
@@ -429,7 +465,7 @@ impl From<RuleInputDto> for RuleInput {
     fn from(r: RuleInputDto) -> Self {
         Self {
             id: r.id,
-            category_id: CategoryId(r.category_id),
+            activity_id: ActivityId(r.activity_id),
             kind: match r.spec {
                 RuleSpecDto::App { app_id } => RuleSpec::App(app_id),
                 RuleSpecDto::TitlePattern { pattern, app_id } => {
@@ -524,6 +560,30 @@ pub struct SettingsDto {
     pub shortcut: String,
     pub onboarding_completed: bool,
     pub tray_display: TrayDisplayDto,
+    pub ui: UiSettingsDto,
+}
+
+/// Interface state persisted across restarts; patches replace the whole blob.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct UiSettingsDto {
+    /// Section intros the user dismissed.
+    pub dismissed_intros: Vec<String>,
+}
+
+impl From<UiSettings> for UiSettingsDto {
+    fn from(u: UiSettings) -> Self {
+        Self {
+            dismissed_intros: u.dismissed_intros,
+        }
+    }
+}
+
+impl From<UiSettingsDto> for UiSettings {
+    fn from(u: UiSettingsDto) -> Self {
+        Self {
+            dismissed_intros: u.dismissed_intros,
+        }
+    }
 }
 
 impl From<Settings> for SettingsDto {
@@ -538,6 +598,7 @@ impl From<Settings> for SettingsDto {
             shortcut: s.shortcut,
             onboarding_completed: s.onboarding_completed,
             tray_display: s.tray_display.into(),
+            ui: s.ui.into(),
         }
     }
 }
@@ -562,6 +623,7 @@ pub struct SettingsPatchDto {
     pub shortcut: Option<String>,
     pub onboarding_completed: Option<bool>,
     pub tray_display: Option<TrayDisplayDto>,
+    pub ui: Option<UiSettingsDto>,
 }
 
 impl From<SettingsPatchDto> for SettingsPatch {
@@ -579,6 +641,7 @@ impl From<SettingsPatchDto> for SettingsPatch {
             shortcut: p.shortcut,
             onboarding_completed: p.onboarding_completed,
             tray_display: p.tray_display.map(Into::into),
+            ui: p.ui.map(Into::into),
         }
     }
 }
@@ -616,7 +679,7 @@ mod tests {
     use std::collections::HashSet;
 
     use application::queries::Range as AppRange;
-    use domain::{CategoryRule, SegmentId};
+    use domain::{ActivityRule, SegmentId};
 
     use super::*;
 
@@ -716,16 +779,16 @@ mod tests {
             IdleResolution::AssignPrevious
         );
         assert_eq!(
-            IdleResolution::from(IdleResolutionDto::AssignCategory { category_id: 7 }),
-            IdleResolution::AssignCategory(CategoryId(7))
+            IdleResolution::from(IdleResolutionDto::AssignActivity { activity_id: 7 }),
+            IdleResolution::AssignActivity(ActivityId(7))
         );
     }
 
     #[test]
     fn idle_resolution_wire_format_is_tagged() {
         let json =
-            serde_json::to_string(&IdleResolutionDto::AssignCategory { category_id: 3 }).unwrap();
-        assert_eq!(json, r#"{"kind":"assign_category","category_id":3}"#);
+            serde_json::to_string(&IdleResolutionDto::AssignActivity { activity_id: 3 }).unwrap();
+        assert_eq!(json, r#"{"kind":"assign_activity","activity_id":3}"#);
         let parsed: IdleResolutionDto = serde_json::from_str(r#"{"kind":"discard"}"#).unwrap();
         assert_eq!(parsed, IdleResolutionDto::Discard);
     }
@@ -761,9 +824,9 @@ mod tests {
             app_id: None,
             app_name: None,
             window_title: None,
-            category_id: CategoryId(2),
-            category_name: "Work".into(),
-            category_color: "#fff".into(),
+            activity_id: ActivityId(2),
+            activity_name: "Work".into(),
+            activity_color: "#fff".into(),
             source: SegmentSource::IdleAssigned,
             end_reason: Some(EndReason::Idle),
             open: false,
@@ -807,7 +870,7 @@ mod tests {
 
     #[test]
     fn rule_conversions_keep_patterns_and_apps() {
-        let rule = CategoryRule::title_pattern(4, CategoryId(2), "^Inbox", None, 5).unwrap();
+        let rule = ActivityRule::title_pattern(4, ActivityId(2), "^Inbox", None, 5).unwrap();
         let dto = RuleDto::from(rule);
         assert_eq!(
             dto.spec,
@@ -818,14 +881,14 @@ mod tests {
         );
         let input = RuleInput::from(RuleInputDto {
             id: 0,
-            category_id: 2,
+            activity_id: 2,
             spec: RuleSpecDto::App {
                 app_id: "com.x".into(),
             },
             priority: 1,
         });
         assert_eq!(input.kind, RuleSpec::App("com.x".into()));
-        assert_eq!(input.category_id, CategoryId(2));
+        assert_eq!(input.activity_id, ActivityId(2));
     }
 
     #[test]

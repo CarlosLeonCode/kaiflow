@@ -8,7 +8,7 @@ import { SECTIONS, type SectionId } from "../lib/sections";
 const ICONS: Record<SectionId, LucideIcon> = {
   today: CalendarDays,
   history: History,
-  categories: Tags,
+  activities: Tags,
   privacy: ShieldCheck,
   settings: Settings,
 };

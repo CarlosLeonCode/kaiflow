@@ -4,8 +4,8 @@ use std::fmt;
 
 use crossbeam_channel::Sender;
 use domain::{
-    AssignedSpan, Category, CategoryId, CategoryRule, EndReason, FocusSnapshot, GapId, GapStatus,
-    IdleGap, PermissionState, PrivacyPolicy, Segment, SegmentId, UtcMs,
+    Activity, ActivityId, ActivityRule, AssignedSpan, EndReason, FocusSnapshot, GapId, GapStatus,
+    IdleGap, PermissionState, PrivacyPolicy, Productivity, Segment, SegmentId, UtcMs,
 };
 
 /// Failure reported by an adapter (storage, OS call...). Carries a readable message only.
@@ -149,16 +149,16 @@ pub trait SettingsRepository: Send + Sync {
     fn set(&self, key: &str, value: &str) -> PortResult<()>;
 }
 
-pub trait CategoryRepository: Send + Sync {
-    fn list(&self) -> PortResult<Vec<Category>>;
-    fn create(&self, name: &str, color: &str) -> PortResult<Category>;
-    fn update(&self, category: &Category) -> PortResult<()>;
-    /// Reassigns manual segments to "Sin categoria" in the same transaction.
-    fn delete(&self, id: CategoryId) -> PortResult<()>;
-    fn list_rules(&self) -> PortResult<Vec<CategoryRule>>;
+pub trait ActivityRepository: Send + Sync {
+    fn list(&self) -> PortResult<Vec<Activity>>;
+    fn create(&self, name: &str, color: &str, productivity: Productivity) -> PortResult<Activity>;
+    fn update(&self, activity: &Activity) -> PortResult<()>;
+    /// Reassigns manual segments to "Unassigned" in the same transaction.
+    fn delete(&self, id: ActivityId) -> PortResult<()>;
+    fn list_rules(&self) -> PortResult<Vec<ActivityRule>>;
     /// Returns the persisted rule id.
     /// `rule.id <= 0` inserts a new rule; a positive id updates that rule (error if missing).
-    fn save_rule(&self, rule: &CategoryRule) -> PortResult<i64>;
+    fn save_rule(&self, rule: &ActivityRule) -> PortResult<i64>;
     fn delete_rule(&self, id: i64) -> PortResult<()>;
 }
 
@@ -170,7 +170,7 @@ pub trait PrivacyRepository: Send + Sync {
 }
 
 /// Data deletion (R10.4). Callers confirm with the user first and stop tracking before
-/// `delete_all`; deleting only touches tracked time, never categories, rules or settings.
+/// `delete_all`; deleting only touches tracked time, never activities, rules or settings.
 pub trait RetentionRepository: Send + Sync {
     /// Deletes closed segments that started in `[from, to)`; returns how many.
     fn delete_range(&self, from: UtcMs, to: UtcMs) -> PortResult<usize>;

@@ -1,8 +1,8 @@
 import { useId, useState, type FormEvent } from "react";
 
-import type { CategoryDto, RuleSpecDto } from "@/shared/ipc";
+import type { ActivityDto, RuleSpecDto } from "@/shared/ipc";
 import type { AppOption } from "@/shared/lib/apps";
-import { categoryLabel } from "@/shared/lib/labels";
+import { activityLabel } from "@/shared/lib/labels";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
 import { Segmented, type SegmentedOption } from "@/shared/ui/segmented";
@@ -17,9 +17,9 @@ const KINDS: readonly SegmentedOption<RuleKind>[] = [
 ];
 
 interface Props {
-  categories: readonly CategoryDto[];
+  activities: readonly ActivityDto[];
   apps: readonly AppOption[];
-  onSubmit: Submit<{ spec: RuleSpecDto; categoryId: number }>;
+  onSubmit: Submit<{ spec: RuleSpecDto; activityId: number }>;
 }
 
 /**
@@ -27,13 +27,13 @@ interface Props {
  * regular expression, optionally limited to one app. A pattern the backend rejects is shown
  * under the pattern field and nothing is saved (R9.4).
  */
-export function RuleForm({ categories, apps, onSubmit }: Props) {
+export function RuleForm({ activities, apps, onSubmit }: Props) {
   const id = useId();
   const [kind, setKind] = useState<RuleKind>("app");
   const [appId, setAppId] = useState("");
   const [pattern, setPattern] = useState("");
   const [limitApp, setLimitApp] = useState("");
-  const [categoryId, setCategoryId] = useState<number | "">("");
+  const [activityId, setActivityId] = useState<number | "">("");
   const [patternError, setPatternError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [missing, setMissing] = useState(false);
@@ -41,7 +41,7 @@ export function RuleForm({ categories, apps, onSubmit }: Props) {
 
   const patternErrorId = `${id}-pattern-error`;
   const trimmedPattern = pattern.trim();
-  const incomplete = categoryId === "" || (kind === "app" ? appId === "" : trimmedPattern === "");
+  const incomplete = activityId === "" || (kind === "app" ? appId === "" : trimmedPattern === "");
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -55,7 +55,7 @@ export function RuleForm({ categories, apps, onSubmit }: Props) {
         kind === "app"
           ? { kind: "app", app_id: appId }
           : { kind: "title_pattern", pattern: trimmedPattern, app_id: limitApp === "" ? null : limitApp },
-      categoryId,
+      activityId,
     });
     setBusy(false);
     if (!result) {
@@ -157,19 +157,19 @@ export function RuleForm({ categories, apps, onSubmit }: Props) {
 
       <div className="flex flex-wrap items-end gap-2">
         <div className="min-w-40 flex-1">
-          <label htmlFor={`${id}-category`} className="mb-1 block text-xs font-medium text-muted-foreground">
-            Category
+          <label htmlFor={`${id}-activity`} className="mb-1 block text-xs font-medium text-muted-foreground">
+            Activity
           </label>
           <Select
-            id={`${id}-category`}
-            value={categoryId}
-            onChange={(event) => setCategoryId(event.target.value === "" ? "" : Number(event.target.value))}
+            id={`${id}-activity`}
+            value={activityId}
+            onChange={(event) => setActivityId(event.target.value === "" ? "" : Number(event.target.value))}
             className="w-full"
           >
-            <option value="">Choose a category…</option>
-            {categories.map((category) => (
-              <option key={category.id} value={category.id}>
-                {categoryLabel(category.id, category.name)}
+            <option value="">Choose an activity…</option>
+            {activities.map((activity) => (
+              <option key={activity.id} value={activity.id}>
+                {activityLabel(activity.id, activity.name)}
               </option>
             ))}
           </Select>
@@ -180,7 +180,7 @@ export function RuleForm({ categories, apps, onSubmit }: Props) {
       </div>
       {missing && incomplete && (
         <p role="alert" className="text-xs text-destructive">
-          {kind === "app" ? "Choose an app and a category." : "Enter a pattern and choose a category."}
+          {kind === "app" ? "Choose an app and an activity." : "Enter a pattern and choose an activity."}
         </p>
       )}
       {formError && (

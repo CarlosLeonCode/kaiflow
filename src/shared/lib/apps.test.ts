@@ -6,7 +6,7 @@ describe("appOptions", () => {
   it("lists seen apps by name without duplicates and skips manual time", () => {
     const options = appOptions([
       { app_id: "com.zed", app_name: "Zed", total_ms: 1 },
-      { app_id: null, app_name: "Asignado manualmente", total_ms: 5 },
+      { app_id: null, app_name: "", total_ms: 5 },
       { app_id: "com.apple.dt.Xcode", app_name: "xcode", total_ms: 1 },
     ]);
     expect(options).toEqual([

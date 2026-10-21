@@ -14,10 +14,10 @@ export const commands = {
 	getTimeline: (range: RangeDto) => typedError<TimelineItemDto[], AppError>(__TAURI_INVOKE("get_timeline", { range })),
 	listPendingIdleGaps: () => typedError<IdleGapDto[], AppError>(__TAURI_INVOKE("list_pending_idle_gaps")),
 	resolveIdleGap: (id: number, resolution: IdleResolutionDto) => typedError<null, AppError>(__TAURI_INVOKE("resolve_idle_gap", { id, resolution })),
-	categoriesList: () => typedError<CategoryDto[], AppError>(__TAURI_INVOKE("categories_list")),
-	categoriesCreate: (name: string, color: string) => typedError<CategoryDto, AppError>(__TAURI_INVOKE("categories_create", { name, color })),
-	categoriesUpdate: (category: CategoryDto) => typedError<null, AppError>(__TAURI_INVOKE("categories_update", { category })),
-	categoriesDelete: (id: number) => typedError<null, AppError>(__TAURI_INVOKE("categories_delete", { id })),
+	activitiesList: () => typedError<ActivityDto[], AppError>(__TAURI_INVOKE("activities_list")),
+	activitiesCreate: (name: string, color: string, productivity: ProductivityDto) => typedError<ActivityDto, AppError>(__TAURI_INVOKE("activities_create", { name, color, productivity })),
+	activitiesUpdate: (activity: ActivityDto) => typedError<null, AppError>(__TAURI_INVOKE("activities_update", { activity })),
+	activitiesDelete: (id: number) => typedError<null, AppError>(__TAURI_INVOKE("activities_delete", { id })),
 	rulesList: () => typedError<RuleDto[], AppError>(__TAURI_INVOKE("rules_list")),
 	/**  Validates the title pattern first (R9.4): a bad regex is `AppError::InvalidPattern`. */
 	rulesUpsert: (rule: RuleInputDto) => typedError<number, AppError>(__TAURI_INVOKE("rules_upsert", { rule })),
@@ -91,6 +91,22 @@ export const events = {
 };
 
 /* Types */
+export type ActivityDto = {
+	id: number,
+	name: string,
+	color: string,
+	sort_order: number,
+	productivity: ProductivityDto,
+	preset_key: string | null,
+};
+
+export type ActivityTotalDto = {
+	activity_id: number,
+	name: string,
+	color: string,
+	total_ms: number,
+};
+
 export type AppError = 
 /**  A title pattern did not compile (R9.4); nothing was saved. */
 { kind: "invalid_pattern"; pattern: string; reason: string } | 
@@ -107,7 +123,7 @@ export type AppError =
 { kind: "internal"; message: string };
 
 export type AppTotalDto = {
-	/**  `None` for time assigned manually to a category. */
+	/**  `None` for time assigned manually to an activity. */
 	app_id: string | null,
 	app_name: string,
 	total_ms: number,
@@ -115,20 +131,6 @@ export type AppTotalDto = {
 
 export type BucketTotalDto = {
 	range: RangeDto,
-	total_ms: number,
-};
-
-export type CategoryDto = {
-	id: number,
-	name: string,
-	color: string,
-	sort_order: number,
-};
-
-export type CategoryTotalDto = {
-	category_id: number,
-	name: string,
-	color: string,
 	total_ms: number,
 };
 
@@ -181,7 +183,7 @@ export type IdleGapResolved = {
 };
 
 /**  Same enum as the domain and the database (design section 3). */
-export type IdleResolutionDto = { kind: "discard" } | { kind: "assign_previous" } | { kind: "assign_category"; category_id: number };
+export type IdleResolutionDto = { kind: "discard" } | { kind: "assign_previous" } | { kind: "assign_activity"; activity_id: number };
 
 export type PermissionChanged = {
 	state: PermissionStateDto,
@@ -198,6 +200,9 @@ export type PrivacyRulesDto = {
 	redacted_apps: string[],
 };
 
+/**  How an activity counts toward the focus ratio. */
+export type ProductivityDto = "productive" | "neutral" | "distracting";
+
 /**  Half-open UTC range `[from, to)` computed by the frontend (local day bounds, DST included). */
 export type RangeDto = {
 	from: number,
@@ -206,7 +211,7 @@ export type RangeDto = {
 
 export type ReportDto = {
 	by_app: AppTotalDto[],
-	by_category: CategoryTotalDto[],
+	by_activity: ActivityTotalDto[],
 	by_bucket: BucketTotalDto[],
 	total_ms: number,
 };
@@ -216,7 +221,7 @@ export type RetentionPatchDto = { kind: "forever" } | { kind: "days"; days: numb
 
 export type RuleDto = {
 	id: number,
-	category_id: number,
+	activity_id: number,
 	spec: RuleSpecDto,
 	priority: number,
 };
@@ -224,7 +229,7 @@ export type RuleDto = {
 /**  Rule coming from the UI; `id <= 0` creates it. Patterns are validated in Rust (R9.4). */
 export type RuleInputDto = {
 	id: number,
-	category_id: number,
+	activity_id: number,
 	spec: RuleSpecDto,
 	priority: number,
 };
@@ -245,6 +250,7 @@ export type SettingsDto = {
 	shortcut: string,
 	onboarding_completed: boolean,
 	tray_display: TrayDisplayDto,
+	ui: UiSettingsDto,
 };
 
 /**  Partial update: absent fields stay untouched. */
@@ -258,6 +264,7 @@ export type SettingsPatchDto = {
 	shortcut: string | null,
 	onboarding_completed: boolean | null,
 	tray_display: TrayDisplayDto | null,
+	ui: UiSettingsDto | null,
 };
 
 export type ShortcutStatusChanged = ShortcutStatusDto;
@@ -277,9 +284,9 @@ export type TimelineItemDto = {
 	app_id: string | null,
 	app_name: string | null,
 	window_title: string | null,
-	category_id: number,
-	category_name: string,
-	category_color: string,
+	activity_id: number,
+	activity_name: string,
+	activity_color: string,
 	source: SegmentSourceDto,
 	end_reason: EndReasonDto | null,
 	open: boolean,
@@ -301,6 +308,12 @@ export type TrackingStatusDto = {
 
 /**  What the menu-bar / tray text next to the icon shows. */
 export type TrayDisplayDto = "off" | "today_total" | "current_app" | "today_and_current";
+
+/**  Interface state persisted across restarts; patches replace the whole blob. */
+export type UiSettingsDto = {
+	/**  Section intros the user dismissed. */
+	dismissed_intros: string[],
+};
 
 /**  The updater found a newer signed release; the UI offers to install it. */
 export type UpdateAvailable = UpdateInfoDto;

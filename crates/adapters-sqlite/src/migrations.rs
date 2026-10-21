@@ -13,10 +13,16 @@ pub struct Migration {
     pub sql: &'static str,
 }
 
-pub const MIGRATIONS: &[Migration] = &[Migration {
-    version: 1,
-    sql: include_str!("../migrations/0001_init.sql"),
-}];
+pub const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 1,
+        sql: include_str!("../migrations/0001_init.sql"),
+    },
+    Migration {
+        version: 2,
+        sql: include_str!("../migrations/0002_activities.sql"),
+    },
+];
 
 pub fn current_version(conn: &Connection) -> Result<u32, DbError> {
     Ok(conn.pragma_query_value(None, "user_version", |row| row.get(0))?)
@@ -76,25 +82,30 @@ mod tests {
     }
 
     #[test]
-    fn fresh_database_gets_full_schema_and_system_category() {
+    fn fresh_database_gets_full_schema_and_system_activity() {
         let mut conn = Connection::open_in_memory().unwrap();
         migrate(&mut conn, MIGRATIONS, None).unwrap();
-        assert_eq!(current_version(&conn).unwrap(), 1);
+        assert_eq!(current_version(&conn).unwrap(), 2);
         for t in [
-            "categories",
+            "activities",
             "segments",
             "idle_gaps",
-            "category_rules",
+            "activity_rules",
             "privacy_rules",
             "settings",
         ] {
             assert!(table_exists(&conn, t), "missing table {t}");
         }
         let name: String = conn
-            .query_row("SELECT name FROM categories WHERE id = 1", [], |r| r.get(0))
+            .query_row("SELECT name FROM activities WHERE id = 1", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(name, "Sin categoría");
-        for idx in ["ix_seg_start", "ix_seg_app_start", "ux_one_open"] {
+        assert_eq!(name, "Unassigned");
+        for idx in [
+            "ix_seg_start",
+            "ix_seg_app_start",
+            "ux_one_open",
+            "ix_seg_end",
+        ] {
             let n: i64 = conn
                 .query_row(
                     "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name=?1",
@@ -112,28 +123,28 @@ mod tests {
         migrate(&mut conn, MIGRATIONS, None).unwrap();
         migrate(&mut conn, MIGRATIONS, None).unwrap();
         let n: i64 = conn
-            .query_row("SELECT COUNT(*) FROM categories", [], |r| r.get(0))
+            .query_row("SELECT COUNT(*) FROM activities", [], |r| r.get(0))
             .unwrap();
         assert_eq!(n, 1);
     }
 
     #[test]
-    fn system_category_cannot_be_deleted() {
+    fn system_activity_cannot_be_deleted() {
         let mut conn = Connection::open_in_memory().unwrap();
         migrate(&mut conn, MIGRATIONS, None).unwrap();
         assert!(
-            conn.execute("DELETE FROM categories WHERE id = 1", [])
+            conn.execute("DELETE FROM activities WHERE id = 1", [])
                 .is_err()
         );
     }
 
-    const V2_OK: Migration = Migration {
-        version: 2,
+    const V3_OK: Migration = Migration {
+        version: 3,
         sql: "CREATE TABLE extra(x INTEGER);",
     };
     // The first statement succeeds, the second fails: the whole migration must roll back.
-    const V3_BROKEN: Migration = Migration {
-        version: 3,
+    const V4_BROKEN: Migration = Migration {
+        version: 4,
         sql: "CREATE TABLE half_done(x INTEGER); INSERT INTO no_such_table VALUES (1);",
     };
 
@@ -150,13 +161,18 @@ mod tests {
         conn.execute("INSERT INTO settings(key, value) VALUES ('k', '1')", [])
             .unwrap();
 
-        migrate(&mut conn, &[MIGRATIONS[0], V2_OK], Some(&path)).unwrap();
+        migrate(
+            &mut conn,
+            &[MIGRATIONS[0], MIGRATIONS[1], V3_OK],
+            Some(&path),
+        )
+        .unwrap();
 
-        let backup = backup_path(&path, 1);
+        let backup = backup_path(&path, 2);
         assert!(backup.exists());
-        assert_eq!(current_version(&conn).unwrap(), 2);
+        assert_eq!(current_version(&conn).unwrap(), 3);
         let copy = Connection::open(&backup).unwrap();
-        assert_eq!(current_version(&copy).unwrap(), 1);
+        assert_eq!(current_version(&copy).unwrap(), 2);
         assert!(!table_exists(&copy, "extra"));
         let kept: String = copy
             .query_row("SELECT value FROM settings WHERE key='k'", [], |r| r.get(0))
@@ -173,14 +189,14 @@ mod tests {
         conn.execute("INSERT INTO settings(key, value) VALUES ('k', '1')", [])
             .unwrap();
 
-        let all = [MIGRATIONS[0], V2_OK, V3_BROKEN];
+        let all = [MIGRATIONS[0], MIGRATIONS[1], V3_OK, V4_BROKEN];
         assert!(migrate(&mut conn, &all, Some(&path)).is_err());
 
-        // v2 committed on its own; v3 rolled back completely.
-        assert_eq!(current_version(&conn).unwrap(), 2);
+        // v3 committed on its own; v4 rolled back completely.
+        assert_eq!(current_version(&conn).unwrap(), 3);
         assert!(table_exists(&conn, "extra"));
         assert!(!table_exists(&conn, "half_done"));
-        assert!(backup_path(&path, 1).exists());
+        assert!(backup_path(&path, 2).exists());
         let kept: String = conn
             .query_row("SELECT value FROM settings WHERE key='k'", [], |r| r.get(0))
             .unwrap();
@@ -189,6 +205,6 @@ mod tests {
 
         // Reopening through the public entry point surfaces the failure and keeps the file usable.
         let reopened = Connection::open(&path).unwrap();
-        assert_eq!(current_version(&reopened).unwrap(), 2);
+        assert_eq!(current_version(&reopened).unwrap(), 3);
     }
 }

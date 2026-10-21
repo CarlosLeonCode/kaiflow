@@ -1,14 +1,14 @@
-import { tuneCategoryColor } from "@/shared/lib/color";
+import { tuneActivityColor } from "@/shared/lib/color";
 import { formatDuration } from "@/shared/lib/time";
 
-import { formatPercent, type CategoryRow } from "../lib/today";
+import { formatPercent, type ActivityRow } from "../lib/today";
 
-/** Totals by category with a share bar in the category color (tuned for the theme). */
-export function CategoryList({ rows, dark }: { rows: readonly CategoryRow[]; dark: boolean }) {
+/** Totals by activity with a share bar in the activity color (tuned for the theme). */
+export function ActivityList({ rows, dark }: { rows: readonly ActivityRow[]; dark: boolean }) {
   return (
-    <ul className="divide-y divide-border" aria-label="Time by category">
+    <ul className="divide-y divide-border" aria-label="Time by activity">
       {rows.map((row) => {
-        const color = tuneCategoryColor(row.color, dark);
+        const color = tuneActivityColor(row.color, dark);
         return (
           <li key={row.id} className="px-1 py-2">
             <div className="flex items-center gap-2">

@@ -3,7 +3,10 @@
 
 use domain::{EndReason, UtcMs};
 
-use crate::queries::{MANUAL_ASSIGNMENT_LABEL, TimelineItem};
+use crate::queries::TimelineItem;
+
+/// CSV label for time assigned to an activity without an app.
+const MANUAL_ASSIGNMENT_LABEL: &str = "Assigned manually";
 
 pub const HEADER: [&str; 7] = [
     "start",
@@ -11,7 +14,7 @@ pub const HEADER: [&str; 7] = [
     "duration_ms",
     "app",
     "title",
-    "category",
+    "activity",
     "reason",
 ];
 
@@ -30,7 +33,7 @@ pub fn render_csv(items: &[TimelineItem]) -> String {
                 item.end.since(item.start).to_string(),
                 neutralize(app),
                 neutralize(item.window_title.as_deref().unwrap_or("")),
-                neutralize(&item.category_name),
+                neutralize(&item.activity_name),
                 item.end_reason.map(reason_label).unwrap_or("").to_owned(),
             ]
             .into_iter(),
@@ -108,7 +111,7 @@ fn iso_utc(t: UtcMs) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use domain::{CategoryId, SegmentId, SegmentSource};
+    use domain::{ActivityId, SegmentId, SegmentSource};
 
     fn item(app: Option<&str>, title: Option<&str>) -> TimelineItem {
         TimelineItem {
@@ -118,9 +121,9 @@ mod tests {
             app_id: app.map(Into::into),
             app_name: app.map(Into::into),
             window_title: title.map(Into::into),
-            category_id: CategoryId(2),
-            category_name: "Work".into(),
-            category_color: "#fff".into(),
+            activity_id: ActivityId(2),
+            activity_name: "Work".into(),
+            activity_color: "#fff".into(),
             source: SegmentSource::Tracked,
             end_reason: Some(EndReason::FocusChange),
             open: false,
@@ -131,7 +134,7 @@ mod tests {
     fn empty_range_is_header_only() {
         assert_eq!(
             render_csv(&[]),
-            "start,end,duration_ms,app,title,category,reason\r\n"
+            "start,end,duration_ms,app,title,activity,reason\r\n"
         );
     }
 
@@ -177,7 +180,7 @@ mod tests {
             csv.lines()
                 .nth(1)
                 .unwrap()
-                .ends_with(",90500,Asignado manualmente,,Work,")
+                .ends_with(",90500,Assigned manually,,Work,")
         );
     }
 

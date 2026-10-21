@@ -1,10 +1,10 @@
-import type { AppTotalDto, CategoryTotalDto, RangeDto, TimelineItemDto } from "@/shared/ipc";
-import { appLabel, categoryLabel } from "@/shared/lib/labels";
+import type { AppTotalDto, ActivityTotalDto, RangeDto, TimelineItemDto } from "@/shared/ipc";
+import { appLabel, activityLabel } from "@/shared/lib/labels";
 import { HOUR } from "@/shared/lib/time";
 
 /** Pure view-model helpers for the Today dashboard (no IPC, no clock of their own). */
 
-/** Key used for time assigned manually to a category (no app). */
+/** Key used for time assigned manually to an activity (no app). */
 export const MANUAL_KEY = "manual";
 
 export function appKey(appId: string | null): string {
@@ -67,7 +67,7 @@ export interface TimelineBlock {
   /** 0..100 of the window. */
   leftPct: number;
   widthPct: number;
-  categoryId: number;
+  activityId: number;
   color: string;
   label: string;
   durationMs: number;
@@ -89,8 +89,8 @@ export function layoutTimeline(
       id: item.segment_id,
       leftPct: ((clamped.start - window.from) / span) * 100,
       widthPct: ((clamped.end - clamped.start) / span) * 100,
-      categoryId: item.category_id,
-      color: item.category_color,
+      activityId: item.activity_id,
+      color: item.activity_color,
       label: blockLabel(item),
       durationMs: clamped.end - clamped.start,
     });
@@ -100,7 +100,7 @@ export function layoutTimeline(
 
 function blockLabel(item: TimelineItemDto): string {
   const app = appLabel(item.app_id, item.app_name);
-  return `${app}, ${categoryLabel(item.category_id, item.category_name)}`;
+  return `${app}, ${activityLabel(item.activity_id, item.activity_name)}`;
 }
 
 export interface AxisTick {
@@ -207,7 +207,7 @@ export function buildAppRows(
   }));
 }
 
-export interface CategoryRow {
+export interface ActivityRow {
   id: number;
   name: string;
   color: string;
@@ -216,26 +216,26 @@ export interface CategoryRow {
   fraction: number;
 }
 
-export function buildCategoryRows(
-  byCategory: readonly CategoryTotalDto[],
+export function buildActivityRows(
+  byActivity: readonly ActivityTotalDto[],
   open: TimelineItemDto | undefined,
   elapsedMs: number,
   totalMs: number,
-): CategoryRow[] {
-  const rows = byCategory.map((c) => ({
-    id: c.category_id,
-    name: categoryLabel(c.category_id, c.name),
+): ActivityRow[] {
+  const rows = byActivity.map((c) => ({
+    id: c.activity_id,
+    name: activityLabel(c.activity_id, c.name),
     color: c.color,
     totalMs: c.total_ms,
   }));
   if (open && elapsedMs > 0) {
-    const live = rows.find((row) => row.id === open.category_id);
+    const live = rows.find((row) => row.id === open.activity_id);
     if (live) live.totalMs += elapsedMs;
     else
       rows.push({
-        id: open.category_id,
-        name: categoryLabel(open.category_id, open.category_name),
-        color: open.category_color,
+        id: open.activity_id,
+        name: activityLabel(open.activity_id, open.activity_name),
+        color: open.activity_color,
         totalMs: elapsedMs,
       });
   }

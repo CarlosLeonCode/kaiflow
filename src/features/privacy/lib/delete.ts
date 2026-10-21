@@ -52,7 +52,7 @@ const dayFormat = { year: "numeric", month: "short", day: "numeric" } as const;
 
 /** Confirmation copy for an operation: what goes, what stays, and that it cannot be undone. */
 export function deleteCopy(op: DeleteOpDto, trackingWillRestart = false): DeleteCopy {
-  const kept = "Categories, rules, privacy rules and settings are kept.";
+  const kept = "Activities, rules, privacy rules and settings are kept.";
   switch (op.kind) {
     case "range": {
       const from = new Date(op.range.from).toLocaleDateString(undefined, dayFormat);

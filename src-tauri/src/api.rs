@@ -5,14 +5,14 @@ use std::sync::PoisonError;
 
 use application::commands::ConfirmToken;
 use application::engine::{Command, Reply};
-use domain::{Category, CategoryId, GapId};
+use domain::{Activity, ActivityId, GapId};
 
 use crate::composition::AppState;
 use crate::error::AppError;
 use crate::ipc::dto::{
-    CategoryDto, DeleteOpDto, IdleGapDto, IdleResolutionDto, PermissionStateDto, PrivacyModeDto,
-    PrivacyRulesDto, RangeDto, ReportDto, RuleDto, RuleInputDto, SettingsDto, SettingsPatchDto,
-    ShortcutStatusDto, TimelineItemDto, TrackingStatusDto,
+    ActivityDto, DeleteOpDto, IdleGapDto, IdleResolutionDto, PermissionStateDto, PrivacyModeDto,
+    PrivacyRulesDto, ProductivityDto, RangeDto, ReportDto, RuleDto, RuleInputDto, SettingsDto,
+    SettingsPatchDto, ShortcutStatusDto, TimelineItemDto, TrackingStatusDto,
 };
 
 impl AppState {
@@ -97,30 +97,38 @@ impl AppState {
         Ok(())
     }
 
-    pub fn categories_list(&self) -> Result<Vec<CategoryDto>, AppError> {
+    pub fn activities_list(&self) -> Result<Vec<ActivityDto>, AppError> {
         Ok(self
-            .categories
+            .activities
             .list()?
             .into_iter()
             .map(Into::into)
             .collect())
     }
 
-    pub fn categories_create(&self, name: &str, color: &str) -> Result<CategoryDto, AppError> {
-        Ok(self.commands.create_category(name, color)?.into())
+    pub fn activities_create(
+        &self,
+        name: &str,
+        color: &str,
+        productivity: ProductivityDto,
+    ) -> Result<ActivityDto, AppError> {
+        Ok(self
+            .commands
+            .create_activity(name, color, productivity.into())?
+            .into())
     }
 
-    pub fn categories_update(&self, category: CategoryDto) -> Result<(), AppError> {
-        Ok(self.commands.update_category(&Category::from(category))?)
+    pub fn activities_update(&self, activity: ActivityDto) -> Result<(), AppError> {
+        Ok(self.commands.update_activity(&Activity::from(activity))?)
     }
 
-    pub fn categories_delete(&self, id: i64) -> Result<(), AppError> {
-        Ok(self.commands.delete_category(CategoryId(id))?)
+    pub fn activities_delete(&self, id: i64) -> Result<(), AppError> {
+        Ok(self.commands.delete_activity(ActivityId(id))?)
     }
 
     pub fn rules_list(&self) -> Result<Vec<RuleDto>, AppError> {
         Ok(self
-            .categories
+            .activities
             .list_rules()?
             .into_iter()
             .map(Into::into)
@@ -370,7 +378,7 @@ mod tests {
             .state
             .rules_upsert(RuleInputDto {
                 id: 0,
-                category_id: 1,
+                activity_id: 1,
                 spec: RuleSpecDto::TitlePattern {
                     pattern: "(".into(),
                     app_id: None,
@@ -384,17 +392,21 @@ mod tests {
     }
 
     #[test]
-    fn categories_and_rules_round_trip() {
+    fn activities_and_rules_round_trip() {
         let rig = rig();
-        let work = rig.state.categories_create("Work", "#3366ff").unwrap();
-        let listed = rig.state.categories_list().unwrap();
+        let work = rig
+            .state
+            .activities_create("Work", "#3366ff", ProductivityDto::Productive)
+            .unwrap();
+        let listed = rig.state.activities_list().unwrap();
         assert!(listed.iter().any(|c| c.id == work.id && c.name == "Work"));
+        assert_eq!(work.productivity, ProductivityDto::Productive);
 
         let id = rig
             .state
             .rules_upsert(RuleInputDto {
                 id: 0,
-                category_id: work.id,
+                activity_id: work.id,
                 spec: RuleSpecDto::App {
                     app_id: "com.apple.Xcode".into(),
                 },

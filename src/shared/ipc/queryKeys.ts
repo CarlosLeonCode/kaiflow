@@ -5,7 +5,7 @@ export const queryKeys = {
   status: ["status"] as const,
   settings: ["settings"] as const,
   permission: ["permission"] as const,
-  categories: ["categories"] as const,
+  activities: ["activities"] as const,
   rules: ["rules"] as const,
   privacy: ["privacy"] as const,
   idleGaps: ["idle-gaps"] as const,

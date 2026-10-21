@@ -1,36 +1,39 @@
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 
-import type { CategoryDto } from "@/shared/ipc";
-import { tuneCategoryColor } from "@/shared/lib/color";
-import { categoryLabel, UNCATEGORIZED_ID } from "@/shared/lib/labels";
+import type { ActivityDto } from "@/shared/ipc";
+import { tuneActivityColor } from "@/shared/lib/color";
+import { activityLabel, UNASSIGNED_ID } from "@/shared/lib/labels";
 import { Button } from "@/shared/ui/button";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
+import { EmptyState } from "@/shared/ui/EmptyState";
 
 import { suggestColor } from "../lib/palette";
+import { productivityLabel, type ActivityFormValue } from "../lib/productivity";
 import type { Submit } from "../lib/submit";
-import { CategoryForm } from "./CategoryForm";
+import { ActivityForm } from "./ActivityForm";
 
 interface Props {
-  categories: readonly CategoryDto[];
-  /** Number of rules that point at each category id. */
+  activities: readonly ActivityDto[];
+  /** Number of rules that point at each activity id. */
   ruleCounts: ReadonlyMap<number, number>;
   dark: boolean;
-  onCreate: Submit<{ name: string; color: string }>;
-  onUpdate: Submit<CategoryDto>;
+  onCreate: Submit<ActivityFormValue>;
+  onUpdate: Submit<ActivityDto>;
   onDelete: Submit<number>;
 }
 
 type Mode = { kind: "idle" } | { kind: "create" } | { kind: "edit"; id: number };
 
-/** Category list with inline create/edit and a confirmed delete (R9.1). */
-export function CategoryPanel({ categories, ruleCounts, dark, onCreate, onUpdate, onDelete }: Props) {
+/** Activity list with inline create/edit and a confirmed delete (R9.1). */
+export function ActivityPanel({ activities, ruleCounts, dark, onCreate, onUpdate, onDelete }: Props) {
   const [mode, setMode] = useState<Mode>({ kind: "idle" });
-  const [pendingDelete, setPendingDelete] = useState<CategoryDto | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<ActivityDto | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   const close = () => setMode({ kind: "idle" });
+  const onlySystem = activities.every((activity) => activity.id === UNASSIGNED_ID);
 
   async function confirmDelete() {
     if (!pendingDelete) return;
@@ -47,23 +50,23 @@ export function CategoryPanel({ categories, ruleCounts, dark, onCreate, onUpdate
   const rulesOfDeleted = pendingDelete ? (ruleCounts.get(pendingDelete.id) ?? 0) : 0;
 
   return (
-    <section aria-label="Categories" className="space-y-2">
+    <section aria-label="Activities" className="space-y-2">
       <div className="flex items-end justify-between px-1">
         <div>
-          <h2 className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">Categories</h2>
+          <h2 className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">Activities</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">Group apps and window titles to see where your time goes.</p>
         </div>
         <Button size="sm" onClick={() => setMode({ kind: "create" })} disabled={mode.kind === "create"}>
-          <Plus aria-hidden="true" /> New category
+          <Plus aria-hidden="true" /> New activity
         </Button>
       </div>
 
       <div className="divide-y divide-border rounded-lg border border-border bg-background">
         {mode.kind === "create" && (
-          <CategoryForm
+          <ActivityForm
             editing={null}
-            existing={categories}
-            initialColor={suggestColor(categories.map((c) => c.color))}
+            existing={activities}
+            initialColor={suggestColor(activities.map((c) => c.color))}
             dark={dark}
             onSubmit={async (value) => {
               const result = await onCreate(value);
@@ -73,21 +76,30 @@ export function CategoryPanel({ categories, ruleCounts, dark, onCreate, onUpdate
             onCancel={close}
           />
         )}
-        <ul aria-label="Category list" className="divide-y divide-border">
-          {categories.map((category) => {
-            const system = category.id === UNCATEGORIZED_ID;
-            const count = ruleCounts.get(category.id) ?? 0;
-            const label = categoryLabel(category.id, category.name);
-            if (mode.kind === "edit" && mode.id === category.id) {
+        {onlySystem && mode.kind === "idle" && (
+          <EmptyState
+            className="mt-0 px-3 py-6"
+            title="No activities yet"
+            action={{ label: "Create your first activity", onClick: () => setMode({ kind: "create" }) }}
+          >
+            Activities group your time by project, client or task. Everything is Unassigned until you add one.
+          </EmptyState>
+        )}
+        <ul aria-label="Activity list" className="divide-y divide-border">
+          {activities.map((activity) => {
+            const system = activity.id === UNASSIGNED_ID;
+            const count = ruleCounts.get(activity.id) ?? 0;
+            const label = activityLabel(activity.id, activity.name);
+            if (mode.kind === "edit" && mode.id === activity.id) {
               return (
-                <li key={category.id}>
-                  <CategoryForm
-                    editing={category}
-                    existing={categories}
-                    initialColor={category.color}
+                <li key={activity.id}>
+                  <ActivityForm
+                    editing={activity}
+                    existing={activities}
+                    initialColor={activity.color}
                     dark={dark}
                     onSubmit={async (value) => {
-                      const result = await onUpdate({ ...category, ...value });
+                      const result = await onUpdate({ ...activity, ...value });
                       if (!result) close();
                       return result;
                     }}
@@ -97,11 +109,11 @@ export function CategoryPanel({ categories, ruleCounts, dark, onCreate, onUpdate
               );
             }
             return (
-              <li key={category.id} className="group flex items-center gap-2.5 px-3 py-2">
+              <li key={activity.id} className="group flex items-center gap-2.5 px-3 py-2">
                 <span
                   aria-hidden="true"
                   className="size-3 shrink-0 rounded-full"
-                  style={{ backgroundColor: tuneCategoryColor(category.color, dark) }}
+                  style={{ backgroundColor: tuneActivityColor(activity.color, dark) }}
                 />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-medium" title={label}>
@@ -110,9 +122,7 @@ export function CategoryPanel({ categories, ruleCounts, dark, onCreate, onUpdate
                   <span className="block text-xs text-muted-foreground">
                     {system
                       ? "Default for anything without a rule"
-                      : count === 0
-                        ? "No rules"
-                        : `${count} ${count === 1 ? "rule" : "rules"}`}
+                      : `${count === 0 ? "No rules" : `${count} ${count === 1 ? "rule" : "rules"}`} · ${productivityLabel(activity.productivity)}`}
                   </span>
                 </span>
                 {!system && (
@@ -121,7 +131,7 @@ export function CategoryPanel({ categories, ruleCounts, dark, onCreate, onUpdate
                       variant="ghost"
                       size="icon"
                       aria-label={`Edit ${label}`}
-                      onClick={() => setMode({ kind: "edit", id: category.id })}
+                      onClick={() => setMode({ kind: "edit", id: activity.id })}
                     >
                       <Pencil />
                     </Button>
@@ -131,7 +141,7 @@ export function CategoryPanel({ categories, ruleCounts, dark, onCreate, onUpdate
                       aria-label={`Delete ${label}`}
                       onClick={() => {
                         setDeleteError(null);
-                        setPendingDelete(category);
+                        setPendingDelete(activity);
                       }}
                     >
                       <Trash2 />
@@ -153,14 +163,14 @@ export function CategoryPanel({ categories, ruleCounts, dark, onCreate, onUpdate
         description={
           <>
             <p>
-              Time already tracked in this category moves to Uncategorized.
+              Time already tracked in this activity moves to Unassigned.
               {rulesOfDeleted > 0 &&
                 ` Its ${rulesOfDeleted} ${rulesOfDeleted === 1 ? "rule is" : "rules are"} deleted too.`}
             </p>
             <p>The tracked time itself is kept. This cannot be undone.</p>
           </>
         }
-        confirmLabel="Delete category"
+        confirmLabel="Delete activity"
         destructive
         busy={deleting}
         error={deleteError}

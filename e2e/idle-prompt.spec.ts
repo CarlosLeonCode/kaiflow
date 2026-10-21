@@ -33,11 +33,11 @@ test.describe("idle prompt", () => {
     await expect(page.getByTestId("today-total")).toHaveText("4:37:00");
   });
 
-  test("assigning to a category adds the time and the card goes away", async ({ page }) => {
+  test("assigning to an activity adds the time and the card goes away", async ({ page }) => {
     await openWindow(page, "popover");
 
-    await card(page).getByRole("button", { name: /^Assign to category/ }).click();
-    await card(page).getByRole("list", { name: "Categories" }).getByRole("button", { name: "Meetings" }).click();
+    await card(page).getByRole("button", { name: /^Assign to activity/ }).click();
+    await card(page).getByRole("list", { name: "Activities" }).getByRole("button", { name: "Meetings" }).click();
 
     await expect(card(page)).toHaveCount(0);
     await expect(page.getByTestId("today-total")).toHaveText("4:37:00");

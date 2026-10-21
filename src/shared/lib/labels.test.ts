@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { appLabel, categoryLabel } from "./labels";
+import { appLabel, activityLabel } from "./labels";
 
 describe("labels", () => {
-  it("translates the system category by id, not by name", () => {
-    expect(categoryLabel(1, "Sin categoría")).toBe("Uncategorized");
-    expect(categoryLabel(2, "Work")).toBe("Work");
+  it("translates the system activity by id, not by name", () => {
+    expect(activityLabel(1, "Legacy seeded name")).toBe("Unassigned");
+    expect(activityLabel(2, "Work")).toBe("Work");
   });
 
   it("labels manual assignments and falls back to the bundle id", () => {

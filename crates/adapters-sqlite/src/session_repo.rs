@@ -1,6 +1,6 @@
 use application::ports::{PortError, PortResult, SessionRepository};
 use domain::{
-    AssignedSpan, CategoryId, EndReason, FocusSnapshot, GapId, GapStatus, IdleGap, IdleResolution,
+    ActivityId, AssignedSpan, EndReason, FocusSnapshot, GapId, GapStatus, IdleGap, IdleResolution,
     SegmentId, UtcMs,
 };
 use rusqlite::{Connection, params};
@@ -34,25 +34,25 @@ pub(crate) fn reason_from_sql(reason: &str) -> Result<EndReason, PortError> {
     })
 }
 
-/// (status column, category column) for a gap status.
+/// (status column, activity column) for a gap status.
 fn status_to_sql(status: GapStatus) -> (&'static str, Option<i64>) {
     match status {
         GapStatus::Pending => ("pending", None),
         GapStatus::Expired => ("expired", None),
         GapStatus::Resolved(IdleResolution::Discard) => ("discard", None),
         GapStatus::Resolved(IdleResolution::AssignPrevious) => ("assign_previous", None),
-        GapStatus::Resolved(IdleResolution::AssignCategory(c)) => ("assign_category", Some(c.0)),
+        GapStatus::Resolved(IdleResolution::AssignActivity(c)) => ("assign_activity", Some(c.0)),
     }
 }
 
-fn status_from_sql(status: &str, category: Option<i64>) -> Result<GapStatus, PortError> {
-    Ok(match (status, category) {
+fn status_from_sql(status: &str, activity: Option<i64>) -> Result<GapStatus, PortError> {
+    Ok(match (status, activity) {
         ("pending", _) => GapStatus::Pending,
         ("expired", _) => GapStatus::Expired,
         ("discard", _) => GapStatus::Resolved(IdleResolution::Discard),
         ("assign_previous", _) => GapStatus::Resolved(IdleResolution::AssignPrevious),
-        ("assign_category", Some(c)) => {
-            GapStatus::Resolved(IdleResolution::AssignCategory(CategoryId(c)))
+        ("assign_activity", Some(c)) => {
+            GapStatus::Resolved(IdleResolution::AssignActivity(ActivityId(c)))
         }
         (other, _) => return Err(PortError(format!("invalid idle gap status: {other}"))),
     })
@@ -109,7 +109,7 @@ impl SessionRepository for SqliteSessionRepository {
         self.conn
             .execute(
                 "INSERT INTO segments(started_at, ended_at, heartbeat_at, app_id, app_name,
-                                      window_title, end_reason, source, category_id)
+                                      window_title, end_reason, source, activity_id)
                  VALUES (?1, ?2, ?2, ?3, ?4, ?5, 'idle', 'idle_assigned', ?6)",
                 params![
                     span.started_at.0,
@@ -117,7 +117,7 @@ impl SessionRepository for SqliteSessionRepository {
                     span.app_id,
                     span.app_name,
                     span.window_title,
-                    span.category_id.map(|c| c.0)
+                    span.activity_id.map(|c| c.0)
                 ],
             )
             .map_err(port_err)?;
@@ -125,12 +125,12 @@ impl SessionRepository for SqliteSessionRepository {
     }
 
     fn insert_gap(&mut self, gap: &IdleGap) -> PortResult<GapId> {
-        let (status, category) = status_to_sql(gap.status);
+        let (status, activity) = status_to_sql(gap.status);
         let prev = gap.prev_focus.as_ref();
         self.conn
             .execute(
                 "INSERT INTO idle_gaps(started_at, ended_at, prev_app_id, prev_app_name, prev_title,
-                                       status, category_id, expires_at)
+                                       status, activity_id, expires_at)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
                 params![
                     gap.started_at.0,
@@ -139,7 +139,7 @@ impl SessionRepository for SqliteSessionRepository {
                     prev.map(|f| f.app_name.as_str()),
                     prev.and_then(|f| f.window_title.as_deref()),
                     status,
-                    category,
+                    activity,
                     gap.expires_at.0
                 ],
             )
@@ -148,12 +148,12 @@ impl SessionRepository for SqliteSessionRepository {
     }
 
     fn update_gap_status(&mut self, id: GapId, status: GapStatus, at: UtcMs) -> PortResult<()> {
-        let (status, category) = status_to_sql(status);
+        let (status, activity) = status_to_sql(status);
         let changed = self
             .conn
             .execute(
-                "UPDATE idle_gaps SET status = ?1, category_id = ?2, resolved_at = ?3 WHERE id = ?4",
-                params![status, category, at.0, id.0],
+                "UPDATE idle_gaps SET status = ?1, activity_id = ?2, resolved_at = ?3 WHERE id = ?4",
+                params![status, activity, at.0, id.0],
             )
             .map_err(port_err)?;
         if changed == 0 {
@@ -167,7 +167,7 @@ impl SessionRepository for SqliteSessionRepository {
             .conn
             .prepare(
                 "SELECT id, started_at, ended_at, prev_app_id, prev_app_name, prev_title,
-                        status, category_id, expires_at
+                        status, activity_id, expires_at
                  FROM idle_gaps WHERE status = 'pending' ORDER BY started_at, id",
             )
             .map_err(port_err)?;
@@ -227,7 +227,7 @@ impl SessionRepository for SqliteSessionRepository {
 mod tests {
     use super::*;
     use crate::db::open_in_memory;
-    use domain::UNCATEGORIZED;
+    use domain::UNASSIGNED;
 
     fn repo() -> SqliteSessionRepository {
         SqliteSessionRepository::new(open_in_memory().unwrap())
@@ -255,14 +255,14 @@ mod tests {
             .unwrap()
     }
 
-    fn span(app: Option<&str>, category: Option<CategoryId>) -> AssignedSpan {
+    fn span(app: Option<&str>, activity: Option<ActivityId>) -> AssignedSpan {
         AssignedSpan {
             started_at: UtcMs(100),
             ended_at: UtcMs(200),
             app_id: app.map(Into::into),
             app_name: app.map(|a| a.to_uppercase()),
             window_title: None,
-            category_id: category,
+            activity_id: activity,
         }
     }
 
@@ -346,7 +346,7 @@ mod tests {
         assert!(exec("INSERT INTO segments(started_at, heartbeat_at, app_id, source) VALUES (1, 1, 'a', 'x')").is_err());
         // idle_assigned needs end_reason idle
         assert!(exec("INSERT INTO segments(started_at, ended_at, heartbeat_at, app_id, end_reason, source) VALUES (1, 2, 2, 'a', 'stop', 'idle_assigned')").is_err());
-        // idle_assigned needs app or category
+        // idle_assigned needs app or activity
         assert!(exec("INSERT INTO segments(started_at, ended_at, heartbeat_at, end_reason, source) VALUES (1, 2, 2, 'idle', 'idle_assigned')").is_err());
         // ended before started
         assert!(exec("INSERT INTO segments(started_at, ended_at, heartbeat_at, app_id) VALUES (5, 4, 4, 'a')").is_err());
@@ -355,13 +355,13 @@ mod tests {
     }
 
     #[test]
-    fn assign_category_allows_null_app_but_requires_the_category() {
+    fn assign_activity_allows_null_app_but_requires_the_activity() {
         let mut r = repo();
-        let id = r.insert_assigned(&span(None, Some(UNCATEGORIZED))).unwrap();
+        let id = r.insert_assigned(&span(None, Some(UNASSIGNED))).unwrap();
         let (app, cat): (Option<String>, Option<i64>) = r
             .conn
             .query_row(
-                "SELECT app_id, category_id FROM segments WHERE id = ?1",
+                "SELECT app_id, activity_id FROM segments WHERE id = ?1",
                 [id.0],
                 |x| Ok((x.get(0)?, x.get(1)?)),
             )
@@ -369,7 +369,7 @@ mod tests {
         assert_eq!((app, cat), (None, Some(1)));
         assert!(r.insert_assigned(&span(None, None)).is_err());
         assert!(
-            r.insert_assigned(&span(None, Some(CategoryId(999))))
+            r.insert_assigned(&span(None, Some(ActivityId(999))))
                 .is_err(),
             "FK enforced"
         );
@@ -416,7 +416,7 @@ mod tests {
 
         r.update_gap_status(
             id1,
-            GapStatus::Resolved(IdleResolution::AssignCategory(UNCATEGORIZED)),
+            GapStatus::Resolved(IdleResolution::AssignActivity(UNASSIGNED)),
             UtcMs(25),
         )
         .unwrap();
@@ -427,14 +427,14 @@ mod tests {
         let (status, cat, resolved): (String, Option<i64>, i64) = r
             .conn
             .query_row(
-                "SELECT status, category_id, resolved_at FROM idle_gaps WHERE id = ?1",
+                "SELECT status, activity_id, resolved_at FROM idle_gaps WHERE id = ?1",
                 [id1.0],
                 |x| Ok((x.get(0)?, x.get(1)?, x.get(2)?)),
             )
             .unwrap();
         assert_eq!(
             (status.as_str(), cat, resolved),
-            ("assign_category", Some(1), 25)
+            ("assign_activity", Some(1), 25)
         );
     }
 
@@ -454,7 +454,7 @@ mod tests {
             GapStatus::Expired,
             GapStatus::Resolved(IdleResolution::Discard),
             GapStatus::Resolved(IdleResolution::AssignPrevious),
-            GapStatus::Resolved(IdleResolution::AssignCategory(CategoryId(1))),
+            GapStatus::Resolved(IdleResolution::AssignActivity(ActivityId(1))),
         ] {
             let (text, cat) = status_to_sql(s);
             assert_eq!(status_from_sql(text, cat).unwrap(), s);

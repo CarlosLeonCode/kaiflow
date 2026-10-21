@@ -16,7 +16,7 @@ pub fn exe_file_name(path: &str) -> Option<&str> {
 ///
 /// The full path is not used because many apps install into versioned folders
 /// (`app-1.0.9\Discord.exe`), which would split one app into many after every update and
-/// break the per-app privacy and category rules.
+/// break the per-app privacy and activity rules.
 pub fn app_id_from_exe(path: &str) -> Option<String> {
     exe_file_name(path).map(str::to_lowercase)
 }

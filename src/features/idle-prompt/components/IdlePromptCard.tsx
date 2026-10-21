@@ -1,7 +1,7 @@
 import { ChevronLeft, Moon } from "lucide-react";
 import { useState } from "react";
 
-import type { CategoryDto, IdleGapDto, IdleResolutionDto } from "@/shared/ipc";
+import type { ActivityDto, IdleGapDto, IdleResolutionDto } from "@/shared/ipc";
 import { formatDuration, formatTimeOfDay } from "@/shared/lib/time";
 import { Button } from "@/shared/ui/button";
 
@@ -9,14 +9,14 @@ interface Props {
   gap: IdleGapDto;
   /** Other gaps waiting behind this one. */
   moreCount: number;
-  categories: CategoryDto[];
+  activities: ActivityDto[];
   busy: boolean;
   error: string | null;
   onResolve: (resolution: IdleResolutionDto) => void;
 }
 
-/** Idle-return card (R1.6): discard, give the time to the previous app, or to a category. */
-export function IdlePromptCard({ gap, moreCount, categories, busy, error, onResolve }: Props) {
+/** Idle-return card (R1.6): discard, give the time to the previous app, or to an activity. */
+export function IdlePromptCard({ gap, moreCount, activities, busy, error, onResolve }: Props) {
   const [choosing, setChoosing] = useState(false);
   const previous = gap.prev_focus;
 
@@ -58,26 +58,26 @@ export function IdlePromptCard({ gap, moreCount, categories, busy, error, onReso
             >
               <ChevronLeft aria-hidden="true" />
             </Button>
-            <p className="text-xs text-muted-foreground">Assign this time to a category</p>
+            <p className="text-xs text-muted-foreground">Assign this time to an activity</p>
           </div>
-          {categories.length === 0 ? (
-            <p className="px-1 py-2 text-xs text-muted-foreground">No categories yet.</p>
+          {activities.length === 0 ? (
+            <p className="px-1 py-2 text-xs text-muted-foreground">No activities yet.</p>
           ) : (
-            <ul className="max-h-36 space-y-0.5 overflow-y-auto" aria-label="Categories">
-              {categories.map((category) => (
-                <li key={category.id}>
+            <ul className="max-h-36 space-y-0.5 overflow-y-auto" aria-label="Activities">
+              {activities.map((activity) => (
+                <li key={activity.id}>
                   <button
                     type="button"
                     disabled={busy}
-                    onClick={() => onResolve({ kind: "assign_category", category_id: category.id })}
+                    onClick={() => onResolve({ kind: "assign_activity", activity_id: activity.id })}
                     className="flex h-7 w-full items-center gap-2 rounded-md px-2 text-left hover:bg-accent disabled:opacity-50"
                   >
                     <span
                       aria-hidden="true"
                       className="size-2.5 shrink-0 rounded-full"
-                      style={{ backgroundColor: category.color }}
+                      style={{ backgroundColor: activity.color }}
                     />
-                    <span className="truncate">{category.name}</span>
+                    <span className="truncate">{activity.name}</span>
                   </button>
                 </li>
               ))}
@@ -100,7 +100,7 @@ export function IdlePromptCard({ gap, moreCount, categories, busy, error, onReso
             </Button>
           )}
           <Button size="sm" variant="secondary" disabled={busy} onClick={() => setChoosing(true)}>
-            Assign to category…
+            Assign to activity…
           </Button>
         </div>
       )}

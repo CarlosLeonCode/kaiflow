@@ -1,24 +1,22 @@
 //! Read use cases behind the UI (design section 8): today summary, range reports,
 //! timeline and title detail. Ranges are UTC `[from, to)` computed by the frontend (local
-//! day boundaries, DST included); categories are resolved at query time (R9.2).
+//! day boundaries, DST included); activities are resolved at query time (R9.2).
 
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
 
 use domain::{
-    Category, CategoryId, EndReason, Segment, SegmentId, SegmentSource, UNCATEGORIZED, UtcMs,
-    categorize, clip_to_range, split_at_boundaries,
+    Activity, ActivityId, EndReason, Segment, SegmentId, SegmentSource, UNASSIGNED, UtcMs,
+    classify, clip_to_range, split_at_boundaries,
 };
 
-use crate::ports::{CategoryRepository, PortError, ReportRepository};
+use crate::ports::{ActivityRepository, PortError, ReportRepository};
 
-/// Name shown for the system category when the repository does not list it.
-pub const UNCATEGORIZED_NAME: &str = "Sin categoría";
-/// Neutral color used when a category cannot be resolved.
-pub const UNCATEGORIZED_COLOR: &str = "#9ca3af";
-/// Label for idle time assigned straight to a category (no app, amendment A1).
-pub const MANUAL_ASSIGNMENT_LABEL: &str = "Asignado manualmente";
+/// Name shown for the system activity when the repository does not list it.
+pub const UNASSIGNED_NAME: &str = "Unassigned";
+/// Neutral color used when an activity cannot be resolved.
+pub const UNASSIGNED_COLOR: &str = "#9ca3af";
 
 /// Half-open UTC range `[from, to)`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -53,15 +51,16 @@ impl From<PortError> for QueryError {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AppTotal {
-    /// `None` for time assigned manually to a category.
+    /// `None` for time assigned manually to an activity.
     pub app_id: Option<String>,
+    /// Empty for manually assigned time (no app); the UI supplies that label.
     pub app_name: String,
     pub total_ms: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CategoryTotal {
-    pub category_id: CategoryId,
+pub struct ActivityTotal {
+    pub activity_id: ActivityId,
     pub name: String,
     pub color: String,
     pub total_ms: i64,
@@ -76,12 +75,12 @@ pub struct BucketTotal {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Report {
     pub by_app: Vec<AppTotal>,
-    pub by_category: Vec<CategoryTotal>,
+    pub by_activity: Vec<ActivityTotal>,
     pub by_bucket: Vec<BucketTotal>,
     pub total_ms: i64,
 }
 
-/// One clipped span of the timeline with its category resolved.
+/// One clipped span of the timeline with its activity resolved.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TimelineItem {
     pub segment_id: SegmentId,
@@ -90,9 +89,9 @@ pub struct TimelineItem {
     pub app_id: Option<String>,
     pub app_name: Option<String>,
     pub window_title: Option<String>,
-    pub category_id: CategoryId,
-    pub category_name: String,
-    pub category_color: String,
+    pub activity_id: ActivityId,
+    pub activity_name: String,
+    pub activity_color: String,
     pub source: SegmentSource,
     /// Reason of the segment's own end; `None` when the span was clipped or is still open.
     pub end_reason: Option<EndReason>,
@@ -109,15 +108,15 @@ pub struct TitleTotal {
 
 pub struct Queries {
     reports: Arc<dyn ReportRepository>,
-    categories: Arc<dyn CategoryRepository>,
+    activities: Arc<dyn ActivityRepository>,
 }
 
-/// A segment, its clipped span and its resolved category.
+/// A segment, its clipped span and its resolved activity.
 struct Resolved {
     segment: Segment,
     start: UtcMs,
     end: UtcMs,
-    category: CategoryId,
+    activity: ActivityId,
 }
 
 impl Resolved {
@@ -129,11 +128,11 @@ impl Resolved {
 impl Queries {
     pub fn new(
         reports: Arc<dyn ReportRepository>,
-        categories: Arc<dyn CategoryRepository>,
+        activities: Arc<dyn ActivityRepository>,
     ) -> Self {
         Self {
             reports,
-            categories,
+            activities,
         }
     }
 
@@ -149,7 +148,7 @@ impl Queries {
         Ok(report)
     }
 
-    /// Totals by app, category and caller-provided bucket (day buckets for week/month
+    /// Totals by app, activity and caller-provided bucket (day buckets for week/month
     /// history). Spans crossing a bucket boundary are shared between buckets (R8.3).
     pub fn range_report(
         &self,
@@ -160,7 +159,7 @@ impl Queries {
         let (resolved, cats) = self.load(range, now)?;
 
         let mut by_app: HashMap<Option<String>, AppTotal> = HashMap::new();
-        let mut by_cat: HashMap<CategoryId, i64> = HashMap::new();
+        let mut by_cat: HashMap<ActivityId, i64> = HashMap::new();
         let mut by_bucket = vec![0i64; buckets.len()];
         let boundaries: Vec<UtcMs> = buckets.iter().flat_map(|b| [b.from, b.to]).collect();
         let mut total_ms = 0;
@@ -179,7 +178,7 @@ impl Queries {
             if let Some(name) = &r.segment.app_name {
                 entry.app_name.clone_from(name);
             }
-            *by_cat.entry(r.category).or_default() += ms;
+            *by_cat.entry(r.activity).or_default() += ms;
 
             let span = domain::ClippedSpan {
                 start: r.start,
@@ -201,27 +200,27 @@ impl Queries {
                 .cmp(&a.total_ms)
                 .then_with(|| a.app_name.cmp(&b.app_name))
         });
-        let mut by_category: Vec<CategoryTotal> = by_cat
+        let mut by_activity: Vec<ActivityTotal> = by_cat
             .into_iter()
             .map(|(id, total_ms)| {
-                let (name, color) = category_label(id, &cats);
-                CategoryTotal {
-                    category_id: id,
+                let (name, color) = activity_label(id, &cats);
+                ActivityTotal {
+                    activity_id: id,
                     name,
                     color,
                     total_ms,
                 }
             })
             .collect();
-        by_category.sort_by(|a, b| {
+        by_activity.sort_by(|a, b| {
             b.total_ms
                 .cmp(&a.total_ms)
-                .then_with(|| a.category_id.cmp(&b.category_id))
+                .then_with(|| a.activity_id.cmp(&b.activity_id))
         });
 
         Ok(Report {
             by_app,
-            by_category,
+            by_activity,
             by_bucket: buckets
                 .iter()
                 .zip(by_bucket)
@@ -234,13 +233,13 @@ impl Queries {
         })
     }
 
-    /// Clipped spans in chronological order with the category resolved (timeline, CSV).
+    /// Clipped spans in chronological order with the activity resolved (timeline, CSV).
     pub fn timeline(&self, range: Range, now: UtcMs) -> Result<Vec<TimelineItem>, QueryError> {
         let (resolved, cats) = self.load(range, now)?;
         Ok(resolved
             .into_iter()
             .map(|r| {
-                let (category_name, category_color) = category_label(r.category, &cats);
+                let (activity_name, activity_color) = activity_label(r.activity, &cats);
                 let own_end = r.segment.ended_at;
                 TimelineItem {
                     segment_id: r.segment.id,
@@ -255,9 +254,9 @@ impl Queries {
                     app_id: r.segment.app_id,
                     app_name: r.segment.app_name,
                     window_title: r.segment.window_title,
-                    category_id: r.category,
-                    category_name,
-                    category_color,
+                    activity_id: r.activity,
+                    activity_name,
+                    activity_color,
                     source: r.segment.source,
                 }
             })
@@ -301,13 +300,13 @@ impl Queries {
         Ok(out)
     }
 
-    /// Loads, clips and categorizes the segments of a range, ordered by start then id.
-    fn load(&self, range: Range, now: UtcMs) -> Result<(Vec<Resolved>, Vec<Category>), QueryError> {
+    /// Loads, clips and classifies the segments of a range, ordered by start then id.
+    fn load(&self, range: Range, now: UtcMs) -> Result<(Vec<Resolved>, Vec<Activity>), QueryError> {
         if range.from >= range.to {
             return Err(QueryError::InvalidRange);
         }
-        let rules = self.categories.list_rules()?;
-        let cats = self.categories.list()?;
+        let rules = self.activities.list_rules()?;
+        let cats = self.activities.list()?;
         let mut segments = self.reports.segments_in_range(range.from, range.to)?;
         segments.sort_by_key(|s| (s.started_at, s.id));
 
@@ -315,16 +314,16 @@ impl Queries {
             .into_iter()
             .filter_map(|segment| {
                 let span = clip_to_range(&segment, range.from, range.to, now)?;
-                let mut category = categorize(&segment, &rules);
-                // A rule or assignment pointing at a deleted category counts as uncategorized.
-                if category != UNCATEGORIZED && !cats.iter().any(|c| c.id == category) {
-                    category = UNCATEGORIZED;
+                let mut activity = classify(&segment, &rules);
+                // A rule or assignment pointing at a deleted activity counts as unassigned.
+                if activity != UNASSIGNED && !cats.iter().any(|c| c.id == activity) {
+                    activity = UNASSIGNED;
                 }
                 Some(Resolved {
                     start: span.start,
                     end: span.end,
                     segment,
-                    category,
+                    activity,
                 })
             })
             .collect();
@@ -333,20 +332,12 @@ impl Queries {
 }
 
 fn app_label(segment: &Segment) -> String {
-    segment
-        .app_name
-        .clone()
-        .unwrap_or_else(|| MANUAL_ASSIGNMENT_LABEL.to_owned())
+    segment.app_name.clone().unwrap_or_default()
 }
 
-fn category_label(id: CategoryId, cats: &[Category]) -> (String, String) {
+fn activity_label(id: ActivityId, cats: &[Activity]) -> (String, String) {
     cats.iter().find(|c| c.id == id).map_or_else(
-        || {
-            (
-                UNCATEGORIZED_NAME.to_owned(),
-                UNCATEGORIZED_COLOR.to_owned(),
-            )
-        },
+        || (UNASSIGNED_NAME.to_owned(), UNASSIGNED_COLOR.to_owned()),
         |c| (c.name.clone(), c.color.clone()),
     )
 }
@@ -354,8 +345,8 @@ fn category_label(id: CategoryId, cats: &[Category]) -> (String, String) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fakes::{FakeCategories, FakeStore};
-    use domain::{CategoryRule, RuleKind};
+    use crate::fakes::{FakeActivities, FakeStore};
+    use domain::{ActivityRule, Productivity, RuleKind};
 
     const MIN: i64 = 60_000;
 
@@ -380,7 +371,7 @@ mod tests {
             } else {
                 SegmentSource::IdleAssigned
             },
-            category_id: manual.map(CategoryId),
+            activity_id: manual.map(ActivityId),
         }
     }
 
@@ -391,35 +382,38 @@ mod tests {
         }
     }
 
-    /// Ids: 1 = Sin categoría, 2 = Work, 3 = Chat.
-    fn setup() -> (Queries, FakeStore, FakeCategories) {
+    /// Ids: 1 = Unassigned, 2 = Work, 3 = Chat.
+    fn setup() -> (Queries, FakeStore, FakeActivities) {
         let store = FakeStore::default();
-        let cats = FakeCategories::default();
-        cats.create("Sin categoría", "#999999").unwrap();
-        cats.create("Work", "#00ff00").unwrap();
-        cats.create("Chat", "#0000ff").unwrap();
+        let cats = FakeActivities::default();
+        cats.create("Unassigned", "#999999", Productivity::Neutral)
+            .unwrap();
+        cats.create("Work", "#00ff00", Productivity::Neutral)
+            .unwrap();
+        cats.create("Chat", "#0000ff", Productivity::Neutral)
+            .unwrap();
         let q = Queries::new(Arc::new(store.clone()), Arc::new(cats.clone()));
         (q, store, cats)
     }
 
-    fn app_rule(id: i64, cat: i64, bundle: &str) -> CategoryRule {
-        CategoryRule {
+    fn app_rule(id: i64, cat: i64, bundle: &str) -> ActivityRule {
+        ActivityRule {
             id,
-            category_id: CategoryId(cat),
+            activity_id: ActivityId(cat),
             kind: RuleKind::App(bundle.into()),
             priority: 0,
         }
     }
 
     #[test]
-    fn totals_by_app_and_category_use_rules_and_manual_assignment() {
+    fn totals_by_app_and_activity_use_rules_and_manual_assignment() {
         let (q, store, cats) = setup();
         cats.save_rule(&app_rule(1, 2, "code")).unwrap();
         cats.save_rule(&app_rule(2, 3, "slack")).unwrap();
         store.seed_segment(seg(0, Some(30 * MIN), Some("code"), None, None));
         store.seed_segment(seg(30 * MIN, Some(40 * MIN), Some("slack"), None, None));
         store.seed_segment(seg(40 * MIN, Some(50 * MIN), Some("misc"), None, None));
-        // Idle time assigned to Work: no app, counted under "Asignado manualmente".
+        // Idle time assigned to Work: no app, counted under an empty app name (the UI labels it).
         store.seed_segment(seg(50 * MIN, Some(60 * MIN), None, None, Some(2)));
 
         let r = q.range_report(range(0, 60 * MIN), &[], UtcMs(0)).unwrap();
@@ -433,13 +427,13 @@ mod tests {
             apps,
             vec![
                 ("CODE", 30 * MIN),
-                ("Asignado manualmente", 10 * MIN),
+                ("", 10 * MIN),
                 ("MISC", 10 * MIN),
                 ("SLACK", 10 * MIN),
             ]
         );
         let cat: Vec<_> = r
-            .by_category
+            .by_activity
             .iter()
             .map(|c| (c.name.as_str(), c.total_ms))
             .collect();
@@ -447,7 +441,7 @@ mod tests {
             cat,
             vec![
                 ("Work", 40 * MIN),
-                ("Sin categoría", 10 * MIN),
+                ("Unassigned", 10 * MIN),
                 ("Chat", 10 * MIN)
             ]
         );
@@ -458,20 +452,20 @@ mod tests {
         let (q, store, cats) = setup();
         store.seed_segment(seg(0, Some(MIN), Some("code"), None, None));
         let r = q.range_report(range(0, MIN), &[], UtcMs(0)).unwrap();
-        assert_eq!(r.by_category[0].category_id, UNCATEGORIZED);
+        assert_eq!(r.by_activity[0].activity_id, UNASSIGNED);
 
         cats.save_rule(&app_rule(1, 2, "code")).unwrap();
         let r = q.range_report(range(0, MIN), &[], UtcMs(0)).unwrap();
-        assert_eq!(r.by_category[0].name, "Work");
-        assert!(store.segments()[0].category_id.is_none());
+        assert_eq!(r.by_activity[0].name, "Work");
+        assert!(store.segments()[0].activity_id.is_none());
     }
 
     #[test]
-    fn deleted_category_falls_back_to_uncategorized() {
+    fn deleted_activity_falls_back_to_unassigned() {
         let (q, store, _) = setup();
         store.seed_segment(seg(0, Some(MIN), None, None, Some(99)));
         let r = q.range_report(range(0, MIN), &[], UtcMs(0)).unwrap();
-        assert_eq!(r.by_category[0].category_id, UNCATEGORIZED);
+        assert_eq!(r.by_activity[0].activity_id, UNASSIGNED);
     }
 
     #[test]
@@ -509,7 +503,7 @@ mod tests {
     fn empty_range_gives_empty_report_and_bad_range_is_rejected() {
         let (q, _, _) = setup();
         let r = q.range_report(range(0, MIN), &[], UtcMs(0)).unwrap();
-        assert_eq!((r.total_ms, r.by_app.len(), r.by_category.len()), (0, 0, 0));
+        assert_eq!((r.total_ms, r.by_app.len(), r.by_activity.len()), (0, 0, 0));
         assert_eq!(
             q.range_report(range(MIN, MIN), &[], UtcMs(0)),
             Err(QueryError::InvalidRange)
@@ -529,7 +523,7 @@ mod tests {
     }
 
     #[test]
-    fn timeline_is_chronological_clipped_and_resolves_category() {
+    fn timeline_is_chronological_clipped_and_resolves_activity() {
         let (q, store, cats) = setup();
         cats.save_rule(&app_rule(1, 2, "a")).unwrap();
         store.seed_segment(seg(20 * MIN, Some(30 * MIN), Some("b"), None, None));
@@ -540,7 +534,7 @@ mod tests {
             (items[0].start, items[0].end),
             (UtcMs(5 * MIN), UtcMs(15 * MIN))
         );
-        assert_eq!(items[0].category_name, "Work");
+        assert_eq!(items[0].activity_name, "Work");
         assert_eq!(items[0].end_reason, Some(EndReason::FocusChange));
         // Second span is cut by the range end: reason hidden, not open.
         assert_eq!(items[1].end, UtcMs(25 * MIN));

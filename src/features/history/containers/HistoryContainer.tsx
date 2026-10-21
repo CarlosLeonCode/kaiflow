@@ -1,3 +1,4 @@
+import { SectionIntroContainer } from "@/features/shell/containers/SectionIntroContainer";
 import { useMemo, useState } from "react";
 
 import { useNow } from "@/features/tracking/hooks/useNow";
@@ -25,7 +26,7 @@ import {
   appRows,
   averages,
   busiest,
-  categoryRows,
+  activityRows,
   compareTotals,
   dayBars,
   hourBars,
@@ -35,7 +36,7 @@ import {
  * Wires History to the backend. The frontend owns the calendar: it computes local day, week
  * and month boundaries (DST-safe) and sends UTC ranges; the backend only sums segments clipped
  * to them (design section 8). Week and month fetch one small report per day so each bar can
- * be stacked by category.
+ * be stacked by activity.
  */
 export function HistoryContainer() {
   const now = useNow(60_000);
@@ -81,6 +82,7 @@ export function HistoryContainer() {
 
   return (
     <HistoryView
+      intro={<SectionIntroContainer section="history" />}
       period={period}
       onPeriodChange={(next) => {
         setPeriod(next);
@@ -103,7 +105,7 @@ export function HistoryContainer() {
       averages={averages(bars)}
       busiest={busiest(bars)}
       bars={bars}
-      categories={categoryRows(report.data?.by_category ?? [], totalMs)}
+      activities={activityRows(report.data?.by_activity ?? [], totalMs)}
       apps={appRows(report.data?.by_app ?? [], totalMs)}
       exporting={exportCsv.isPending}
       exportedTo={exportedTo}

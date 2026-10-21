@@ -58,7 +58,7 @@ mod tests {
             window_title: None,
             end_reason: end.map(|_| EndReason::Stop),
             source: SegmentSource::Tracked,
-            category_id: None,
+            activity_id: None,
         }
     }
 

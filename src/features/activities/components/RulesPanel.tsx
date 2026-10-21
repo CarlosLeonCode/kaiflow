@@ -1,8 +1,8 @@
 import { ArrowRight, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 
-import type { CategoryDto, RuleDto, RuleInputDto, RuleSpecDto } from "@/shared/ipc";
+import type { ActivityDto, RuleDto, RuleInputDto, RuleSpecDto } from "@/shared/ipc";
 import { appName, type AppOption } from "@/shared/lib/apps";
-import { categoryLabel } from "@/shared/lib/labels";
+import { activityLabel } from "@/shared/lib/labels";
 import { Button } from "@/shared/ui/button";
 import { Select } from "@/shared/ui/select";
 
@@ -12,12 +12,12 @@ import { RuleForm } from "./RuleForm";
 
 interface Props {
   rules: readonly RuleDto[];
-  categories: readonly CategoryDto[];
+  activities: readonly ActivityDto[];
   apps: readonly AppOption[];
   /** Creates or updates rules (an input with `id <= 0` is new). */
   onSave: Submit<readonly RuleInputDto[]>;
   onDelete: Submit<number>;
-  /** Failures of in-list actions (reorder, change category, delete) have no form to live in. */
+  /** Failures of in-list actions (reorder, change activity, delete) have no form to live in. */
   onFailure: (message: string) => void;
 }
 
@@ -34,7 +34,7 @@ const GROUPS: readonly { kind: RuleKind; title: string; hint: string }[] = [
 ];
 
 /** Rules form plus the ordered rule lists. Within a group the rule higher up wins. */
-export function RulesPanel({ rules, categories, apps, onSave, onDelete, onFailure }: Props) {
+export function RulesPanel({ rules, activities, apps, onSave, onDelete, onFailure }: Props) {
   async function save(changed: readonly RuleInputDto[]) {
     const result = await onSave(changed);
     if (result) onFailure(result.message);
@@ -61,10 +61,10 @@ export function RulesPanel({ rules, categories, apps, onSave, onDelete, onFailur
 
       <div className="divide-y divide-border rounded-lg border border-border bg-background">
         <RuleForm
-          categories={categories}
+          activities={activities}
           apps={apps}
-          onSubmit={({ spec, categoryId }) =>
-            onSave([{ id: 0, category_id: categoryId, spec, priority: nextPriority(rules, spec.kind) }])
+          onSubmit={({ spec, activityId }) =>
+            onSave([{ id: 0, activity_id: activityId, spec, priority: nextPriority(rules, spec.kind) }])
           }
         />
 
@@ -118,18 +118,18 @@ export function RulesPanel({ rules, categories, apps, onSave, onDelete, onFailur
                         </span>
                         <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
                         <Select
-                          aria-label={`Category for ${label}`}
-                          value={rule.category_id}
+                          aria-label={`Activity for ${label}`}
+                          value={rule.activity_id}
                           className="max-w-36"
                           onChange={(event) =>
                             void save([
-                              { id: rule.id, category_id: Number(event.target.value), spec: rule.spec, priority: rule.priority },
+                              { id: rule.id, activity_id: Number(event.target.value), spec: rule.spec, priority: rule.priority },
                             ])
                           }
                         >
-                          {categories.map((category) => (
-                            <option key={category.id} value={category.id}>
-                              {categoryLabel(category.id, category.name)}
+                          {activities.map((activity) => (
+                            <option key={activity.id} value={activity.id}>
+                              {activityLabel(activity.id, activity.name)}
                             </option>
                           ))}
                         </Select>

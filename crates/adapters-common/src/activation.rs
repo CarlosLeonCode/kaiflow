@@ -4,7 +4,7 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AppIdentity {
     /// Stable application id: bundle id (macOS), executable name (Windows), `WM_CLASS`
-    /// (Linux/X11). Privacy and category rules key on it.
+    /// (Linux/X11). Privacy and activity rules key on it.
     pub bundle_id: String,
     pub name: String,
 }

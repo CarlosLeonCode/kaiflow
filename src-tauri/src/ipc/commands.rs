@@ -9,9 +9,9 @@ use tauri_plugin_dialog::DialogExt;
 use tauri_specta::Event;
 
 use super::dto::{
-    CategoryDto, DeleteOpDto, IdleGapDto, IdleResolutionDto, PermissionStateDto, PrivacyModeDto,
-    PrivacyRulesDto, RangeDto, ReportDto, RuleDto, RuleInputDto, SettingsDto, SettingsPatchDto,
-    TimelineItemDto, TrackingStatusDto, UpdateInfoDto,
+    ActivityDto, DeleteOpDto, IdleGapDto, IdleResolutionDto, PermissionStateDto, PrivacyModeDto,
+    PrivacyRulesDto, ProductivityDto, RangeDto, ReportDto, RuleDto, RuleInputDto, SettingsDto,
+    SettingsPatchDto, TimelineItemDto, TrackingStatusDto, UpdateInfoDto,
 };
 use super::events::{DataChanged, DataKindDto};
 use crate::composition::AppState;
@@ -108,30 +108,34 @@ pub async fn resolve_idle_gap(
 
 #[tauri::command]
 #[specta::specta]
-pub async fn categories_list(state: Shared<'_>) -> Result<Vec<CategoryDto>, AppError> {
-    run(state, AppState::categories_list).await
+pub async fn activities_list(state: Shared<'_>) -> Result<Vec<ActivityDto>, AppError> {
+    run(state, AppState::activities_list).await
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn categories_create(
+pub async fn activities_create(
     state: Shared<'_>,
     name: String,
     color: String,
-) -> Result<CategoryDto, AppError> {
-    run(state, move |s| s.categories_create(&name, &color)).await
+    productivity: ProductivityDto,
+) -> Result<ActivityDto, AppError> {
+    run(state, move |s| {
+        s.activities_create(&name, &color, productivity)
+    })
+    .await
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn categories_update(state: Shared<'_>, category: CategoryDto) -> Result<(), AppError> {
-    run(state, move |s| s.categories_update(category)).await
+pub async fn activities_update(state: Shared<'_>, activity: ActivityDto) -> Result<(), AppError> {
+    run(state, move |s| s.activities_update(activity)).await
 }
 
 #[tauri::command]
 #[specta::specta]
-pub async fn categories_delete(state: Shared<'_>, id: i64) -> Result<(), AppError> {
-    run(state, move |s| s.categories_delete(id)).await
+pub async fn activities_delete(state: Shared<'_>, id: i64) -> Result<(), AppError> {
+    run(state, move |s| s.activities_delete(id)).await
 }
 
 #[tauri::command]
@@ -387,6 +391,8 @@ mod tests {
         let source = include_str!("commands.rs");
         let build = include_str!("../../build.rs");
         let main_capability = include_str!("../../capabilities/main.json");
+        let popover_capability = include_str!("../../capabilities/popover.json");
+        let onboarding_capability = include_str!("../../capabilities/onboarding.json");
 
         let mut functions = Vec::new();
         let mut lines = source.lines().peekable();
@@ -416,5 +422,29 @@ mod tests {
         }
         let declared = build.matches("    \"").count();
         assert_eq!(declared, functions.len(), "build.rs lists extra commands");
+
+        // Every command permission granted by any window must name a real command, so a rename
+        // cannot leave a stale grant behind (the popover/onboarding subsets included).
+        let known: Vec<String> = functions
+            .iter()
+            .map(|name| format!("allow-{}", name.replace('_', "-")))
+            .collect();
+        for (file, capability) in [
+            ("main.json", main_capability),
+            ("popover.json", popover_capability),
+            ("onboarding.json", onboarding_capability),
+        ] {
+            let granted: Vec<&str> = capability
+                .split('"')
+                .filter(|token| token.starts_with("allow-"))
+                .collect();
+            assert!(!granted.is_empty(), "{file} grants no commands");
+            for permission in granted {
+                assert!(
+                    known.iter().any(|k| k == permission),
+                    "{permission} in capabilities/{file} matches no command"
+                );
+            }
+        }
     }
 }

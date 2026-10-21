@@ -7,12 +7,15 @@ export function Page({
   title,
   subtitle,
   actions,
+  intro,
   children,
   className,
 }: {
   title: string;
   subtitle?: string;
   actions?: ReactNode;
+  /** Dismissible explanation rendered above the content (see `SectionIntro`). */
+  intro?: ReactNode;
   children: ReactNode;
   className?: string;
 }) {
@@ -34,7 +37,10 @@ export function Page({
         </div>
         {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
       </header>
-      <div className={cn("min-h-0 flex-1 overflow-y-auto px-6 py-5", className)}>{children}</div>
+      <div className={cn("min-h-0 flex-1 overflow-y-auto px-6 py-5", className)}>
+        {intro}
+        {children}
+      </div>
     </div>
   );
 }

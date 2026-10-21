@@ -16,8 +16,8 @@ const NOW = local(2026, 10, 21, 12);
 const WEEK = { from: local(2026, 10, 19), to: local(2026, 10, 26) };
 const PREVIOUS_WEEK = { from: local(2026, 10, 12), to: local(2026, 10, 19) };
 
-const WORK = { category_id: 2, name: "Work", color: "#3b82f6" };
-const UNCAT = { category_id: 1, name: "Sin categoría", color: "#6b7280" };
+const WORK = { activity_id: 2, name: "Work", color: "#3b82f6" };
+const UNCAT = { activity_id: 1, name: "Unassigned", color: "#6b7280" };
 
 const weekReport: ReportDto = report({
   total_ms: 3 * H,
@@ -25,7 +25,7 @@ const weekReport: ReportDto = report({
     { app_id: "com.apple.dt.Xcode", app_name: "Xcode", total_ms: 2 * H },
     { app_id: "com.tinyspeck.slackmacgap", app_name: "Slack", total_ms: H },
   ],
-  by_category: [
+  by_activity: [
     { ...WORK, total_ms: 2.5 * H },
     { ...UNCAT, total_ms: 0.5 * H },
   ],
@@ -34,9 +34,9 @@ const weekReport: ReportDto = report({
 const dayReports = new Map<number, ReportDto>([
   [
     local(2026, 10, 19),
-    report({ total_ms: 2 * H, by_category: [{ ...WORK, total_ms: 1.5 * H }, { ...UNCAT, total_ms: 0.5 * H }] }),
+    report({ total_ms: 2 * H, by_activity: [{ ...WORK, total_ms: 1.5 * H }, { ...UNCAT, total_ms: 0.5 * H }] }),
   ],
-  [local(2026, 10, 20), report({ total_ms: H, by_category: [{ ...WORK, total_ms: H }] })],
+  [local(2026, 10, 20), report({ total_ms: H, by_activity: [{ ...WORK, total_ms: H }] })],
 ]);
 
 function backend(overrides: Record<string, (args: Record<string, unknown>) => unknown> = {}) {
@@ -87,13 +87,13 @@ describe("HistoryContainer", () => {
     await waitFor(() => expect(comparison).toHaveTextContent("1h 00m more than the previous week (+50%)"));
   });
 
-  it("draws one accessible bar per day, stacked by category, and moves between bars with the arrow keys", async () => {
+  it("draws one accessible bar per day, stacked by activity, and moves between bars with the arrow keys", async () => {
     const user = userEvent.setup();
     backend();
     renderWithProviders(<HistoryContainer />);
 
-    const chart = await screen.findByRole("group", { name: "Focused time per day, stacked by category" });
-    const monday = await within(chart).findByRole("img", { name: /October 19: 2h 00m\. Work 1h 30m, Uncategorized 30m/ });
+    const chart = await screen.findByRole("group", { name: "Focused time per day, stacked by activity" });
+    const monday = await within(chart).findByRole("img", { name: /October 19: 2h 00m\. Work 1h 30m, Unassigned 30m/ });
     expect(within(chart).getAllByRole("img")).toHaveLength(7);
     expect(within(chart).getByRole("img", { name: /October 22: nothing tracked/ })).toBeInTheDocument();
     // Segments are SVG shapes with a title for pointer users.
@@ -110,14 +110,14 @@ describe("HistoryContainer", () => {
     expect(document.activeElement).toBe(within(chart).getByRole("img", { name: /October 25/ }));
   });
 
-  it("lists totals by category and by app with the Uncategorized name mapped", async () => {
+  it("lists totals by activity and by app with the Unassigned name mapped", async () => {
     backend();
     renderWithProviders(<HistoryContainer />);
 
-    const categories = await screen.findByRole("list", { name: "Time by category" });
-    expect(within(categories).getAllByRole("listitem").map((li) => li.textContent)).toEqual([
+    const activities = await screen.findByRole("list", { name: "Time by activity" });
+    expect(within(activities).getAllByRole("listitem").map((li) => li.textContent)).toEqual([
       expect.stringContaining("Work"),
-      expect.stringContaining("Uncategorized"),
+      expect.stringContaining("Unassigned"),
     ]);
     const apps = screen.getByRole("list", { name: "Time by app" });
     expect(within(apps).getByText("Xcode")).toBeInTheDocument();

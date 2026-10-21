@@ -1,3 +1,4 @@
+import { SectionIntroContainer } from "@/features/shell/containers/SectionIntroContainer";
 import { useMemo, useState } from "react";
 
 import { useNow } from "@/features/tracking/hooks/useNow";
@@ -109,6 +110,7 @@ export function PrivacyContainer({ onOpenSettings }: Props) {
 
   return (
     <PrivacyView
+      intro={<SectionIntroContainer section="privacy" />}
       privacy={privacy.data}
       retentionDays={settings.data?.retention_days ?? null}
       apps={apps}

@@ -69,7 +69,7 @@ describe("deleteCopy", () => {
     ] as const) {
       const text = deleteCopy(op).paragraphs.join(" ");
       expect(text).toContain("cannot be undone");
-      expect(text.toLowerCase()).toMatch(/settings|categories/);
+      expect(text.toLowerCase()).toMatch(/settings|activities/);
     }
   });
 

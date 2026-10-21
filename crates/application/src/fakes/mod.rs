@@ -7,8 +7,9 @@ use std::sync::{Arc, Mutex};
 
 use crossbeam_channel::Sender;
 use domain::{
-    AssignedSpan, Category, CategoryId, CategoryRule, EndReason, FocusSnapshot, GapId, GapStatus,
-    IdleGap, PermissionState, PrivacyPolicy, Segment, SegmentId, SegmentSource, UtcMs,
+    Activity, ActivityId, ActivityRule, AssignedSpan, EndReason, FocusSnapshot, GapId, GapStatus,
+    IdleGap, PermissionState, PrivacyPolicy, Productivity, Segment, SegmentId, SegmentSource,
+    UtcMs,
 };
 
 use crate::ports::*;
@@ -182,7 +183,7 @@ impl SessionRepository for FakeStore {
             window_title: focus.window_title.clone(),
             end_reason: None,
             source: SegmentSource::Tracked,
-            category_id: None,
+            activity_id: None,
         });
         Ok(id)
     }
@@ -219,7 +220,7 @@ impl SessionRepository for FakeStore {
             window_title: span.window_title.clone(),
             end_reason: Some(EndReason::Idle),
             source: SegmentSource::IdleAssigned,
-            category_id: span.category_id,
+            activity_id: span.activity_id,
         });
         Ok(id)
     }
@@ -319,51 +320,53 @@ impl SettingsRepository for FakeSettings {
 }
 
 #[derive(Default)]
-struct Categories {
-    categories: Vec<Category>,
-    rules: Vec<CategoryRule>,
+struct Activities {
+    activities: Vec<Activity>,
+    rules: Vec<ActivityRule>,
     next_id: i64,
 }
 
 #[derive(Clone, Default)]
-pub struct FakeCategories(Arc<Mutex<Categories>>);
+pub struct FakeActivities(Arc<Mutex<Activities>>);
 
-impl CategoryRepository for FakeCategories {
-    fn list(&self) -> PortResult<Vec<Category>> {
-        Ok(self.0.lock().unwrap().categories.clone())
+impl ActivityRepository for FakeActivities {
+    fn list(&self) -> PortResult<Vec<Activity>> {
+        Ok(self.0.lock().unwrap().activities.clone())
     }
-    fn create(&self, name: &str, color: &str) -> PortResult<Category> {
+    fn create(&self, name: &str, color: &str, productivity: Productivity) -> PortResult<Activity> {
         let mut s = self.0.lock().unwrap();
         s.next_id += 1;
-        let category = Category {
-            id: CategoryId(s.next_id),
+        let activity = Activity {
+            id: ActivityId(s.next_id),
             name: name.into(),
             color: color.into(),
             sort_order: 0,
+            productivity,
+            preset_key: None,
         };
-        s.categories.push(category.clone());
-        Ok(category)
+        s.activities.push(activity.clone());
+        Ok(activity)
     }
-    fn update(&self, category: &Category) -> PortResult<()> {
+    fn update(&self, activity: &Activity) -> PortResult<()> {
         let mut s = self.0.lock().unwrap();
-        match s.categories.iter_mut().find(|c| c.id == category.id) {
+        match s.activities.iter_mut().find(|c| c.id == activity.id) {
             Some(c) => {
-                *c = category.clone();
+                *c = activity.clone();
                 Ok(())
             }
-            None => Err(PortError("unknown category".into())),
+            None => Err(PortError("unknown activity".into())),
         }
     }
-    fn delete(&self, id: CategoryId) -> PortResult<()> {
+    fn delete(&self, id: ActivityId) -> PortResult<()> {
         let mut s = self.0.lock().unwrap();
-        s.categories.retain(|c| c.id != id);
-        s.rules.retain(|r| r.category_id != id);
+        s.activities.retain(|c| c.id != id);
+        s.rules.retain(|r| r.activity_id != id);
         Ok(())
     }
-    fn list_rules(&self) -> PortResult<Vec<CategoryRule>> {
+    fn list_rules(&self) -> PortResult<Vec<ActivityRule>> {
         Ok(self.0.lock().unwrap().rules.clone())
     }
-    fn save_rule(&self, rule: &CategoryRule) -> PortResult<i64> {
+    fn save_rule(&self, rule: &ActivityRule) -> PortResult<i64> {
         let mut s = self.0.lock().unwrap();
         s.rules.retain(|r| r.id != rule.id);
         s.rules.push(rule.clone());

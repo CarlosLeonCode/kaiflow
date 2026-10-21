@@ -1,18 +1,18 @@
 /**
- * The backend stores two system names in Spanish (the migration seeds "Sin categoría" and
- * the report labels manual assignments "Asignado manualmente"). The UI is English, so the
- * display name is derived from the stable identity (id 1 / null app), never from the text.
+ * Display names of the two system identities. The backend only carries stable identities
+ * (activity id 1, `null` app id for time assigned without an app); the UI derives the text
+ * from them, so an older database that still stores a different seeded name looks the same.
  */
 
-/** Id of the system category that cannot be deleted (migration 0001). */
-export const UNCATEGORIZED_ID = 1;
+/** Id of the system activity that cannot be deleted. */
+export const UNASSIGNED_ID = 1;
 
 export const MANUAL_APP_LABEL = "Assigned manually";
-export const UNCATEGORIZED_LABEL = "Uncategorized";
+export const UNASSIGNED_LABEL = "Unassigned";
 export const NO_TITLE_LABEL = "No window title";
 
-export function categoryLabel(id: number, name: string): string {
-  return id === UNCATEGORIZED_ID ? UNCATEGORIZED_LABEL : name;
+export function activityLabel(id: number, name: string): string {
+  return id === UNASSIGNED_ID ? UNASSIGNED_LABEL : name;
 }
 
 export function appLabel(appId: string | null, name: string | null): string {

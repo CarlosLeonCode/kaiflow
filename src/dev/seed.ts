@@ -4,7 +4,7 @@
  * start at fixed local hours. Nothing here ships in production builds (see `mount.tsx`).
  */
 
-import type { CategoryDto, FocusDto, IdleGapDto, RuleDto } from "@/shared/ipc";
+import type { ActivityDto, FocusDto, IdleGapDto, RuleDto } from "@/shared/ipc";
 import { addLocalDays } from "@/shared/lib/time";
 
 const MINUTE = 60_000;
@@ -18,18 +18,18 @@ export interface MockSegment {
   app_name: string | null;
   window_title: string | null;
   source: "tracked" | "idle_assigned";
-  category_id: number | null;
+  activity_id: number | null;
   end_reason: "focus_change" | "idle" | "pause" | "stop" | null;
 }
 
 export interface MockData {
   segments: MockSegment[];
-  categories: CategoryDto[];
+  activities: ActivityDto[];
   rules: RuleDto[];
   gaps: IdleGapDto[];
   excluded: string[];
   redacted: string[];
-  nextIds: { segment: number; category: number; rule: number; gap: number };
+  nextIds: { segment: number; activity: number; rule: number; gap: number };
 }
 
 export const APPS = {
@@ -43,24 +43,23 @@ export const APPS = {
 
 type AppKey = keyof typeof APPS;
 
-export function seedCategories(): CategoryDto[] {
+export function seedActivities(): ActivityDto[] {
   return [
-    // The migration seeds the system category with a Spanish name; the UI maps it by id.
-    { id: 1, name: "Sin categoría", color: "#9ca3af", sort_order: 0 },
-    { id: 2, name: "Development", color: "#3b82f6", sort_order: 1 },
-    { id: 3, name: "Communication", color: "#22c55e", sort_order: 2 },
-    { id: 4, name: "Meetings", color: "#f97316", sort_order: 3 },
-    { id: 5, name: "Planning", color: "#a855f7", sort_order: 4 },
+    { id: 1, name: "Unassigned", color: "#9ca3af", sort_order: 0, productivity: "neutral", preset_key: null },
+    { id: 2, name: "Development", color: "#3b82f6", sort_order: 1, productivity: "productive", preset_key: null },
+    { id: 3, name: "Communication", color: "#22c55e", sort_order: 2, productivity: "neutral", preset_key: null },
+    { id: 4, name: "Meetings", color: "#f97316", sort_order: 3, productivity: "neutral", preset_key: null },
+    { id: 5, name: "Planning", color: "#a855f7", sort_order: 4, productivity: "neutral", preset_key: null },
   ];
 }
 
 export function seedRules(): RuleDto[] {
   return [
-    { id: 1, category_id: 2, spec: { kind: "app", app_id: APPS.xcode.app_id }, priority: 1 },
-    { id: 2, category_id: 3, spec: { kind: "app", app_id: APPS.slack.app_id }, priority: 1 },
-    { id: 3, category_id: 3, spec: { kind: "app", app_id: APPS.mail.app_id }, priority: 2 },
-    { id: 4, category_id: 4, spec: { kind: "app", app_id: APPS.zoom.app_id }, priority: 3 },
-    { id: 5, category_id: 5, spec: { kind: "title_pattern", pattern: "(?i)sprint|roadmap", app_id: null }, priority: 1 },
+    { id: 1, activity_id: 2, spec: { kind: "app", app_id: APPS.xcode.app_id }, priority: 1 },
+    { id: 2, activity_id: 3, spec: { kind: "app", app_id: APPS.slack.app_id }, priority: 1 },
+    { id: 3, activity_id: 3, spec: { kind: "app", app_id: APPS.mail.app_id }, priority: 2 },
+    { id: 4, activity_id: 4, spec: { kind: "app", app_id: APPS.zoom.app_id }, priority: 3 },
+    { id: 5, activity_id: 5, spec: { kind: "title_pattern", pattern: "(?i)sprint|roadmap", app_id: null }, priority: 1 },
   ];
 }
 
@@ -130,7 +129,7 @@ export function buildSeed(now: number): MockData {
         ...APPS[key],
         window_title: titles[Math.floor(roll() * titles.length)] ?? null,
         source: "tracked",
-        category_id: null,
+        activity_id: null,
         end_reason: "focus_change",
       });
       cursor = end + (i === Math.floor(blocks / 2) ? 45 * MINUTE : 0);
@@ -163,7 +162,7 @@ export function buildSeed(now: number): MockData {
       ...APPS[step.app],
       window_title: step.title,
       source: "tracked",
-      category_id: null,
+      activity_id: null,
       end_reason: last ? null : "focus_change",
     });
     previous = { ...APPS[step.app], window_title: step.title };
@@ -172,11 +171,11 @@ export function buildSeed(now: number): MockData {
 
   return {
     segments,
-    categories: seedCategories(),
+    activities: seedActivities(),
     rules: seedRules(),
     gaps,
     excluded: [],
     redacted: [],
-    nextIds: { segment: nextSegment, category: 6, rule: 6, gap: nextGap },
+    nextIds: { segment: nextSegment, activity: 6, rule: 6, gap: nextGap },
   };
 }

@@ -11,10 +11,10 @@ test.describe("Today", () => {
     await expect(byApp.getByRole("listitem").first()).toContainText("Xcode");
     await expect(byApp.getByRole("listitem").first()).toContainText("2h 45m");
 
-    const byCategory = page.getByRole("list", { name: "Time by category" });
-    await expect(byCategory).toContainText("Development");
-    await expect(byCategory).toContainText("Meetings");
-    await expect(byCategory).toContainText("Uncategorized");
+    const byActivity = page.getByRole("list", { name: "Time by activity" });
+    await expect(byActivity).toContainText("Development");
+    await expect(byActivity).toContainText("Meetings");
+    await expect(byActivity).toContainText("Unassigned");
   });
 
   test("expands an app to its window titles", async ({ page }) => {

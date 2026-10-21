@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, TryLockError};
 
 use application::ports::{PortError, PortResult, ReportRepository};
-use domain::{CategoryId, Segment, SegmentId, SegmentSource, UtcMs};
+use domain::{ActivityId, Segment, SegmentId, SegmentSource, UtcMs};
 use rusqlite::{Connection, OpenFlags, Row};
 
 use crate::db::{DbError, port_err};
@@ -51,7 +51,7 @@ fn segment_from_row(r: &Row<'_>) -> rusqlite::Result<Result<Segment, PortError>>
     let reason: Option<String> = r.get(7)?;
     let source: String = r.get(8)?;
     let ended_at: Option<i64> = r.get(2)?;
-    let category: Option<i64> = r.get(9)?;
+    let activity: Option<i64> = r.get(9)?;
     let parsed = (|| {
         Ok(Segment {
             id: SegmentId(r.get(0).map_err(port_err)?),
@@ -67,7 +67,7 @@ fn segment_from_row(r: &Row<'_>) -> rusqlite::Result<Result<Segment, PortError>>
                 "idle_assigned" => SegmentSource::IdleAssigned,
                 other => return Err(PortError(format!("invalid segment source: {other}"))),
             },
-            category_id: category.map(CategoryId),
+            activity_id: activity.map(ActivityId),
         })
     })();
     Ok(parsed)
@@ -79,7 +79,7 @@ impl ReportRepository for SqliteReportRepository {
             let mut stmt = conn
                 .prepare_cached(
                     "SELECT id, started_at, ended_at, heartbeat_at, app_id, app_name, window_title,
-                            end_reason, source, category_id
+                            end_reason, source, activity_id
                      FROM segments
                      WHERE started_at < ?2 AND (ended_at IS NULL OR ended_at > ?1)
                      ORDER BY started_at, id",
@@ -154,7 +154,7 @@ mod tests {
             app_id: None,
             app_name: None,
             window_title: None,
-            category_id: Some(CategoryId(1)),
+            activity_id: Some(ActivityId(1)),
         })
         .unwrap();
         w.open_segment(&focus("live"), UtcMs(100)).unwrap();
@@ -162,7 +162,7 @@ mod tests {
         assert_eq!(all.len(), 2);
         assert_eq!(all[0].source, SegmentSource::IdleAssigned);
         assert_eq!(all[0].app_id, None);
-        assert_eq!(all[0].category_id, Some(CategoryId(1)));
+        assert_eq!(all[0].activity_id, Some(ActivityId(1)));
         assert_eq!(all[0].end_reason, Some(EndReason::Idle));
         assert_eq!(all[1].ended_at, None);
         assert_eq!(all[1].window_title.as_deref(), Some("t"));

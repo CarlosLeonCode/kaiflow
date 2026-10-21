@@ -118,6 +118,8 @@ version = "0.1.0"
 dependencies = [
  "crossbeam-channel",
  "domain",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

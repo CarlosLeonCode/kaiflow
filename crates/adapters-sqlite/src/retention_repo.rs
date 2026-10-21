@@ -157,7 +157,7 @@ mod tests {
         assert_eq!(count(&path, "idle_gaps"), 0);
         assert_eq!(count(&path, "privacy_rules"), 1);
         assert_eq!(count(&path, "settings"), 1);
-        assert_eq!(count(&path, "categories"), 1, "system category stays");
+        assert_eq!(count(&path, "activities"), 1, "system activity stays");
         let free: i64 = conn
             .query_row("PRAGMA freelist_count", [], |r| r.get(0))
             .unwrap();

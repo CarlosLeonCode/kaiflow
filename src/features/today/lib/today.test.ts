@@ -7,7 +7,7 @@ import {
   awayMs,
   axisTicks,
   buildAppRows,
-  buildCategoryRows,
+  buildActivityRows,
   formatPercent,
   layoutTimeline,
   timelineWindow,
@@ -27,9 +27,9 @@ function item(start: number, end: number, overrides: Partial<TimelineItemDto> = 
     app_id: "com.apple.dt.Xcode",
     app_name: "Xcode",
     window_title: "AppDelegate.swift",
-    category_id: 2,
-    category_name: "Work",
-    category_color: "#2f7de1",
+    activity_id: 2,
+    activity_name: "Work",
+    activity_color: "#2f7de1",
     source: "tracked",
     end_reason: "focus_change",
     open: false,
@@ -91,13 +91,13 @@ describe("layoutTimeline", () => {
     expect(block?.widthPct).toBeCloseTo(50);
   });
 
-  it("labels manual assignments and the system category in English", () => {
+  it("labels manual assignments and the system activity in English", () => {
     const [block] = layoutTimeline(
-      [item(at(9), at(10), { app_id: null, app_name: null, category_id: 1, category_name: "Sin categoría" })],
+      [item(at(9), at(10), { app_id: null, app_name: null, activity_id: 1, activity_name: "Unassigned" })],
       { from: at(9), to: at(13) },
       at(13),
     );
-    expect(block?.label).toBe("Assigned manually, Uncategorized");
+    expect(block?.label).toBe("Assigned manually, Unassigned");
   });
 });
 
@@ -170,7 +170,7 @@ describe("awayMs", () => {
 describe("buildAppRows", () => {
   const byApp = [
     { app_id: "com.a", app_name: "A", total_ms: 10 * MINUTE },
-    { app_id: null, app_name: "Asignado manualmente", total_ms: 5 * MINUTE },
+    { app_id: null, app_name: "", total_ms: 5 * MINUTE },
   ];
 
   it("adds the live delta to the open app and keeps rows sorted", () => {
@@ -187,12 +187,12 @@ describe("buildAppRows", () => {
   });
 });
 
-describe("buildCategoryRows", () => {
-  it("computes the share of the total and renames the system category", () => {
-    const rows = buildCategoryRows(
+describe("buildActivityRows", () => {
+  it("computes the share of the total and renames the system activity", () => {
+    const rows = buildActivityRows(
       [
-        { category_id: 1, name: "Sin categoría", color: "#999", total_ms: 10 * MINUTE },
-        { category_id: 2, name: "Work", color: "#2f7de1", total_ms: 30 * MINUTE },
+        { activity_id: 1, name: "Unassigned", color: "#999", total_ms: 10 * MINUTE },
+        { activity_id: 2, name: "Work", color: "#2f7de1", total_ms: 30 * MINUTE },
       ],
       undefined,
       0,
@@ -200,7 +200,7 @@ describe("buildCategoryRows", () => {
     );
     expect(rows.map((r) => [r.name, r.fraction])).toEqual([
       ["Work", 0.75],
-      ["Uncategorized", 0.25],
+      ["Unassigned", 0.25],
     ]);
   });
 });

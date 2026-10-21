@@ -1,5 +1,5 @@
 use crate::focus::FocusSnapshot;
-use crate::segment::{CategoryId, IdleResolution};
+use crate::segment::{ActivityId, IdleResolution};
 use crate::time::UtcMs;
 
 /// Default time the user has to answer the idle prompt (`idle_prompt_timeout_secs=600`).
@@ -32,11 +32,11 @@ pub struct IdleGap {
 pub struct AssignedSpan {
     pub started_at: UtcMs,
     pub ended_at: UtcMs,
-    /// All three are `None` for `AssignCategory` (amendment A1).
+    /// All three are `None` for `AssignActivity` (amendment A1).
     pub app_id: Option<String>,
     pub app_name: Option<String>,
     pub window_title: Option<String>,
-    pub category_id: Option<CategoryId>,
+    pub activity_id: Option<ActivityId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -85,18 +85,18 @@ impl IdleGap {
             return Err(GapError::NotPending);
         }
         self.status = GapStatus::Resolved(resolution);
-        let span = |focus: Option<&FocusSnapshot>, category_id| AssignedSpan {
+        let span = |focus: Option<&FocusSnapshot>, activity_id| AssignedSpan {
             started_at: self.started_at,
             ended_at: self.ended_at,
             app_id: focus.map(|f| f.app_id.clone()),
             app_name: focus.map(|f| f.app_name.clone()),
             window_title: focus.and_then(|f| f.window_title.clone()),
-            category_id,
+            activity_id,
         };
         Ok(match resolution {
             IdleResolution::Discard => None,
             IdleResolution::AssignPrevious => self.prev_focus.as_ref().map(|f| span(Some(f), None)),
-            IdleResolution::AssignCategory(id) => Some(span(None, Some(id))),
+            IdleResolution::AssignActivity(id) => Some(span(None, Some(id))),
         })
     }
 }
@@ -169,7 +169,7 @@ mod tests {
             (span.started_at, span.ended_at),
             (UtcMs(1_000), UtcMs(21_000))
         );
-        assert_eq!(span.category_id, None);
+        assert_eq!(span.activity_id, None);
 
         let mut no_prev = gap();
         no_prev.prev_focus = None;
@@ -177,16 +177,16 @@ mod tests {
     }
 
     #[test]
-    fn assign_category_has_null_app() {
+    fn assign_activity_has_null_app() {
         let span = gap()
-            .resolve(IdleResolution::AssignCategory(CategoryId(7)))
+            .resolve(IdleResolution::AssignActivity(ActivityId(7)))
             .unwrap()
             .unwrap();
         assert_eq!(
             (span.app_id, span.app_name, span.window_title),
             (None, None, None)
         );
-        assert_eq!(span.category_id, Some(CategoryId(7)));
+        assert_eq!(span.activity_id, Some(ActivityId(7)));
     }
 
     #[test]

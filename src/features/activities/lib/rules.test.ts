@@ -5,10 +5,10 @@ import type { RuleDto } from "@/shared/ipc";
 import { canMove, moveRule, nameProblem, nameProblemMessage, nextPriority, tierOf } from "./rules";
 
 let nextId = 1;
-function rule(kind: "app" | "title_pattern", priority: number, id = nextId++, category = 2): RuleDto {
+function rule(kind: "app" | "title_pattern", priority: number, id = nextId++, activity = 2): RuleDto {
   return {
     id,
-    category_id: category,
+    activity_id: activity,
     priority,
     spec: kind === "app" ? { kind, app_id: `app.${id}` } : { kind, pattern: `p${id}`, app_id: null },
   };
@@ -56,7 +56,7 @@ describe("moveRule", () => {
     expect(new Set(applied.map((r) => r.priority)).size).toBe(3);
   });
 
-  it("does not move past the ends nor across groups, and keeps the category and spec", () => {
+  it("does not move past the ends nor across groups, and keeps the activity and spec", () => {
     expect(moveRule(rules, 1, "up")).toEqual([]);
     expect(moveRule(rules, 3, "down")).toEqual([]);
     expect(moveRule(rules, 4, "up")).toEqual([]);
@@ -64,17 +64,17 @@ describe("moveRule", () => {
     expect(canMove(rules, 1, "up")).toBe(false);
     expect(canMove(rules, 1, "down")).toBe(true);
     const [first] = moveRule(rules, 2, "up");
-    expect(first).toMatchObject({ category_id: 2, spec: expect.objectContaining({ kind: "app" }) });
+    expect(first).toMatchObject({ activity_id: 2, spec: expect.objectContaining({ kind: "app" }) });
   });
 });
 
 describe("nameProblem", () => {
   const existing = [
-    { id: 1, name: "Sin categoría" },
+    { id: 1, name: "Unassigned" },
     { id: 2, name: "Work" },
   ];
 
-  it("accepts a fresh name and the unchanged name of the category being edited", () => {
+  it("accepts a fresh name and the unchanged name of the activity being edited", () => {
     expect(nameProblem("Reading", existing, null)).toBeNull();
     expect(nameProblem("Work", existing, 2)).toBeNull();
   });
@@ -83,7 +83,7 @@ describe("nameProblem", () => {
     expect(nameProblem("   ", existing, null)).toBe("empty");
     expect(nameProblem("x".repeat(41), existing, null)).toBe("too_long");
     expect(nameProblem(" work ", existing, null)).toBe("duplicate");
-    expect(nameProblem("uncategorized", existing, null)).toBe("duplicate");
+    expect(nameProblem("unassigned", existing, null)).toBe("duplicate");
     expect(nameProblem("Work", existing, 5)).toBe("duplicate");
   });
 

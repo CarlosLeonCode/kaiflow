@@ -29,7 +29,7 @@ export function status(overrides: Partial<TrackingStatusDto> = {}): TrackingStat
 }
 
 export function report(overrides: Partial<ReportDto> = {}): ReportDto {
-  return { by_app: [], by_category: [], by_bucket: [], total_ms: 0, ...overrides };
+  return { by_app: [], by_activity: [], by_bucket: [], total_ms: 0, ...overrides };
 }
 
 export function settings(overrides: Partial<SettingsDto> = {}): SettingsDto {
@@ -43,6 +43,7 @@ export function settings(overrides: Partial<SettingsDto> = {}): SettingsDto {
     shortcut: "⌃⌥⌘T",
     onboarding_completed: true,
     tray_display: "today_total",
+    ui: { dismissed_intros: [] },
     ...overrides,
   };
 }

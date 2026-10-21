@@ -10,13 +10,13 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use adapters_common::idle::IdleThreshold;
 use adapters_sqlite::{
-    DbError, SqliteCategoryRepository, SqlitePrivacyRepository, SqliteReportRepository,
+    DbError, SqliteActivityRepository, SqlitePrivacyRepository, SqliteReportRepository,
     SqliteRetentionRepository, SqliteSessionRepository, SqliteSettingsRepository,
 };
 use application::commands::Commands;
 use application::engine::{Command, Engine, EngineHandle, Ports};
 use application::ports::{
-    ActiveWindowProvider, CategoryRepository, Clock, EventSink, Notifier, PermissionProvider,
+    ActiveWindowProvider, ActivityRepository, Clock, EventSink, Notifier, PermissionProvider,
     PortResult, PowerEventsProvider, PrivacyMode, PrivacyRepository,
 };
 use application::queries::Queries;
@@ -116,8 +116,8 @@ pub struct AppState {
     pub engine: EngineHandle,
     pub queries: Queries,
     pub commands: Arc<Commands>,
-    /// Read-only listing of categories and rules (writes go through `commands`).
-    pub categories: Arc<dyn CategoryRepository>,
+    /// Read-only listing of activities and rules (writes go through `commands`).
+    pub activities: Arc<dyn ActivityRepository>,
     pub permission: Arc<dyn PermissionProvider>,
     pub shortcut: SharedShortcut,
     pub clock: SystemClock,
@@ -143,7 +143,7 @@ pub fn compose(
     let sessions = SqliteSessionRepository::new(adapters_sqlite::open(db_path)?);
     // Opened after the first connection so the schema exists when the read pool starts.
     let reports = SqliteReportRepository::open(db_path)?;
-    let categories: Arc<dyn CategoryRepository> = Arc::new(SqliteCategoryRepository::new(
+    let activities: Arc<dyn ActivityRepository> = Arc::new(SqliteActivityRepository::new(
         adapters_sqlite::open(db_path)?,
     ));
     let settings = Arc::new(SqliteSettingsRepository::new(adapters_sqlite::open(
@@ -156,9 +156,9 @@ pub fn compose(
         adapters_sqlite::open(db_path)?,
     ));
 
-    let queries = Queries::new(Arc::new(reports), categories.clone());
+    let queries = Queries::new(Arc::new(reports), activities.clone());
     let commands = Arc::new(Commands::new(
-        categories.clone(),
+        activities.clone(),
         privacy.clone(),
         settings,
         retention,
@@ -182,7 +182,7 @@ pub fn compose(
         engine: handle,
         queries,
         commands,
-        categories,
+        activities,
         permission: providers.permission,
         shortcut,
         clock: SystemClock,

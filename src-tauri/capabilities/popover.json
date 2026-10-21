@@ -15,7 +15,7 @@
     "allow-get-report",
     "allow-list-pending-idle-gaps",
     "allow-resolve-idle-gap",
-    "allow-categories-list",
+    "allow-activities-list",
     "allow-permission-status",
     "allow-settings-get",
     "allow-permission-open-settings",

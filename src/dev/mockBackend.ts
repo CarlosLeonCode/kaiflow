@@ -1,7 +1,7 @@
 /**
  * In-memory stand-in for the Rust backend, installed with Tauri's `mockIPC` in dev and E2E
  * runs (`VITE_MOCK_IPC=1`). It mirrors the contract in `bindings.ts` closely enough to drive
- * the real UI: categorization precedence, range clipping, idle gap resolution, validated
+ * the real UI: classification precedence, range clipping, idle gap resolution, validated
  * rules and two-step destructive deletes with single-use tokens.
  */
 
@@ -10,11 +10,12 @@ import { mockIPC } from "@tauri-apps/api/mocks";
 import type {
   AppError,
   AppTotalDto,
-  CategoryDto,
-  CategoryTotalDto,
+  ActivityDto,
+  ActivityTotalDto,
   FocusDto,
   IdleResolutionDto,
   PermissionStateDto,
+  ProductivityDto,
   RangeDto,
   ReportDto,
   RuleDto,
@@ -29,8 +30,7 @@ import type {
 
 import { buildSeed, type MockData, type MockSegment } from "./seed";
 
-const SYSTEM_CATEGORY = 1;
-const MANUAL_APP_NAME = "Asignado manualmente";
+const SYSTEM_ACTIVITY = 1;
 
 export interface MockOptions {
   /** Start with Accessibility revoked (onboarding and the degraded banner). */
@@ -47,19 +47,19 @@ function fail(error: AppError): never {
   throw error;
 }
 
-export function categorize(segment: MockSegment, rules: readonly RuleDto[]): number {
-  if (segment.category_id !== null) return segment.category_id;
+export function classify(segment: MockSegment, rules: readonly RuleDto[]): number {
+  if (segment.activity_id !== null) return segment.activity_id;
   const ordered = [...rules].sort((a, b) => b.priority - a.priority || a.id - b.id);
   const title = segment.window_title ?? "";
   for (const rule of ordered) {
     if (rule.spec.kind !== "title_pattern") continue;
     if (rule.spec.app_id !== null && rule.spec.app_id !== segment.app_id) continue;
-    if (compilePattern(rule.spec.pattern).test(title)) return rule.category_id;
+    if (compilePattern(rule.spec.pattern).test(title)) return rule.activity_id;
   }
   for (const rule of ordered) {
-    if (rule.spec.kind === "app" && rule.spec.app_id === segment.app_id) return rule.category_id;
+    if (rule.spec.kind === "app" && rule.spec.app_id === segment.app_id) return rule.activity_id;
   }
-  return SYSTEM_CATEGORY;
+  return SYSTEM_ACTIVITY;
 }
 
 /** The Rust regex crate accepts `(?i)`; JavaScript spells it as a flag. */
@@ -83,6 +83,7 @@ export function installMockBackend(options: MockOptions = {}): void {
     shortcut: "⌃⌥⌘T",
     onboarding_completed: true,
     tray_display: "today_total",
+    ui: { dismissed_intros: [] },
   };
   let tokenCounter = 0;
   const liveTokens = new Set<string>();
@@ -105,7 +106,7 @@ export function installMockBackend(options: MockOptions = {}): void {
       app_name: focus.app_name,
       window_title: focus.window_title,
       source: "tracked",
-      category_id: null,
+      activity_id: null,
       end_reason: null,
     });
   };
@@ -144,7 +145,7 @@ export function installMockBackend(options: MockOptions = {}): void {
 
   const report = (range: RangeDto, buckets: RangeDto[]): ReportDto => {
     const byApp = new Map<string, AppTotalDto>();
-    const byCategory = new Map<number, CategoryTotalDto>();
+    const byActivity = new Map<number, ActivityTotalDto>();
     let total = 0;
     for (const { segment, start, end } of clip(range)) {
       const ms = end - start;
@@ -152,26 +153,27 @@ export function installMockBackend(options: MockOptions = {}): void {
       const appKey = segment.app_id ?? "";
       const app = byApp.get(appKey) ?? {
         app_id: segment.app_id,
-        app_name: segment.app_name ?? MANUAL_APP_NAME,
+        // Like the backend: manual (app-less) time has an empty app name; the UI labels it.
+        app_name: segment.app_name ?? "",
         total_ms: 0,
       };
       app.total_ms += ms;
       byApp.set(appKey, app);
-      const categoryId = categorize(segment, data.rules);
-      const category = data.categories.find((c) => c.id === categoryId) ?? data.categories[0];
-      if (!category) continue;
-      const row = byCategory.get(category.id) ?? {
-        category_id: category.id,
-        name: category.name,
-        color: category.color,
+      const activityId = classify(segment, data.rules);
+      const activity = data.activities.find((c) => c.id === activityId) ?? data.activities[0];
+      if (!activity) continue;
+      const row = byActivity.get(activity.id) ?? {
+        activity_id: activity.id,
+        name: activity.name,
+        color: activity.color,
         total_ms: 0,
       };
       row.total_ms += ms;
-      byCategory.set(category.id, row);
+      byActivity.set(activity.id, row);
     }
     return {
       by_app: [...byApp.values()].sort((a, b) => b.total_ms - a.total_ms),
-      by_category: [...byCategory.values()].sort((a, b) => b.total_ms - a.total_ms),
+      by_activity: [...byActivity.values()].sort((a, b) => b.total_ms - a.total_ms),
       by_bucket: buckets.map((bucket) => ({
         range: bucket,
         total_ms: clip(bucket).reduce((sum, part) => sum + (Math.min(part.end, bucket.to) - Math.max(part.start, bucket.from)), 0),
@@ -184,7 +186,7 @@ export function installMockBackend(options: MockOptions = {}): void {
     clip(range)
       .sort((a, b) => a.start - b.start)
       .map(({ segment, start, end }) => {
-        const category = data.categories.find((c) => c.id === categorize(segment, data.rules)) ?? data.categories[0];
+        const activity = data.activities.find((c) => c.id === classify(segment, data.rules)) ?? data.activities[0];
         return {
           segment_id: segment.id,
           start,
@@ -192,9 +194,9 @@ export function installMockBackend(options: MockOptions = {}): void {
           app_id: segment.app_id,
           app_name: segment.app_name,
           window_title: redact(segment),
-          category_id: category?.id ?? SYSTEM_CATEGORY,
-          category_name: category?.name ?? "",
-          category_color: category?.color ?? "#9ca3af",
+          activity_id: activity?.id ?? SYSTEM_ACTIVITY,
+          activity_name: activity?.name ?? "",
+          activity_color: activity?.color ?? "#9ca3af",
           source: segment.source,
           end_reason: segment.end_reason,
           open: segment.ended_at === null,
@@ -214,10 +216,10 @@ export function installMockBackend(options: MockOptions = {}): void {
         app_name: gap.prev_focus.app_name,
         window_title: gap.prev_focus.window_title,
         source: "idle_assigned",
-        category_id: null,
+        activity_id: null,
         end_reason: "idle",
       });
-    } else if (resolution.kind === "assign_category") {
+    } else if (resolution.kind === "assign_activity") {
       data.segments.push({
         id: data.nextIds.segment++,
         started_at: gap.started_at,
@@ -226,7 +228,7 @@ export function installMockBackend(options: MockOptions = {}): void {
         app_name: null,
         window_title: null,
         source: "idle_assigned",
-        category_id: resolution.category_id,
+        activity_id: resolution.activity_id,
         end_reason: "idle",
       });
     }
@@ -285,39 +287,41 @@ export function installMockBackend(options: MockOptions = {}): void {
       resolveGap(args.id as number, args.resolution as IdleResolutionDto);
       return null;
     },
-    categories_list: () => data.categories,
-    categories_create: (args) => {
+    activities_list: () => data.activities,
+    activities_create: (args) => {
       const name = String(args.name).trim();
-      if (!name) fail({ kind: "invalid", message: "the category name cannot be empty" });
-      if (data.categories.some((c) => c.name.toLowerCase() === name.toLowerCase())) {
-        fail({ kind: "invalid", message: `a category named "${name}" already exists` });
+      if (!name) fail({ kind: "invalid", message: "the activity name cannot be empty" });
+      if (data.activities.some((c) => c.name.toLowerCase() === name.toLowerCase())) {
+        fail({ kind: "invalid", message: `an activity named "${name}" already exists` });
       }
-      const category: CategoryDto = {
-        id: data.nextIds.category++,
+      const activity: ActivityDto = {
+        id: data.nextIds.activity++,
         name,
         color: String(args.color),
-        sort_order: data.categories.length,
+        sort_order: data.activities.length,
+        productivity: args.productivity as ProductivityDto,
+        preset_key: null,
       };
-      data.categories.push(category);
-      return category;
+      data.activities.push(activity);
+      return activity;
     },
-    categories_update: (args) => {
-      const next = args.category as CategoryDto;
-      const index = data.categories.findIndex((c) => c.id === next.id);
+    activities_update: (args) => {
+      const next = args.activity as ActivityDto;
+      const index = data.activities.findIndex((c) => c.id === next.id);
       if (index < 0) fail({ kind: "not_found" });
-      if (data.categories.some((c) => c.id !== next.id && c.name.toLowerCase() === next.name.trim().toLowerCase())) {
-        fail({ kind: "invalid", message: `a category named "${next.name}" already exists` });
+      if (data.activities.some((c) => c.id !== next.id && c.name.toLowerCase() === next.name.trim().toLowerCase())) {
+        fail({ kind: "invalid", message: `an activity named "${next.name}" already exists` });
       }
-      data.categories[index] = { ...next, name: next.name.trim() };
+      data.activities[index] = { ...next, name: next.name.trim() };
       return null;
     },
-    categories_delete: (args) => {
+    activities_delete: (args) => {
       const id = args.id as number;
-      if (id === SYSTEM_CATEGORY) fail({ kind: "invalid", message: "the system category cannot be deleted" });
-      data.categories = data.categories.filter((c) => c.id !== id);
-      data.rules = data.rules.filter((r) => r.category_id !== id);
+      if (id === SYSTEM_ACTIVITY) fail({ kind: "invalid", message: "the system activity cannot be deleted" });
+      data.activities = data.activities.filter((c) => c.id !== id);
+      data.rules = data.rules.filter((r) => r.activity_id !== id);
       for (const segment of data.segments) {
-        if (segment.category_id === id) segment.category_id = SYSTEM_CATEGORY;
+        if (segment.activity_id === id) segment.activity_id = SYSTEM_ACTIVITY;
       }
       return null;
     },

@@ -1,12 +1,12 @@
 import type { RuleDto, RuleInputDto, RuleSpecDto } from "@/shared/ipc";
-import { UNCATEGORIZED_LABEL } from "@/shared/lib/labels";
+import { UNASSIGNED_LABEL } from "@/shared/lib/labels";
 
-/** Pure helpers for the category rules UI (no IPC). */
+/** Pure helpers for the activity rules UI (no IPC). */
 
 export type RuleKind = RuleSpecDto["kind"];
 
 /**
- * Matching order (domain `categorize`): title patterns beat app rules; inside a group the
+ * Matching order (domain `classify`): title patterns beat app rules; inside a group the
  * highest `priority` wins, then the lowest `id`. This is the order the list is shown in.
  */
 export function tierOf(rules: readonly RuleDto[], kind: RuleKind): RuleDto[] {
@@ -41,7 +41,7 @@ export function moveRule(rules: readonly RuleDto[], id: number, direction: Direc
   reordered.forEach((rule, index) => {
     const priority = reordered.length - index;
     if (rule.priority !== priority) {
-      changed.push({ id: rule.id, category_id: rule.category_id, spec: rule.spec, priority });
+      changed.push({ id: rule.id, activity_id: rule.activity_id, spec: rule.spec, priority });
     }
   });
   return changed;
@@ -66,18 +66,18 @@ export function nameProblem(
   if (value.length > MAX_NAME_LENGTH) return "too_long";
   const lower = value.toLowerCase();
   const clash =
-    lower === UNCATEGORIZED_LABEL.toLowerCase() ||
-    existing.some((category) => category.id !== editingId && category.name.trim().toLowerCase() === lower);
+    lower === UNASSIGNED_LABEL.toLowerCase() ||
+    existing.some((activity) => activity.id !== editingId && activity.name.trim().toLowerCase() === lower);
   return clash ? "duplicate" : null;
 }
 
 export function nameProblemMessage(problem: NameProblem): string {
   switch (problem) {
     case "empty":
-      return "Give the category a name.";
+      return "Give the activity a name.";
     case "too_long":
       return `Use at most ${MAX_NAME_LENGTH} characters.`;
     case "duplicate":
-      return "A category with this name already exists.";
+      return "An activity with this name already exists.";
   }
 }

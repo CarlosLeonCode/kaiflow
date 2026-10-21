@@ -4,7 +4,7 @@ use crate::time::UtcMs;
 pub struct SegmentId(pub i64);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct CategoryId(pub i64);
+pub struct ActivityId(pub i64);
 
 /// Why a segment ended (R1.5).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -30,7 +30,7 @@ pub enum SegmentSource {
 pub enum IdleResolution {
     Discard,
     AssignPrevious,
-    AssignCategory(CategoryId),
+    AssignActivity(ActivityId),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -45,7 +45,7 @@ pub struct Segment {
     pub end_reason: Option<EndReason>,
     pub source: SegmentSource,
     /// Manual assignment only; rules are resolved at query time (R9.2).
-    pub category_id: Option<CategoryId>,
+    pub activity_id: Option<ActivityId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -53,7 +53,7 @@ pub enum SegmentError {
     EndsBeforeStart,
     TrackedWithoutApp,
     AssignedWithoutEndReasonIdle,
-    AssignedWithoutAppOrCategory,
+    AssignedWithoutAppOrActivity,
 }
 
 impl Segment {
@@ -70,8 +70,8 @@ impl Segment {
             SegmentSource::IdleAssigned if self.end_reason != Some(EndReason::Idle) => {
                 Err(SegmentError::AssignedWithoutEndReasonIdle)
             }
-            SegmentSource::IdleAssigned if !has_app && self.category_id.is_none() => {
-                Err(SegmentError::AssignedWithoutAppOrCategory)
+            SegmentSource::IdleAssigned if !has_app && self.activity_id.is_none() => {
+                Err(SegmentError::AssignedWithoutAppOrActivity)
             }
             _ => Ok(()),
         }
@@ -93,7 +93,7 @@ mod tests {
             window_title: None,
             end_reason: Some(EndReason::FocusChange),
             source,
-            category_id: None,
+            activity_id: None,
         }
     }
 
@@ -129,16 +129,16 @@ mod tests {
     }
 
     #[test]
-    fn assign_category_allows_null_app_only_with_category() {
+    fn assign_activity_allows_null_app_only_with_activity() {
         let mut s = base(SegmentSource::IdleAssigned);
         s.end_reason = Some(EndReason::Idle);
         s.app_id = None;
         s.app_name = None;
         assert_eq!(
             s.validate(),
-            Err(SegmentError::AssignedWithoutAppOrCategory)
+            Err(SegmentError::AssignedWithoutAppOrActivity)
         );
-        s.category_id = Some(CategoryId(7));
+        s.activity_id = Some(ActivityId(7));
         assert_eq!(s.validate(), Ok(()));
     }
 }

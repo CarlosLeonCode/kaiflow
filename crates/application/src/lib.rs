@@ -8,3 +8,4 @@ pub mod engine;
 pub mod fakes;
 pub mod ports;
 pub mod queries;
+pub mod settings_blobs;

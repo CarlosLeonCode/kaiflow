@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-activities-delete"
+description = "Enables the activities_delete command without any pre-configured scope."
+commands.allow = ["activities_delete"]
+
+[[permission]]
+identifier = "deny-activities-delete"
+description = "Denies the activities_delete command without any pre-configured scope."
+commands.deny = ["activities_delete"]

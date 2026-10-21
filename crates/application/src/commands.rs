@@ -1,4 +1,4 @@
-//! Write use cases behind the UI (design section 8): categories, rules, privacy,
+//! Write use cases behind the UI (design section 8): activities, rules, privacy,
 //! settings and data deletion. Destructive deletions need a `confirm_token` obtained
 //! from `prepare_delete` (R10.4): single use, bound to the exact operation, short-lived.
 
@@ -7,15 +7,16 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use domain::{
-    Category, CategoryId, CategoryRule, InvalidPattern, PrivacyPolicy, RuleKind, UNCATEGORIZED,
-    UtcMs,
+    Activity, ActivityId, ActivityRule, InvalidPattern, PrivacyPolicy, Productivity, RuleKind,
+    UNASSIGNED, UtcMs,
 };
 
 use crate::ports::{
-    CategoryRepository, PortError, PrivacyMode, PrivacyRepository, RetentionRepository,
+    ActivityRepository, PortError, PrivacyMode, PrivacyRepository, RetentionRepository,
     SettingsRepository,
 };
 use crate::queries::Range;
+use crate::settings_blobs::{KEY_UI, UiSettings, read_blob, write_blob};
 
 /// How long a confirmation token stays valid.
 pub const CONFIRM_TOKEN_TTL_MS: i64 = 60_000;
@@ -64,7 +65,7 @@ impl From<InvalidPattern> for CommandError {
 pub struct RuleInput {
     /// `<= 0` creates a rule.
     pub id: i64,
-    pub category_id: CategoryId,
+    pub activity_id: ActivityId,
     pub kind: RuleSpec,
     pub priority: i32,
 }
@@ -147,6 +148,8 @@ pub struct Settings {
     pub shortcut: String,
     pub onboarding_completed: bool,
     pub tray_display: TrayDisplay,
+    /// Interface state kept across restarts (`ui` blob).
+    pub ui: UiSettings,
 }
 
 impl Default for Settings {
@@ -161,6 +164,7 @@ impl Default for Settings {
             shortcut: "⌃⌥⌘T".into(),
             onboarding_completed: false,
             tray_display: TrayDisplay::default(),
+            ui: UiSettings::default(),
         }
     }
 }
@@ -178,10 +182,12 @@ pub struct SettingsPatch {
     pub shortcut: Option<String>,
     pub onboarding_completed: Option<bool>,
     pub tray_display: Option<TrayDisplay>,
+    /// Replaces the whole `ui` blob.
+    pub ui: Option<UiSettings>,
 }
 
 pub struct Commands {
-    categories: Arc<dyn CategoryRepository>,
+    activities: Arc<dyn ActivityRepository>,
     privacy: Arc<dyn PrivacyRepository>,
     settings: Arc<dyn SettingsRepository>,
     retention: Arc<dyn RetentionRepository>,
@@ -191,13 +197,13 @@ pub struct Commands {
 
 impl Commands {
     pub fn new(
-        categories: Arc<dyn CategoryRepository>,
+        activities: Arc<dyn ActivityRepository>,
         privacy: Arc<dyn PrivacyRepository>,
         settings: Arc<dyn SettingsRepository>,
         retention: Arc<dyn RetentionRepository>,
     ) -> Self {
         Self {
-            categories,
+            activities,
             privacy,
             settings,
             retention,
@@ -206,34 +212,39 @@ impl Commands {
         }
     }
 
-    // ---- categories and rules (R9.1, R9.4) ----
+    // ---- activities and rules (R9.1, R9.4) ----
 
-    pub fn create_category(&self, name: &str, color: &str) -> Result<Category, CommandError> {
-        let (name, color) = validate_category_fields(name, color)?;
-        Ok(self.categories.create(name, color)?)
+    pub fn create_activity(
+        &self,
+        name: &str,
+        color: &str,
+        productivity: Productivity,
+    ) -> Result<Activity, CommandError> {
+        let (name, color) = validate_activity_fields(name, color)?;
+        Ok(self.activities.create(name, color, productivity)?)
     }
 
-    pub fn update_category(&self, category: &Category) -> Result<(), CommandError> {
-        let (name, color) = validate_category_fields(&category.name, &category.color)?;
-        if !self.categories.list()?.iter().any(|c| c.id == category.id) {
+    pub fn update_activity(&self, activity: &Activity) -> Result<(), CommandError> {
+        let (name, color) = validate_activity_fields(&activity.name, &activity.color)?;
+        if !self.activities.list()?.iter().any(|c| c.id == activity.id) {
             return Err(CommandError::NotFound);
         }
-        let clean = Category {
+        let clean = Activity {
             name: name.to_owned(),
             color: color.to_owned(),
-            ..category.clone()
+            ..activity.clone()
         };
-        Ok(self.categories.update(&clean)?)
+        Ok(self.activities.update(&clean)?)
     }
 
-    /// Time assigned to the category falls back to "Sin categoria" (adapter's job).
-    pub fn delete_category(&self, id: CategoryId) -> Result<(), CommandError> {
-        if id == UNCATEGORIZED {
+    /// Time assigned to the activity falls back to "Unassigned" (adapter's job).
+    pub fn delete_activity(&self, id: ActivityId) -> Result<(), CommandError> {
+        if id == UNASSIGNED {
             return Err(CommandError::Invalid(
-                "the system category cannot be deleted".into(),
+                "the system activity cannot be deleted".into(),
             ));
         }
-        Ok(self.categories.delete(id)?)
+        Ok(self.activities.delete(id)?)
     }
 
     /// Validates (regex included) before anything is persisted; returns the rule id.
@@ -243,26 +254,26 @@ impl Commands {
                 if bundle.trim().is_empty() {
                     return Err(CommandError::Invalid("app id must not be empty".into()));
                 }
-                CategoryRule {
+                ActivityRule {
                     id: input.id,
-                    category_id: input.category_id,
+                    activity_id: input.activity_id,
                     kind: RuleKind::App(bundle.trim().to_owned()),
                     priority: input.priority,
                 }
             }
-            RuleSpec::TitlePattern { pattern, app_id } => CategoryRule::title_pattern(
+            RuleSpec::TitlePattern { pattern, app_id } => ActivityRule::title_pattern(
                 input.id,
-                input.category_id,
+                input.activity_id,
                 pattern,
                 app_id.clone(),
                 input.priority,
             )?,
         };
-        Ok(self.categories.save_rule(&rule)?)
+        Ok(self.activities.save_rule(&rule)?)
     }
 
     pub fn delete_rule(&self, id: i64) -> Result<(), CommandError> {
-        Ok(self.categories.delete_rule(id)?)
+        Ok(self.activities.delete_rule(id)?)
     }
 
     // ---- privacy (R10.2, R10.3, R10.5) ----
@@ -301,6 +312,7 @@ impl Commands {
             shortcut: self.read(KEY_SHORTCUT, parse_string, d.shortcut)?,
             onboarding_completed: self.read(KEY_ONBOARDING, parse_bool, d.onboarding_completed)?,
             tray_display: self.read(KEY_TRAY_DISPLAY, parse_tray_display, d.tray_display)?,
+            ui: read_blob(self.settings.as_ref(), KEY_UI)?,
         })
     }
 
@@ -337,6 +349,9 @@ impl Commands {
         }
         if let Some(v) = patch.tray_display {
             set(KEY_TRAY_DISPLAY, json_string(v.as_str()))?;
+        }
+        if let Some(v) = &patch.ui {
+            write_blob(self.settings.as_ref(), KEY_UI, &v.clone().normalized())?;
         }
         self.get_settings()
     }
@@ -443,7 +458,7 @@ fn cutoff(now: UtcMs, days: u32) -> UtcMs {
     now.plus_ms(-(i64::from(days) * DAY_MS))
 }
 
-fn validate_category_fields<'a>(
+fn validate_activity_fields<'a>(
     name: &'a str,
     color: &'a str,
 ) -> Result<(&'a str, &'a str), CommandError> {
@@ -480,6 +495,9 @@ fn validate_patch(p: &SettingsPatch) -> Result<(), CommandError> {
     }
     if p.shortcut.as_deref().is_some_and(|s| s.trim().is_empty()) {
         return bad("shortcut must not be empty");
+    }
+    if let Some(Err(message)) = p.ui.as_ref().map(UiSettings::validate) {
+        return bad(&message);
     }
     Ok(())
 }
@@ -563,7 +581,7 @@ fn json_string(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fakes::{FakeCategories, FakePrivacy, FakeSettings, FakeStore};
+    use crate::fakes::{FakeActivities, FakePrivacy, FakeSettings, FakeStore};
     use domain::{EndReason, Segment, SegmentId, SegmentSource};
 
     const DAY: i64 = DAY_MS;
@@ -571,14 +589,14 @@ mod tests {
     struct Fixture {
         cmd: Commands,
         store: FakeStore,
-        cats: FakeCategories,
+        cats: FakeActivities,
         privacy: FakePrivacy,
         settings: FakeSettings,
     }
 
     fn fixture() -> Fixture {
         let store = FakeStore::default();
-        let cats = FakeCategories::default();
+        let cats = FakeActivities::default();
         let privacy = FakePrivacy::default();
         let settings = FakeSettings::default();
         let cmd = Commands::new(
@@ -607,7 +625,7 @@ mod tests {
             window_title: None,
             end_reason: Some(EndReason::Stop),
             source: SegmentSource::Tracked,
-            category_id: None,
+            activity_id: None,
         }
     }
 
@@ -619,37 +637,42 @@ mod tests {
     }
 
     #[test]
-    fn category_crud_validates_input_and_protects_the_system_category() {
+    fn activity_crud_validates_input_and_protects_the_system_activity() {
         let f = fixture();
-        f.cmd.create_category("Sin categoría", "#999").unwrap();
-        let work = f.cmd.create_category("  Work ", "#0f0").unwrap();
+        f.cmd
+            .create_activity("Unassigned", "#999", Productivity::Neutral)
+            .unwrap();
+        let work = f
+            .cmd
+            .create_activity("  Work ", "#0f0", Productivity::Neutral)
+            .unwrap();
         assert_eq!(work.name, "Work");
         assert!(matches!(
-            f.cmd.create_category("  ", "#0f0"),
+            f.cmd.create_activity("  ", "#0f0", Productivity::Neutral),
             Err(CommandError::Invalid(_))
         ));
         assert!(matches!(
-            f.cmd.create_category("x", ""),
+            f.cmd.create_activity("x", "", Productivity::Neutral),
             Err(CommandError::Invalid(_))
         ));
 
-        let renamed = Category {
+        let renamed = Activity {
             name: "Deep work".into(),
             ..work.clone()
         };
-        f.cmd.update_category(&renamed).unwrap();
+        f.cmd.update_activity(&renamed).unwrap();
         assert_eq!(f.cats.list().unwrap()[1].name, "Deep work");
-        let ghost = Category {
-            id: CategoryId(99),
+        let ghost = Activity {
+            id: ActivityId(99),
             ..work.clone()
         };
-        assert_eq!(f.cmd.update_category(&ghost), Err(CommandError::NotFound));
+        assert_eq!(f.cmd.update_activity(&ghost), Err(CommandError::NotFound));
 
         assert!(matches!(
-            f.cmd.delete_category(UNCATEGORIZED),
+            f.cmd.delete_activity(UNASSIGNED),
             Err(CommandError::Invalid(_))
         ));
-        f.cmd.delete_category(work.id).unwrap();
+        f.cmd.delete_activity(work.id).unwrap();
         assert_eq!(f.cats.list().unwrap().len(), 1);
     }
 
@@ -658,7 +681,7 @@ mod tests {
         let f = fixture();
         let input = RuleInput {
             id: 0,
-            category_id: CategoryId(2),
+            activity_id: ActivityId(2),
             kind: RuleSpec::TitlePattern {
                 pattern: "(unclosed".into(),
                 app_id: None,
@@ -677,7 +700,7 @@ mod tests {
         let f = fixture();
         let app = RuleInput {
             id: 0,
-            category_id: CategoryId(2),
+            activity_id: ActivityId(2),
             kind: RuleSpec::App(" com.slack ".into()),
             priority: 1,
         };
@@ -726,6 +749,43 @@ mod tests {
             Err(CommandError::Invalid(_))
         ));
         let _ = &f.privacy;
+    }
+
+    #[test]
+    fn dismissed_intros_persist_as_a_ui_blob_and_are_validated() {
+        let f = fixture();
+        assert!(f.cmd.get_settings().unwrap().ui.dismissed_intros.is_empty());
+        let out = f
+            .cmd
+            .update_settings(&SettingsPatch {
+                ui: Some(UiSettings {
+                    dismissed_intros: vec!["today".into(), "today".into(), "activities".into()],
+                }),
+                ..SettingsPatch::default()
+            })
+            .unwrap();
+        assert_eq!(out.ui.dismissed_intros, ["today", "activities"]);
+        assert_eq!(
+            f.settings.get("ui").unwrap().as_deref(),
+            Some(r#"{"dismissed_intros":["today","activities"]}"#)
+        );
+        // Unrelated patches leave the blob alone.
+        f.cmd
+            .update_settings(&SettingsPatch {
+                theme: Some("dark".into()),
+                ..SettingsPatch::default()
+            })
+            .unwrap();
+        assert_eq!(f.cmd.get_settings().unwrap().ui.dismissed_intros.len(), 2);
+        assert!(matches!(
+            f.cmd.update_settings(&SettingsPatch {
+                ui: Some(UiSettings {
+                    dismissed_intros: vec!["".into()],
+                }),
+                ..SettingsPatch::default()
+            }),
+            Err(CommandError::Invalid(_))
+        ));
     }
 
     #[test]

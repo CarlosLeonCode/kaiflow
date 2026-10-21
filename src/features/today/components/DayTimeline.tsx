@@ -1,7 +1,7 @@
 import { type CSSProperties, useState } from "react";
 
 import type { RangeDto } from "@/shared/ipc";
-import { tuneCategoryColor } from "@/shared/lib/color";
+import { tuneActivityColor } from "@/shared/lib/color";
 import { formatDuration, formatHour } from "@/shared/lib/time";
 
 import { axisTicks, type TimelineBlock } from "../lib/today";
@@ -31,7 +31,7 @@ function tickPosition(pct: number): CSSProperties {
 }
 
 /**
- * Hand-rolled SVG of the day: one block per segment colored by category, hour ticks, and a
+ * Hand-rolled SVG of the day: one block per segment colored by activity, hour ticks, and a
  * marker for now. The svg is an image for assistive tech (the lists below carry the same
  * data as text); pointer users get a native tooltip and a readout line.
  */
@@ -44,7 +44,7 @@ export function DayTimeline({ window, blocks, now, dark }: Props) {
   const summary =
     blocks.length === 0
       ? "Timeline of today: no activity"
-      : `Timeline of today: ${blocks.length} ${blocks.length === 1 ? "block" : "blocks"}, colored by category. The same data is listed below by app and category.`;
+      : `Timeline of today: ${blocks.length} ${blocks.length === 1 ? "block" : "blocks"}, colored by activity. The same data is listed below by app and activity.`;
 
   return (
     <div>
@@ -78,7 +78,7 @@ export function DayTimeline({ window, blocks, now, dark }: Props) {
             onPointerEnter={() => setActive(block)}
             onPointerLeave={() => setActive((current) => (current?.id === block.id ? null : current))}
             style={{
-              fill: tuneCategoryColor(block.color, dark),
+              fill: tuneActivityColor(block.color, dark),
               stroke: "var(--background)",
               strokeWidth: 1,
             }}

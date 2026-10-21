@@ -18,12 +18,26 @@ async function highlightNow(page: Page): Promise<{ current: string[]; animating:
 }
 
 test.describe("main window shell", () => {
+  test("a dismissed section intro stays dismissed and does not affect other sections", async ({ page }) => {
+    await openWindow(page, "main");
+    const todayIntro = page.getByRole("complementary", { name: "About Your day at a glance" });
+    await expect(todayIntro).toBeVisible();
+    await todayIntro.getByRole("button", { name: /^Dismiss introduction/ }).click();
+    await expect(todayIntro).toHaveCount(0);
+
+    await nav(page).getByRole("button", { name: /^Activities/ }).click();
+    await expect(page.getByRole("complementary", { name: "About Organize time into activities" })).toBeVisible();
+    await nav(page).getByRole("button", { name: /^Today/ }).click();
+    await expect(page.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
+    await expect(todayIntro).toHaveCount(0);
+  });
+
   test("the sidebar highlight always matches the rendered section", async ({ page }) => {
     await openWindow(page, "main");
     const steps: [() => Promise<void>, string][] = [
-      [() => nav(page).getByRole("button", { name: /^Categories/ }).click(), "Categories"],
+      [() => nav(page).getByRole("button", { name: /^Activities/ }).click(), "Activities"],
       [() => nav(page).getByRole("button", { name: /^History/ }).click(), "History"],
-      [() => page.keyboard.press("Meta+3"), "Categories"],
+      [() => page.keyboard.press("Meta+3"), "Activities"],
       [() => page.keyboard.press("Meta+1"), "Today"],
     ];
 

@@ -5,7 +5,7 @@ import { buildTopApps, degradedLabel, elapsedSinceFetch, toggleAction } from "./
 const byApp = [
   { app_id: "a", app_name: "Alpha", total_ms: 60_000 },
   { app_id: "b", app_name: "Beta", total_ms: 120_000 },
-  { app_id: null, app_name: "Assigned manually", total_ms: 30_000 },
+  { app_id: null, app_name: "", total_ms: 30_000 },
 ];
 
 describe("buildTopApps", () => {

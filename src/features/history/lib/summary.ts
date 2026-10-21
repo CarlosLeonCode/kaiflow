@@ -1,5 +1,5 @@
-import type { AppTotalDto, CategoryTotalDto, RangeDto, ReportDto } from "@/shared/ipc";
-import { appLabel, categoryLabel } from "@/shared/lib/labels";
+import type { AppTotalDto, ActivityTotalDto, RangeDto, ReportDto } from "@/shared/ipc";
+import { appLabel, activityLabel } from "@/shared/lib/labels";
 import { formatHour, formatTimeOfDay, MINUTE } from "@/shared/lib/time";
 
 import type { Period } from "./periods";
@@ -39,7 +39,7 @@ export interface Bar {
   segments: BarSegment[];
 }
 
-/** Color of the single-segment bars (hours inside one day are not split by category). */
+/** Color of the single-segment bars (hours inside one day are not split by activity). */
 export const FOCUS_COLOR = "#3b82f6";
 
 function axisLabel(period: Period, from: number): string {
@@ -61,21 +61,21 @@ function fullLabel(period: Period, from: number): string {
     : date.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 }
 
-/** Segments of one day, biggest first, each category once. */
-function categorySegments(report: ReportDto): BarSegment[] {
-  return [...report.by_category]
-    .filter((category) => category.total_ms > 0)
+/** Segments of one day, biggest first, each activity once. */
+function activitySegments(report: ReportDto): BarSegment[] {
+  return [...report.by_activity]
+    .filter((activity) => activity.total_ms > 0)
     .sort((a, b) => b.total_ms - a.total_ms)
-    .map((category) => ({
-      key: `category-${category.category_id}`,
-      name: categoryLabel(category.category_id, category.name),
-      color: category.color,
-      ms: category.total_ms,
+    .map((activity) => ({
+      key: `activity-${activity.activity_id}`,
+      name: activityLabel(activity.activity_id, activity.name),
+      color: activity.color,
+      ms: activity.total_ms,
     }));
 }
 
 /**
- * Bars for week and month: one per local day, stacked by category. A day whose report has
+ * Bars for week and month: one per local day, stacked by activity. A day whose report has
  * not arrived yet is an empty bar (the chart never blocks on the slowest day).
  */
 export function dayBars(
@@ -90,7 +90,7 @@ export function dayBars(
       label: axisLabel(period, range.from),
       fullLabel: fullLabel(period, range.from),
       totalMs: report?.total_ms ?? 0,
-      segments: report ? categorySegments(report) : [],
+      segments: report ? activitySegments(report) : [],
     };
   });
 }
@@ -155,12 +155,12 @@ export function appRows(byApp: readonly AppTotalDto[], totalMs: number): Row[] {
     }));
 }
 
-export function categoryRows(byCategory: readonly CategoryTotalDto[], totalMs: number): Row[] {
-  return [...byCategory]
+export function activityRows(byActivity: readonly ActivityTotalDto[], totalMs: number): Row[] {
+  return [...byActivity]
     .sort((a, b) => b.total_ms - a.total_ms)
     .map((c) => ({
-      key: String(c.category_id),
-      name: categoryLabel(c.category_id, c.name),
+      key: String(c.activity_id),
+      name: activityLabel(c.activity_id, c.name),
       color: c.color,
       totalMs: c.total_ms,
       fraction: totalMs > 0 ? c.total_ms / totalMs : 0,

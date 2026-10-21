@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { CircleAlert, X } from "lucide-react";
 
 import type { DeleteOpDto, PrivacyRulesDto } from "@/shared/ipc";
@@ -17,6 +18,8 @@ import { AppRulesPanel } from "./AppRulesPanel";
 import { DeleteDataPanel } from "./DeleteDataPanel";
 
 interface Props {
+  /** Dismissible section introduction, rendered by `Page`. */
+  intro?: ReactNode;
   /** `undefined` while loading. */
   privacy: PrivacyRulesDto | undefined;
   retentionDays: number | null;
@@ -45,7 +48,7 @@ export function PrivacyView(props: Props) {
   const { privacy, pending } = props;
   const copy = pending ? deleteCopy(pending, props.trackingWillRestart && pending.kind === "all") : null;
   return (
-    <Page title="Privacy" subtitle="Everything stays on this Mac. Nothing is sent anywhere.">
+    <Page title="Privacy" subtitle="Everything stays on this Mac. Nothing is sent anywhere." intro={props.intro}>
       {!privacy ? (
         <div className="max-w-2xl space-y-3" aria-label="Loading privacy">
           <Skeleton className="h-20" />

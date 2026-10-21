@@ -16,7 +16,7 @@ const gap = (overrides: Partial<IdleGapDto> = {}): IdleGapDto => ({
   ...overrides,
 });
 
-const categories = [
+const activities = [
   { id: 1, name: "Work", color: "#3b82f6", sort_order: 0 },
   { id: 2, name: "Meetings", color: "#f59e0b", sort_order: 1 },
 ];
@@ -25,7 +25,7 @@ function setup(gaps: IdleGapDto[], extra: Parameters<typeof mockBackend>[0] = {}
   let pending = gaps;
   return mockBackend({
     list_pending_idle_gaps: () => pending,
-    categories_list: () => categories,
+    activities_list: () => activities,
     resolve_idle_gap: () => {
       pending = [];
       return null;
@@ -76,22 +76,22 @@ describe("IdlePromptContainer", () => {
     });
   });
 
-  it("assigns the time to a chosen category and can go back", async () => {
+  it("assigns the time to a chosen activity and can go back", async () => {
     const user = userEvent.setup();
     const { calls } = setup([gap()]);
     renderWithProviders(<IdlePromptContainer />);
 
-    await user.click(await screen.findByRole("button", { name: /Assign to category/ }));
+    await user.click(await screen.findByRole("button", { name: /Assign to activity/ }));
     await user.click(screen.getByRole("button", { name: "Back to idle options" }));
     expect(screen.getByRole("button", { name: "Discard" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /Assign to category/ }));
+    await user.click(screen.getByRole("button", { name: /Assign to activity/ }));
     await user.click(await screen.findByRole("button", { name: "Meetings" }));
 
     await waitFor(() => expect(calls.some((c) => c.cmd === "resolve_idle_gap")).toBe(true));
     expect(calls.find((c) => c.cmd === "resolve_idle_gap")?.args).toEqual({
       id: 7,
-      resolution: { kind: "assign_category", category_id: 2 },
+      resolution: { kind: "assign_activity", activity_id: 2 },
     });
   });
 

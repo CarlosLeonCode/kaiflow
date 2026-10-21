@@ -21,9 +21,9 @@ function item(start: number, end: number, overrides: Partial<TimelineItemDto> = 
     app_id: "com.apple.dt.Xcode",
     app_name: "Xcode",
     window_title: "AppDelegate.swift",
-    category_id: 2,
-    category_name: "Work",
-    category_color: "#2f7de1",
+    activity_id: 2,
+    activity_name: "Work",
+    activity_color: "#2f7de1",
     source: "tracked",
     end_reason: "focus_change",
     open: false,
@@ -31,7 +31,7 @@ function item(start: number, end: number, overrides: Partial<TimelineItemDto> = 
   };
 }
 
-const work = { category_id: 2, name: "Work", color: "#2f7de1" };
+const work = { activity_id: 2, name: "Work", color: "#2f7de1" };
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
@@ -42,7 +42,7 @@ afterEach(() => {
 });
 
 describe("TodayContainer", () => {
-  it("shows focused time, totals by app and by category (R7.1)", async () => {
+  it("shows focused time, totals by app and by activity (R7.1)", async () => {
     mockBackend({
       get_status: () => status({ state: "paused", current: null, since: null }),
       get_report: () =>
@@ -52,12 +52,12 @@ describe("TodayContainer", () => {
             { app_id: "com.apple.dt.Xcode", app_name: "Xcode", total_ms: 2 * HOUR },
             { app_id: "com.apple.Safari", app_name: "Safari", total_ms: HOUR },
           ],
-          by_category: [
+          by_activity: [
             { ...work, total_ms: 2 * HOUR },
-            { category_id: 1, name: "Sin categoría", color: "#9ca3af", total_ms: HOUR },
+            { activity_id: 1, name: "Unassigned", color: "#9ca3af", total_ms: HOUR },
           ],
         }),
-      get_timeline: () => [item(at(9), at(11)), item(at(11), at(12), { app_id: "com.apple.Safari", app_name: "Safari", category_id: 1, category_name: "Sin categoría", category_color: "#9ca3af" })],
+      get_timeline: () => [item(at(9), at(11)), item(at(11), at(12), { app_id: "com.apple.Safari", app_name: "Safari", activity_id: 1, activity_name: "Unassigned", activity_color: "#9ca3af" })],
     });
     renderWithProviders(<TodayContainer />);
 
@@ -65,16 +65,16 @@ describe("TodayContainer", () => {
     const apps = screen.getByRole("list", { name: "Time by app" });
     expect(within(apps).getAllByRole("button")).toHaveLength(2);
     expect(within(apps).getByText("2h 00m")).toBeInTheDocument();
-    const categories = screen.getByRole("list", { name: "Time by category" });
-    expect(within(categories).getByText("Work")).toBeInTheDocument();
-    expect(within(categories).getByText("Uncategorized")).toBeInTheDocument();
-    expect(within(categories).getByText("67%")).toBeInTheDocument();
+    const activities = screen.getByRole("list", { name: "Time by activity" });
+    expect(within(activities).getByText("Work")).toBeInTheDocument();
+    expect(within(activities).getByText("Unassigned")).toBeInTheDocument();
+    expect(within(activities).getByText("67%")).toBeInTheDocument();
   });
 
   it("draws the timeline as an accessible SVG with one block per segment", async () => {
     mockBackend({
       get_status: () => status({ state: "paused", current: null, since: null }),
-      get_report: () => report({ total_ms: 2 * HOUR, by_app: [], by_category: [] }),
+      get_report: () => report({ total_ms: 2 * HOUR, by_app: [], by_activity: [] }),
       get_timeline: () => [item(at(9), at(10)), item(at(10), at(11), { app_name: "Safari", app_id: "com.apple.Safari" })],
     });
     const { container } = renderWithProviders(<TodayContainer />);
@@ -95,7 +95,7 @@ describe("TodayContainer", () => {
         report({
           total_ms: HOUR,
           by_app: [{ app_id: "com.apple.Safari", app_name: "Safari", total_ms: HOUR }],
-          by_category: [{ ...work, total_ms: HOUR }],
+          by_activity: [{ ...work, total_ms: HOUR }],
         }),
       get_timeline: () => [
         item(at(9), at(9, 40), { app_id: "com.apple.Safari", app_name: "Safari", window_title: hostile }),
@@ -123,7 +123,7 @@ describe("TodayContainer", () => {
   it("separates focused from away time", async () => {
     mockBackend({
       get_status: () => status({ state: "paused", current: null, since: null }),
-      get_report: () => report({ total_ms: 2 * HOUR, by_app: [], by_category: [{ ...work, total_ms: 2 * HOUR }] }),
+      get_report: () => report({ total_ms: 2 * HOUR, by_app: [], by_activity: [{ ...work, total_ms: 2 * HOUR }] }),
       get_timeline: () => [
         item(at(9), at(10), { end_reason: "idle" }),
         item(at(10, 30), at(11, 30)),
@@ -161,6 +161,20 @@ describe("TodayContainer", () => {
     expect(await screen.findByText(/Tracking is not running/)).toBeInTheDocument();
   });
 
+  it("offers to start tracking from the empty state", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    const { calls } = mockBackend({
+      get_status: () => status({ state: "stopped", current: null, since: null }),
+      get_report: () => report(),
+      get_timeline: () => [],
+      start: () => status({ state: "running" }),
+    });
+    renderWithProviders(<TodayContainer />);
+
+    await user.click(await screen.findByRole("button", { name: "Start tracking" }));
+    await waitFor(() => expect(calls.some((c) => c.cmd === "start")).toBe(true));
+  });
+
   it("reports a failed load instead of an empty day", async () => {
     mockBackend({
       get_status: () => status(),
@@ -182,7 +196,7 @@ describe("TodayContainer", () => {
         report({
           total_ms: HOUR,
           by_app: [{ app_id: "com.apple.dt.Xcode", app_name: "Xcode", total_ms: HOUR }],
-          by_category: [{ ...work, total_ms: HOUR }],
+          by_activity: [{ ...work, total_ms: HOUR }],
         }),
       get_timeline: () => [open],
     });
@@ -203,7 +217,7 @@ describe("TodayContainer", () => {
     let rows: TimelineItemDto[] = [item(at(9), at(10))];
     const { calls } = mockBackend({
       get_status: () => status({ state: "paused", current: null, since: null }),
-      get_report: () => report({ total_ms: HOUR, by_app: [], by_category: [] }),
+      get_report: () => report({ total_ms: HOUR, by_app: [], by_activity: [] }),
       get_timeline: () => rows,
     });
     renderWithProviders(<TodayContainer />);

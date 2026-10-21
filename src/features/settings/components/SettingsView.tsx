@@ -23,6 +23,8 @@ const THEMES: readonly SegmentedOption<ThemeSetting>[] = [
 ];
 
 interface Props {
+  /** Dismissible section introduction, rendered by `Page`. */
+  intro?: ReactNode;
   /** `undefined` while loading. */
   settings: SettingsDto | undefined;
   degraded: boolean;
@@ -39,6 +41,7 @@ interface Props {
 
 /** Settings section (presentational): every control saves as soon as it changes. */
 export function SettingsView({
+  intro,
   settings,
   degraded,
   degradedReason,
@@ -49,7 +52,7 @@ export function SettingsView({
   updates,
 }: Props) {
   return (
-    <Page title="Settings" subtitle="Changes apply immediately.">
+    <Page title="Settings" subtitle="Changes apply immediately." intro={intro}>
       {!settings ? (
         <div className="max-w-xl space-y-3" aria-label="Loading settings">
           <Skeleton className="h-24" />

@@ -1,3 +1,4 @@
+import { SectionIntroContainer } from "@/features/shell/containers/SectionIntroContainer";
 import { IpcError, useOpenAccessibilitySettingsMutation, useSettingsQuery, useStatusQuery, useUpdateSettingsMutation, errorMessage } from "@/shared/ipc";
 
 import { UpdatesPanelContainer } from "@/features/updates/containers/UpdateContainers";
@@ -30,6 +31,7 @@ export function SettingsContainer() {
 
   return (
     <SettingsView
+      intro={<SectionIntroContainer section="settings" />}
       settings={settings.data}
       degraded={status.data?.degraded ?? false}
       degradedReason={status.data?.degraded_reason ?? null}

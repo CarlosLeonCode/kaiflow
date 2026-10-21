@@ -502,7 +502,7 @@ mod tests {
             window_title: None,
             end_reason: None,
             source: SegmentSource::Tracked,
-            category_id: None,
+            activity_id: None,
         });
         r.store.seed_gap(gap(0, 5));
         r.exec.recover(UtcMs(1_000));

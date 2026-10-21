@@ -1,19 +1,25 @@
+import type { ReactNode } from "react";
 import { CircleAlert } from "lucide-react";
 
 import type { RangeDto, TimelineItemDto, TrackingStateDto } from "@/shared/ipc";
 import { formatClock, formatDuration } from "@/shared/lib/time";
 import { Alert, AlertDescription } from "@/shared/ui/alert";
+import { EmptyState } from "@/shared/ui/EmptyState";
 import { Page } from "@/shared/ui/page";
 import { Skeleton } from "@/shared/ui/skeleton";
 
 import { stateLabel } from "@/features/tracking/lib/derive";
 
-import { layoutTimeline, timelineWindow, type AppRow, type CategoryRow } from "../lib/today";
+import { layoutTimeline, timelineWindow, type AppRow, type ActivityRow } from "../lib/today";
 import { AppList } from "./AppList";
-import { CategoryList } from "./CategoryList";
+import { ActivityList } from "./ActivityList";
 import { DayTimeline } from "./DayTimeline";
 
 interface Props {
+  /** Dismissible section introduction, rendered by `Page`. */
+  intro?: ReactNode;
+  /** Next step when nothing is tracked and tracking is not running (start or resume). */
+  emptyAction?: { label: string; onClick: () => void };
   range: RangeDto;
   now: number;
   state: TrackingStateDto | undefined;
@@ -22,7 +28,7 @@ interface Props {
   error: string | null;
   items: readonly TimelineItemDto[];
   apps: readonly AppRow[];
-  categories: readonly CategoryRow[];
+  activities: readonly ActivityRow[];
   /** Focused time (live), excludes idle and discarded time (R7.2). */
   totalMs: number;
   awayMs: number;
@@ -45,8 +51,10 @@ function Card({ title, children, label }: { title: string; children: React.React
   );
 }
 
-/** Today dashboard (presentational): totals, SVG timeline, by app and by category. */
+/** Today dashboard (presentational): totals, SVG timeline, by app and by activity. */
 export function TodayView({
+  intro,
+  emptyAction,
   range,
   now,
   state,
@@ -55,7 +63,7 @@ export function TodayView({
   error,
   items,
   apps,
-  categories,
+  activities,
   totalMs,
   awayMs,
 }: Props) {
@@ -69,6 +77,7 @@ export function TodayView({
     <Page
       title="Today"
       subtitle={dateLabel(range)}
+      intro={intro}
       actions={
         state && (
           <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -93,14 +102,11 @@ export function TodayView({
           <Skeleton className="h-40" />
         </div>
       ) : empty ? (
-        <div className="mx-auto mt-16 max-w-sm text-center">
-          <h2 className="text-lg font-semibold">Nothing tracked yet today</h2>
-          <p className="mt-1 text-muted-foreground">
-            {state === "running"
-              ? "Tracking is on. Switch between a few apps and your day will start to fill in here."
-              : "Tracking is not running. Start it from the menu bar and your day will appear here."}
-          </p>
-        </div>
+        <EmptyState title="Nothing tracked yet today" action={state === "running" ? undefined : emptyAction}>
+          {state === "running"
+            ? "Tracking is on. Switch between a few apps and your day will start to fill in here."
+            : "Tracking is not running. Start it and your day will appear here."}
+        </EmptyState>
       ) : (
         <div className="space-y-4">
           <Card title="Focused time" label="Focused and away time">
@@ -144,8 +150,8 @@ export function TodayView({
             <Card title="By app">
               <AppList rows={apps} />
             </Card>
-            <Card title="By category">
-              <CategoryList rows={categories} dark={dark} />
+            <Card title="By activity">
+              <ActivityList rows={activities} dark={dark} />
             </Card>
           </div>
         </div>

@@ -1,6 +1,6 @@
 /**
- * Preset category colors. Raw values are stored; every paint goes through
- * `tuneCategoryColor`, so a preset (or a custom color) stays readable in both themes.
+ * Preset activity colors. Raw values are stored; every paint goes through
+ * `tuneActivityColor`, so a preset (or a custom color) stays readable in both themes.
  */
 export interface Preset {
   name: string;
@@ -26,7 +26,7 @@ export function presetFor(hex: string): Preset | undefined {
   return PRESET_COLORS.find((preset) => preset.hex.toLowerCase() === hex.toLowerCase());
 }
 
-/** The first preset not used by an existing category, so new categories start distinct. */
+/** The first preset not used by an existing activity, so new activities start distinct. */
 export function suggestColor(used: readonly string[]): string {
   const taken = new Set(used.map((hex) => hex.toLowerCase()));
   return (PRESET_COLORS.find((preset) => !taken.has(preset.hex.toLowerCase())) ?? PRESET_COLORS[0]!).hex;

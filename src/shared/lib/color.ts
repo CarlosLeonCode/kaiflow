@@ -1,5 +1,5 @@
 /**
- * Category colors are user data (any hex). A pale yellow vanishes on a white card and a deep
+ * Activity colors are user data (any hex). A pale yellow vanishes on a white card and a deep
  * navy vanishes on the dark background, so every color is tuned per theme before it is
  * painted: the hue stays, the lightness is clamped to a band that stays visible.
  */
@@ -69,8 +69,8 @@ export function hslToRgb(h: number, s: number, l: number): Rgb {
   return { r: (r1 + m) * 255, g: (g1 + m) * 255, b: (b1 + m) * 255 };
 }
 
-/** The category color adjusted so it stays visible in the given theme. */
-export function tuneCategoryColor(value: string, dark: boolean): string {
+/** The activity color adjusted so it stays visible in the given theme. */
+export function tuneActivityColor(value: string, dark: boolean): string {
   const theme = dark ? "dark" : "light";
   const rgb = parseHex(value);
   if (!rgb) return FALLBACK[theme];

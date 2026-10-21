@@ -1,6 +1,6 @@
 //! SQLite adapter (rusqlite, bundled). Repositories for every storage port.
 
-mod category_repo;
+mod activity_repo;
 pub mod db;
 pub mod migrations;
 mod privacy_repo;
@@ -9,7 +9,7 @@ mod retention_repo;
 mod session_repo;
 mod settings_repo;
 
-pub use category_repo::SqliteCategoryRepository;
+pub use activity_repo::SqliteActivityRepository;
 pub use db::{DbError, open, open_in_memory};
 pub use privacy_repo::SqlitePrivacyRepository;
 pub use report_repo::SqliteReportRepository;

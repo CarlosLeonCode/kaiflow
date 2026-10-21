@@ -26,6 +26,10 @@ adapters-common = { path = "crates/adapters-common" }
 # select! over signals, IPC commands and ticks in the engine thread (design section 6).
 crossbeam-channel = "0.5"
 
+# Typed JSON blobs for per-feature settings (application) and the IPC DTOs.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
 # SQLite with the library compiled in, so the app does not depend on the system version (design section 7).
 rusqlite = { version = "0.40", features = ["bundled"] }
 tempfile = "3"

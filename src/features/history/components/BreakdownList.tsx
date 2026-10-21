@@ -1,4 +1,4 @@
-import { tuneCategoryColor } from "@/shared/lib/color";
+import { tuneActivityColor } from "@/shared/lib/color";
 import { formatDuration } from "@/shared/lib/time";
 
 import { formatPercent } from "@/features/today/lib/today";
@@ -12,13 +12,13 @@ interface Props {
   empty: string;
 }
 
-/** Totals for the period by category (colored) or by app (accent bar), with the share of the total. */
+/** Totals for the period by activity (colored) or by app (accent bar), with the share of the total. */
 export function BreakdownList({ rows, label, dark, empty }: Props) {
   if (rows.length === 0) return <p className="py-3 text-xs text-muted-foreground">{empty}</p>;
   return (
     <ul className="divide-y divide-border" aria-label={label}>
       {rows.map((row) => {
-        const color = row.color ? tuneCategoryColor(row.color, dark) : null;
+        const color = row.color ? tuneActivityColor(row.color, dark) : null;
         return (
           <li key={row.key} className="px-1 py-2">
             <div className="flex items-center gap-2">

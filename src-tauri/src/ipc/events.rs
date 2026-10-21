@@ -51,8 +51,8 @@ impl From<GapStatus> for GapStatusDto {
                 resolution: match r {
                     domain::IdleResolution::Discard => IdleResolutionDto::Discard,
                     domain::IdleResolution::AssignPrevious => IdleResolutionDto::AssignPrevious,
-                    domain::IdleResolution::AssignCategory(id) => {
-                        IdleResolutionDto::AssignCategory { category_id: id.0 }
+                    domain::IdleResolution::AssignActivity(id) => {
+                        IdleResolutionDto::AssignActivity { activity_id: id.0 }
                     }
                 },
             },
@@ -204,7 +204,7 @@ impl EventSink for TauriEventSink {
 mod tests {
     use application::ports::{TrackingKind, TrackingStatus};
     use domain::{
-        CategoryId, FocusSnapshot, GapId, IdleGap, IdleResolution, PermissionState, UtcMs,
+        ActivityId, FocusSnapshot, GapId, IdleGap, IdleResolution, PermissionState, UtcMs,
     };
 
     use super::*;
@@ -284,7 +284,7 @@ mod tests {
         let events = translate(
             DomainEvent::IdleGapResolved {
                 id: GapId(4),
-                status: GapStatus::Resolved(IdleResolution::AssignCategory(CategoryId(2))),
+                status: GapStatus::Resolved(IdleResolution::AssignActivity(ActivityId(2))),
             },
             &ShortcutStatusDto::Disabled,
             DegradedReasonDto::AccessibilityDenied,
@@ -294,7 +294,7 @@ mod tests {
             vec![AppEvent::IdleGapResolved(IdleGapResolved {
                 id: 4,
                 status: GapStatusDto::Resolved {
-                    resolution: IdleResolutionDto::AssignCategory { category_id: 2 }
+                    resolution: IdleResolutionDto::AssignActivity { activity_id: 2 }
                 }
             })]
         );

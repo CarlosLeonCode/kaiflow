@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { tuneCategoryColor } from "@/shared/lib/color";
+import { tuneActivityColor } from "@/shared/lib/color";
 
 import { DEFAULT_COLOR, PRESET_COLORS, presetFor, suggestColor } from "./palette";
 
@@ -8,7 +8,7 @@ describe("palette", () => {
   it("offers distinct presets that stay readable in both themes", () => {
     expect(new Set(PRESET_COLORS.map((p) => p.hex)).size).toBe(PRESET_COLORS.length);
     for (const preset of PRESET_COLORS) {
-      for (const dark of [false, true]) expect(tuneCategoryColor(preset.hex, dark)).toMatch(/^#[0-9a-f]{6}$/);
+      for (const dark of [false, true]) expect(tuneActivityColor(preset.hex, dark)).toMatch(/^#[0-9a-f]{6}$/);
     }
   });
 

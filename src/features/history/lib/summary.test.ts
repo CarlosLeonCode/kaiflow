@@ -8,7 +8,7 @@ import {
   appRows,
   averages,
   busiest,
-  categoryRows,
+  activityRows,
   compareTotals,
   dayBars,
   hourBars,
@@ -17,10 +17,10 @@ import {
 
 const day = (offset: number) => ({ from: offset * 1000, to: (offset + 1) * 1000 });
 
-function dayReport(total: number, categories: [number, string, number][]): ReportDto {
+function dayReport(total: number, activities: [number, string, number][]): ReportDto {
   return report({
     total_ms: total,
-    by_category: categories.map(([id, name, ms]) => ({ category_id: id, name, color: "#3b82f6", total_ms: ms })),
+    by_activity: activities.map(([id, name, ms]) => ({ activity_id: id, name, color: "#3b82f6", total_ms: ms })),
   });
 }
 
@@ -38,21 +38,21 @@ describe("compareTotals", () => {
 });
 
 describe("dayBars", () => {
-  it("stacks each day by category, biggest first, with the Uncategorized name mapped by id", () => {
+  it("stacks each day by activity, biggest first, with the Unassigned name mapped by id", () => {
     const bars = dayBars("week", [day(0), day(1)], [
       dayReport(3000, [
-        [1, "Sin categoría", 1000],
+        [1, "Unassigned", 1000],
         [2, "Work", 2000],
       ]),
       undefined,
     ]);
-    expect(bars[0]?.segments.map((s) => s.name)).toEqual(["Work", "Uncategorized"]);
+    expect(bars[0]?.segments.map((s) => s.name)).toEqual(["Work", "Unassigned"]);
     expect(bars[0]?.totalMs).toBe(3000);
     // A day without a report yet is an empty bar, not a crash.
     expect(bars[1]).toMatchObject({ totalMs: 0, segments: [] });
   });
 
-  it("drops empty categories and labels bars for the period", () => {
+  it("drops empty activities and labels bars for the period", () => {
     const [bar] = dayBars("month", [day(0)], [dayReport(10, [[2, "Work", 0]])]);
     expect(bar?.segments).toEqual([]);
     expect(bar?.label).toMatch(/^\d+$/);
@@ -91,10 +91,10 @@ describe("chart helpers", () => {
 });
 
 describe("breakdown rows", () => {
-  it("sorts and computes shares, mapping manual time and the system category", () => {
+  it("sorts and computes shares, mapping manual time and the system activity", () => {
     const apps = appRows(
       [
-        { app_id: null, app_name: "Asignado manualmente", total_ms: 100 },
+        { app_id: null, app_name: "", total_ms: 100 },
         { app_id: "a", app_name: "Xcode", total_ms: 300 },
       ],
       400,
@@ -102,14 +102,14 @@ describe("breakdown rows", () => {
     expect(apps.map((r) => r.name)).toEqual(["Xcode", "Assigned manually"]);
     expect(apps[0]?.fraction).toBe(0.75);
 
-    const categories = categoryRows(
+    const activities = activityRows(
       [
-        { category_id: 1, name: "Sin categoría", color: "#6b7280", total_ms: 50 },
-        { category_id: 2, name: "Work", color: "#3b82f6", total_ms: 150 },
+        { activity_id: 1, name: "Unassigned", color: "#6b7280", total_ms: 50 },
+        { activity_id: 2, name: "Work", color: "#3b82f6", total_ms: 150 },
       ],
       200,
     );
-    expect(categories.map((r) => r.name)).toEqual(["Work", "Uncategorized"]);
+    expect(activities.map((r) => r.name)).toEqual(["Work", "Unassigned"]);
   });
 
   it("has zero shares for an empty period", () => {

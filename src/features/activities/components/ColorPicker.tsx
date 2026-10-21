@@ -1,7 +1,7 @@
 import { Check } from "lucide-react";
 import { RadioGroup } from "radix-ui";
 
-import { tuneCategoryColor } from "@/shared/lib/color";
+import { tuneActivityColor } from "@/shared/lib/color";
 import { cn } from "@/shared/lib/utils";
 
 import { PRESET_COLORS, presetFor } from "../lib/palette";
@@ -37,7 +37,7 @@ export function ColorPicker({ value, onChange, dark, idPrefix }: Props) {
             aria-label={preset.name}
             title={preset.name}
             className="flex size-5 items-center justify-center rounded-full text-white outline-offset-2 dark:text-black/80"
-            style={{ backgroundColor: tuneCategoryColor(preset.hex, dark) }}
+            style={{ backgroundColor: tuneActivityColor(preset.hex, dark) }}
           >
             <RadioGroup.Indicator>
               <Check className="size-3" strokeWidth={3} aria-hidden="true" />
@@ -64,7 +64,7 @@ export function ColorPicker({ value, onChange, dark, idPrefix }: Props) {
         <span
           aria-hidden="true"
           className="size-full rounded-full"
-          style={custom ? { backgroundColor: tuneCategoryColor(value, dark) } : undefined}
+          style={custom ? { backgroundColor: tuneActivityColor(value, dark) } : undefined}
         />
       </label>
     </div>

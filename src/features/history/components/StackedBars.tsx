@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { tuneCategoryColor } from "@/shared/lib/color";
+import { tuneActivityColor } from "@/shared/lib/color";
 import { formatAxisDuration, formatDuration } from "@/shared/lib/time";
 
 import { niceCeiling, type Bar } from "../lib/summary";
@@ -33,7 +33,7 @@ function barLabel(bar: Bar): string {
 }
 
 /**
- * Hand-rolled SVG stacked bars (one per day or hour, stacked by category, colors tuned for
+ * Hand-rolled SVG stacked bars (one per day or hour, stacked by activity, colors tuned for
  * the theme). Every bar is a focusable image with a spoken summary; arrow keys move between
  * bars (roving tab stop) and the readout under the chart follows hover and focus.
  */
@@ -147,7 +147,7 @@ export function StackedBars({ bars, dark, label }: Props) {
                       y={top}
                       width={barWidth}
                       height={height}
-                      style={{ fill: tuneCategoryColor(segment.color, dark), stroke: "var(--background)", strokeWidth: 0.5 }}
+                      style={{ fill: tuneActivityColor(segment.color, dark), stroke: "var(--background)", strokeWidth: 0.5 }}
                     >
                       <title>{`${segment.name}, ${formatDuration(segment.ms)}`}</title>
                     </rect>

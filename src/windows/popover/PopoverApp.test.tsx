@@ -11,7 +11,7 @@ function backend() {
     get_status: () => status(),
     get_report: () => report(),
     list_pending_idle_gaps: () => [],
-    categories_list: () => [],
+    activities_list: () => [],
     hide_popover: () => null,
   });
 }

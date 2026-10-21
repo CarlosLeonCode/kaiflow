@@ -496,7 +496,7 @@ mod tests {
             window_title: None,
             end_reason: None,
             source: SegmentSource::Tracked,
-            category_id: None,
+            activity_id: None,
         });
         store.seed_gap(IdleGap::pending(UtcMs(0), UtcMs(5), None, UtcMs(5)));
         let mut r = rig_with(store);

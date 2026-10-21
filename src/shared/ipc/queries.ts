@@ -2,9 +2,10 @@ import { useMutation, useQueries, useQuery, useQueryClient, type QueryClient } f
 
 import { commands } from "./bindings";
 import type {
-  CategoryDto,
+  ActivityDto,
   DeleteOpDto,
   IdleResolutionDto,
+  ProductivityDto,
   RangeDto,
   RuleInputDto,
   SettingsDto,
@@ -64,10 +65,25 @@ export function useSettingsQuery() {
   });
 }
 
-export function useCategoriesQuery() {
+/** Section intros the user dismissed; the list lives in the `ui` settings blob. */
+export function useDismissedIntros() {
+  const settings = useSettingsQuery();
+  const update = useUpdateSettingsMutation();
+  const dismissed = settings.data?.ui.dismissed_intros ?? [];
+  return {
+    ready: settings.data !== undefined,
+    isDismissed: (id: string) => dismissed.includes(id),
+    dismiss: (id: string) => {
+      if (dismissed.includes(id)) return;
+      update.mutate({ ui: { dismissed_intros: [...dismissed, id] } });
+    },
+  };
+}
+
+export function useActivitiesQuery() {
   return useQuery({
-    queryKey: queryKeys.categories,
-    queryFn: () => unwrap(commands.categoriesList()),
+    queryKey: queryKeys.activities,
+    queryFn: () => unwrap(commands.activitiesList()),
   });
 }
 
@@ -126,6 +142,7 @@ export function settingsPatch(changes: Partial<SettingsPatchDto>): SettingsPatch
     shortcut: null,
     onboarding_completed: null,
     tray_display: null,
+    ui: null,
     ...changes,
   };
 }
@@ -165,10 +182,10 @@ export function useHidePopoverMutation() {
   return useMutation({ mutationFn: () => unwrap(commands.hidePopover()) });
 }
 
-/** Category and rule edits change how existing segments are grouped (R9.2): refresh everything derived. */
-function invalidateCategorization(client: QueryClient): Promise<unknown> {
+/** Activity and rule edits change how existing segments are grouped (R9.2): refresh everything derived. */
+function invalidateClassification(client: QueryClient): Promise<unknown> {
   return Promise.all(
-    [queryKeys.categories, queryKeys.rules, queryKeys.reports, queryKeys.timelines].map((queryKey) =>
+    [queryKeys.activities, queryKeys.rules, queryKeys.reports, queryKeys.timelines].map((queryKey) =>
       client.invalidateQueries({ queryKey }),
     ),
   );
@@ -181,28 +198,28 @@ export function useRulesQuery() {
   });
 }
 
-export function useCreateCategoryMutation() {
+export function useCreateActivityMutation() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (input: { name: string; color: string }) =>
-      unwrap(commands.categoriesCreate(input.name, input.color)),
-    onSuccess: () => invalidateCategorization(client),
+    mutationFn: (input: { name: string; color: string; productivity: ProductivityDto }) =>
+      unwrap(commands.activitiesCreate(input.name, input.color, input.productivity)),
+    onSuccess: () => invalidateClassification(client),
   });
 }
 
-export function useUpdateCategoryMutation() {
+export function useUpdateActivityMutation() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (category: CategoryDto) => unwrap(commands.categoriesUpdate(category)),
-    onSuccess: () => invalidateCategorization(client),
+    mutationFn: (activity: ActivityDto) => unwrap(commands.activitiesUpdate(activity)),
+    onSuccess: () => invalidateClassification(client),
   });
 }
 
-export function useDeleteCategoryMutation() {
+export function useDeleteActivityMutation() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (id: number) => unwrap(commands.categoriesDelete(id)),
-    onSuccess: () => invalidateCategorization(client),
+    mutationFn: (id: number) => unwrap(commands.activitiesDelete(id)),
+    onSuccess: () => invalidateClassification(client),
   });
 }
 
@@ -212,7 +229,7 @@ export function useUpsertRulesMutation() {
   return useMutation({
     mutationFn: (rules: readonly RuleInputDto[]) =>
       Promise.all(rules.map((rule) => unwrap(commands.rulesUpsert(rule)))),
-    onSettled: () => invalidateCategorization(client),
+    onSettled: () => invalidateClassification(client),
   });
 }
 
@@ -220,7 +237,7 @@ export function useDeleteRuleMutation() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (id: number) => unwrap(commands.rulesDelete(id)),
-    onSuccess: () => invalidateCategorization(client),
+    onSuccess: () => invalidateClassification(client),
   });
 }
 

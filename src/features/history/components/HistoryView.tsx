@@ -1,7 +1,9 @@
+import type { ReactNode } from "react";
 import { CircleAlert, Download, X } from "lucide-react";
 
 import { Alert, AlertDescription } from "@/shared/ui/alert";
 import { Button } from "@/shared/ui/button";
+import { EmptyState } from "@/shared/ui/EmptyState";
 import { Page } from "@/shared/ui/page";
 import { Segmented, type SegmentedOption } from "@/shared/ui/segmented";
 import { Skeleton } from "@/shared/ui/skeleton";
@@ -20,6 +22,8 @@ const PERIODS: readonly SegmentedOption<Period>[] = [
 ];
 
 interface Props {
+  /** Dismissible section introduction, rendered by `Page`. */
+  intro?: ReactNode;
   period: Period;
   onPeriodChange: (period: Period) => void;
   label: string;
@@ -36,7 +40,7 @@ interface Props {
   averages: Averages;
   busiest: Bar | null;
   bars: readonly Bar[];
-  categories: readonly Row[];
+  activities: readonly Row[];
   apps: readonly Row[];
   exporting: boolean;
   /** Where the last export was saved; `null` when nothing to report. */
@@ -59,12 +63,13 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
 export function HistoryView(props: Props) {
   const { period, loading, error, totalMs } = props;
   const noun = periodNoun(period);
-  const chartLabel = period === "day" ? "Focused time per hour" : "Focused time per day, stacked by category";
+  const chartLabel = period === "day" ? "Focused time per hour" : "Focused time per day, stacked by activity";
 
   return (
     <Page
       title="History"
       subtitle="Browse past days, weeks and months."
+      intro={props.intro}
       actions={
         <>
           <Segmented aria-label="Period" value={period} options={PERIODS} onChange={props.onPeriodChange} />
@@ -125,24 +130,25 @@ export function HistoryView(props: Props) {
             </Card>
 
             {totalMs === 0 ? (
-              <div className="mx-auto mt-10 max-w-sm text-center">
-                <h2 className="text-lg font-semibold">{`Nothing tracked this ${noun}`}</h2>
-                <p className="mt-1 text-muted-foreground">
-                  Try another {noun}. Exporting still works and gives you a file with just the header row.
-                </p>
-              </div>
+              <EmptyState
+                className="mt-10"
+                title={`Nothing tracked this ${noun}`}
+                action={props.isCurrent ? undefined : { label: `Jump to this ${noun}`, onClick: props.onToday }}
+              >
+                Try another {noun}. Exporting still works and gives you a file with just the header row.
+              </EmptyState>
             ) : (
               <>
                 <Card title={period === "day" ? "By hour" : "By day"}>
                   <StackedBars bars={props.bars} dark={props.dark} label={chartLabel} />
                 </Card>
                 <div className="grid gap-4 lg:grid-cols-2">
-                  <Card title="By category">
+                  <Card title="By activity">
                     <BreakdownList
-                      rows={props.categories}
-                      label="Time by category"
+                      rows={props.activities}
+                      label="Time by activity"
                       dark={props.dark}
-                      empty="No categorized time."
+                      empty="No classified time."
                     />
                   </Card>
                   <Card title="By app">

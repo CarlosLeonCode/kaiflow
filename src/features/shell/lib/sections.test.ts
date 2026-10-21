@@ -11,7 +11,7 @@ describe("sectionForShortcut", () => {
     expect(["1", "2", "3", "4", "5"].map((d) => sectionForShortcut(key(d)))).toEqual([
       "today",
       "history",
-      "categories",
+      "activities",
       "privacy",
       "settings",
     ]);
