@@ -466,7 +466,20 @@ mod tests {
     use crate::fakes::{FakeBackupStore, FakeFiles, FakeSettings, FixedCalendar};
 
     const DAY: i64 = 86_400_000;
+    // Windows needs a drive letter for a path to be absolute.
+    #[cfg(windows)]
+    const DIR: &str = "C:/backups";
+    #[cfg(not(windows))]
     const DIR: &str = "/backups";
+
+    /// A Unix-style absolute test path, made absolute on Windows too.
+    fn abs(path: &str) -> String {
+        if cfg!(windows) {
+            format!("C:{path}")
+        } else {
+            path.to_owned()
+        }
+    }
 
     struct Rig {
         service: DataService,
@@ -515,7 +528,7 @@ mod tests {
                 },
                 SettingRecord {
                     key: "backup".into(),
-                    value: "{\"dir\":\"/x\"}".into(),
+                    value: format!("{{\"dir\":\"{}\"}}", abs("/x")),
                 },
             ],
             ..Default::default()
@@ -532,7 +545,7 @@ mod tests {
             Arc::new(settings.clone()),
             Arc::new(FixedCalendar::fixed(0)),
             DIR.into(),
-            "/data/kaiflow.db".into(),
+            abs("/data/kaiflow.db").into(),
             "9.9.9",
         );
         Rig {
@@ -600,18 +613,22 @@ mod tests {
     #[test]
     fn export_to_writes_atomically_through_the_sink() {
         let rig = rig();
-        let path = Path::new("/out/export.json");
+        let path_buf = std::path::PathBuf::from(abs("/out/export.json"));
+        let path = path_buf.as_path();
         rig.service
             .export_to(path, range(0, DAY), UtcMs(0), "UTC")
             .unwrap();
         assert!(Document::parse(&rig.files.get(path).unwrap()).is_ok());
 
         rig.files.fail_writes_with("disk full");
-        let err = rig
-            .service
-            .export_to(Path::new("/out/two.json"), range(0, DAY), UtcMs(0), "UTC");
+        let err = rig.service.export_to(
+            Path::new(&abs("/out/two.json")),
+            range(0, DAY),
+            UtcMs(0),
+            "UTC",
+        );
         assert!(matches!(err, Err(DataError::Storage(_))));
-        assert!(rig.files.get(Path::new("/out/two.json")).is_none());
+        assert!(rig.files.get(Path::new(&abs("/out/two.json"))).is_none());
     }
 
     #[test]
@@ -698,7 +715,7 @@ mod tests {
             Arc::new(settings),
             Arc::new(FixedCalendar::fixed(-5 * 3_600_000)),
             DIR.into(),
-            "/data/db".into(),
+            abs("/data/db").into(),
             "1",
         );
         let evening = UtcMs(50 * DAY + 3 * 3_600_000); // still local day 49
@@ -769,12 +786,12 @@ mod tests {
     fn the_backup_folder_must_be_absolute_and_can_be_reset() {
         let rig = rig();
         assert!(rig.service.set_backup_dir(Some("relative/dir")).is_err());
-        rig.service.set_backup_dir(Some("/mnt/safe")).unwrap();
+        rig.service.set_backup_dir(Some(&abs("/mnt/safe"))).unwrap();
         let report = rig.service.backup_now(UtcMs(DAY), "UTC").unwrap();
-        assert!(report.path.starts_with("/mnt/safe"));
+        assert!(report.path.starts_with(abs("/mnt/safe")));
         assert_eq!(
             rig.service.backup_status().unwrap().custom_dir.as_deref(),
-            Some("/mnt/safe")
+            Some(abs("/mnt/safe").as_str())
         );
         rig.service.set_backup_dir(None).unwrap();
         assert_eq!(rig.service.backup_status().unwrap().dir, DIR);
@@ -809,7 +826,7 @@ mod tests {
         assert_eq!(rig.store.safety_copies(), vec![report.safety_copy.clone()]);
         assert_eq!(
             report.safety_copy,
-            Path::new("/data/kaiflow.db.pre-restore-200")
+            Path::new(&abs("/data/kaiflow.db.pre-restore-200"))
         );
         assert_eq!(rig.store.data().segments.len(), 2);
         // Single use.
@@ -886,7 +903,8 @@ mod tests {
     #[test]
     fn restore_prepare_file_reads_through_the_sink() {
         let rig = rig();
-        let path = Path::new("/picked/backup.json.gz");
+        let path_buf = std::path::PathBuf::from(abs("/picked/backup.json.gz"));
+        let path = path_buf.as_path();
         rig.files.put(path, &backup_bytes(&rig));
         assert_eq!(
             rig.service
@@ -898,7 +916,7 @@ mod tests {
         );
         assert!(
             rig.service
-                .restore_prepare_file(Path::new("/missing"), UtcMs(0))
+                .restore_prepare_file(Path::new(&abs("/missing")), UtcMs(0))
                 .is_err()
         );
     }
