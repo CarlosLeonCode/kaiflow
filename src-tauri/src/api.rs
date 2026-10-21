@@ -16,8 +16,8 @@ use crate::composition::AppState;
 use crate::error::AppError;
 use crate::ipc::dto::{
     ActivityDto, ApplyPresetResultDto, BackupReportDto, BackupStatusDto, DashboardDto, DeleteOpDto,
-    FocusSessionDto, FocusStartDto, FocusStatusDto, GoalDto, GoalStatusDto, IdleGapDto,
-    IdleResolutionDto, PermissionStateDto, PresetDto, PrivacyModeDto, PrivacyRulesDto,
+    FocusCardActionDto, FocusSessionDto, FocusStartDto, FocusStatusDto, GoalDto, GoalStatusDto,
+    IdleGapDto, IdleResolutionDto, PermissionStateDto, PresetDto, PrivacyModeDto, PrivacyRulesDto,
     ProductivityDto, RangeDto, ReportDto, RestorePreviewDto, RestoreResultDto, RetentionImpactDto,
     RuleDto, RuleInputDto, RulePreviewDto, RuleSpecDto, SettingsDto, SettingsPatchDto,
     ShortcutStatusDto, SuggestionDto, TimelineItemDto, TrackingStateDto, TrackingStatusDto,
@@ -243,12 +243,14 @@ impl AppState {
         self.focus_view(&status)
     }
 
-    /// Starts a session, unless tracking is degraded (`AppError::FocusUnavailable`).
+    /// Starts a block. A focus block needs window observation, so it fails with
+    /// `AppError::FocusUnavailable` while tracking is degraded; timers and breaks always start.
     pub fn focus_start(&self, start: FocusStartDto) -> Result<FocusStatusDto, AppError> {
         let status = self.tracking_status()?;
         let blocked = status.degraded.then(|| self.permission.degraded_reason());
         self.focus.start(
             StartRequest {
+                kind: start.kind.into(),
                 intent: start.intent,
                 planned_ms: i64::from(start.planned_minutes) * 60_000,
                 allowed: start.allowed.into(),
@@ -272,6 +274,34 @@ impl AppState {
         self.focus.extend(minutes, self.now())?;
         self.refresh_focus_views();
         self.focus_status()
+    }
+
+    /// Freezes the countdown; the time left is kept.
+    pub fn focus_pause(&self) -> Result<FocusStatusDto, AppError> {
+        self.focus.pause(self.now())?;
+        self.refresh_focus_views();
+        self.focus_status()
+    }
+
+    pub fn focus_resume(&self) -> Result<FocusStatusDto, AppError> {
+        self.focus.resume(self.now())?;
+        self.refresh_focus_views();
+        self.focus_status()
+    }
+
+    /// Answers the end card: start the break (or the next block), skip it, or more time.
+    pub fn focus_card_action(
+        &self,
+        action: FocusCardActionDto,
+    ) -> Result<FocusStatusDto, AppError> {
+        let status = self.tracking_status()?;
+        self.focus.answer_card(
+            action.into(),
+            crate::focus_watcher::observed(&status),
+            self.now(),
+        )?;
+        self.refresh_focus_views();
+        self.focus_view(&status)
     }
 
     /// "Back to it": acknowledges the drift alert and holds the next one back.
@@ -452,7 +482,7 @@ impl AppState {
         let shortcut_changed = patch.shortcut.is_some();
         let tray_changed = patch.tray_display.is_some();
         let week_changed = patch.week_start.is_some();
-        let drift_changed = patch.focus_drift_after_secs.is_some();
+        let drift_changed = patch.focus_drift_after_secs.is_some() || patch.focus_timer.is_some();
         let settings = self.commands.update_settings(&patch.into())?;
         if titles_changed {
             self.engine.request(Command::ReloadPrivacy)?;
@@ -1466,6 +1496,7 @@ mod tests {
     fn focus_request(rig: &Rig, minutes: u32) -> FocusStartDto {
         let first = rig.state.activities_list().unwrap().remove(0);
         FocusStartDto {
+            kind: crate::ipc::dto::FocusKindDto::Focus,
             intent: "Write report".into(),
             planned_minutes: minutes,
             allowed: crate::ipc::dto::FocusAllowedDto {
@@ -1505,6 +1536,18 @@ mod tests {
                 .allowed
                 .app_ids
                 .contains(&"com.slack".to_owned())
+        );
+        let paused = rig.state.focus_pause().unwrap().active.unwrap();
+        assert!(paused.paused_at.is_some());
+        let resumed = rig.state.focus_resume().unwrap().active.unwrap();
+        assert!(resumed.paused_at.is_none());
+        assert_eq!(resumed.planned_ms, 35 * 60_000);
+        // No end card while a block runs, and the card action refuses to start another.
+        assert!(rig.state.focus_status().unwrap().card.is_none());
+        assert!(
+            rig.state
+                .focus_card_action(crate::ipc::dto::FocusCardActionDto::Skip)
+                .is_err()
         );
         std::thread::sleep(std::time::Duration::from_millis(5));
 
@@ -1579,6 +1622,7 @@ mod tests {
             let status = state.focus_status().unwrap();
             assert_eq!(status.unavailable, Some(wire));
             let start = FocusStartDto {
+                kind: crate::ipc::dto::FocusKindDto::Focus,
                 intent: "Write report".into(),
                 planned_minutes: 25,
                 allowed: crate::ipc::dto::FocusAllowedDto {
@@ -1587,10 +1631,18 @@ mod tests {
                 },
             };
             assert_eq!(
-                state.focus_start(start).unwrap_err(),
+                state.focus_start(start.clone()).unwrap_err(),
                 AppError::FocusUnavailable { reason: wire }
             );
             assert!(state.focus_status().unwrap().active.is_none());
+            // A plain timer needs no observation: it starts anyway.
+            let timer = FocusStartDto {
+                kind: crate::ipc::dto::FocusKindDto::Timer,
+                allowed: crate::ipc::dto::FocusAllowedDto::default(),
+                ..start
+            };
+            assert!(state.focus_start(timer).unwrap().active.is_some());
+            state.focus_stop().unwrap();
             state.shutdown();
         }
     }
@@ -1611,6 +1663,7 @@ mod tests {
         };
         let state = open();
         let start = FocusStartDto {
+            kind: crate::ipc::dto::FocusKindDto::Focus,
             intent: "Write report".into(),
             planned_minutes: 25,
             allowed: crate::ipc::dto::FocusAllowedDto {

@@ -5,8 +5,8 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use application::ports::Notifier;
-use domain::{GoalEventKind, IdleGap};
+use application::ports::{FocusEndAlert, Notifier};
+use domain::{FocusKind, GoalEventKind, IdleGap};
 use tauri::{AppHandle, Wry};
 use tauri_plugin_notification::{NotificationExt, PermissionState};
 
@@ -24,7 +24,8 @@ pub trait Toaster: Send {
     fn authorization(&self) -> Authorization;
     /// Asks the user (the system shows its dialog at most once).
     fn request_authorization(&self) -> Authorization;
-    fn show(&self, title: &str, body: &str) -> Result<(), String>;
+    /// `sound` asks for the system alert sound (end of a focus block).
+    fn show(&self, title: &str, body: &str, sound: bool) -> Result<(), String>;
 }
 
 pub struct SystemNotifier<T: Toaster> {
@@ -52,10 +53,13 @@ impl<T: Toaster> SystemNotifier<T> {
     }
 
     fn notify(&self, title: &str, body: &str) {
-        if self.authorized() {
-            // Best effort by design: the popover fallback already covers a failure.
-            let _ = self.toaster.show(title, body);
-        }
+        self.notify_with(title, body, false);
+    }
+
+    /// `true` when the notification was shown.
+    fn notify_with(&self, title: &str, body: &str, sound: bool) -> bool {
+        // Best effort by design: the popover fallback already covers a failure.
+        self.authorized() && self.toaster.show(title, body, sound).is_ok()
     }
 }
 
@@ -86,26 +90,78 @@ impl<T: Toaster> Notifier for SystemNotifier<T> {
         self.notify(&title, &body);
     }
 
-    fn focus_finished(&self, intent: &str) {
-        let (title, body) = focus_finished_message(intent);
-        self.notify(&title, &body);
+    fn focus_finished(&self, alert: &FocusEndAlert) -> bool {
+        let (title, body) = focus_finished_message(alert);
+        self.notify_with(&title, &body, alert.sound)
+    }
+
+    fn focus_heads_up(&self, kind: FocusKind, intent: &str, sound: bool) {
+        let (title, body) = focus_heads_up_message(kind, intent);
+        self.notify_with(&title, &body, sound);
     }
 }
 
 /// A gentle nudge, never a reprimand. No sound is requested: the toast is informational and
 /// the in-app card and the tray marker carry the same message.
 pub fn focus_drift_message(intent: &str, app_name: &str) -> (String, String) {
-    (
-        "Still on track?".to_owned(),
-        format!("You have been in {app_name} for a while. Your focus: {intent}."),
-    )
+    let body = if intent.trim().is_empty() {
+        format!("You have been in {app_name} for a while.")
+    } else {
+        format!("You have been in {app_name} for a while. Your focus: {intent}.")
+    };
+    ("Still on track?".to_owned(), body)
 }
 
-pub fn focus_finished_message(intent: &str) -> (String, String) {
-    (
-        "Focus session complete".to_owned(),
-        format!("Time is up for: {intent}. Open the app to see how it went."),
-    )
+/// `25 minutes`, `1 minute`.
+fn minutes_text(ms: i64) -> String {
+    match (ms.max(0) + 30_000) / 60_000 {
+        1 => "1 minute".to_owned(),
+        n => format!("{n} minutes"),
+    }
+}
+
+/// `5-minute`, as in "a 5-minute break".
+fn minutes_adjective(ms: i64) -> String {
+    format!("{}-minute", (ms.max(0) + 30_000) / 60_000)
+}
+
+/// Title and body for a block that ran its course, with what comes next.
+pub fn focus_finished_message(alert: &FocusEndAlert) -> (String, String) {
+    let title = match alert.kind {
+        FocusKind::Focus => "Focus block done",
+        FocusKind::Timer => "Time is up",
+        FocusKind::Break => "Break is over",
+    };
+    let task = alert.intent.trim();
+    let next = match (alert.next, alert.auto_started) {
+        (Some((FocusKind::Break, ms)), true) => {
+            format!("Your {} break has started.", minutes_adjective(ms))
+        }
+        (Some((FocusKind::Break, ms)), false) => {
+            format!("Time for a {} break.", minutes_adjective(ms))
+        }
+        (Some((_, ms)), true) => {
+            format!("Your next {} block has started.", minutes_adjective(ms))
+        }
+        (Some((_, ms)), false) => format!("Ready for another {}?", minutes_text(ms)),
+        (None, _) if alert.kind == FocusKind::Break => "Ready when you are.".to_owned(),
+        (None, _) => "Nice work.".to_owned(),
+    };
+    let body = if task.is_empty() || alert.kind == FocusKind::Break {
+        next
+    } else {
+        format!("{task}. {next}")
+    };
+    (title.to_owned(), body)
+}
+
+pub fn focus_heads_up_message(kind: FocusKind, intent: &str) -> (String, String) {
+    let body = match (kind, intent.trim()) {
+        (FocusKind::Break, _) => "Your break ends in a minute.".to_owned(),
+        (_, "") => "Time to wrap up.".to_owned(),
+        (_, task) => format!("Time to wrap up: {task}."),
+    };
+    ("One minute left".to_owned(), body)
 }
 
 /// Title and body of a goal alert. Never mentions window titles; a limit alert only informs.
@@ -143,8 +199,12 @@ impl Notifier for WithoutRevocationNotice {
         self.0.focus_drift(intent, app_name);
     }
 
-    fn focus_finished(&self, intent: &str) {
-        self.0.focus_finished(intent);
+    fn focus_finished(&self, alert: &FocusEndAlert) -> bool {
+        self.0.focus_finished(alert)
+    }
+
+    fn focus_heads_up(&self, kind: FocusKind, intent: &str, sound: bool) {
+        self.0.focus_heads_up(kind, intent, sound);
     }
 }
 
@@ -158,6 +218,12 @@ pub fn idle_message(gap: &IdleGap) -> String {
     };
     format!("You were away for {away}. Choose what to do with that time.")
 }
+
+/// A short, soft system sound (one of the macOS alert sounds; elsewhere the platform default).
+#[cfg(target_os = "macos")]
+const ALERT_SOUND: &str = "Glass";
+#[cfg(not(target_os = "macos"))]
+const ALERT_SOUND: &str = "default";
 
 /// Real toaster backed by `tauri-plugin-notification`, used only from Rust.
 pub struct TauriToaster {
@@ -193,14 +259,12 @@ impl Toaster for TauriToaster {
             .map_or(Authorization::Denied, map_state)
     }
 
-    fn show(&self, title: &str, body: &str) -> Result<(), String> {
-        self.app
-            .notification()
-            .builder()
-            .title(title)
-            .body(body)
-            .show()
-            .map_err(|e| e.to_string())
+    fn show(&self, title: &str, body: &str, sound: bool) -> Result<(), String> {
+        let mut builder = self.app.notification().builder().title(title).body(body);
+        if sound {
+            builder = builder.sound(ALERT_SOUND);
+        }
+        builder.show().map_err(|e| e.to_string())
     }
 }
 
@@ -218,6 +282,7 @@ mod tests {
         grant_on_request: bool,
         requests: Arc<Mutex<u32>>,
         shown: Arc<Mutex<Vec<(String, String)>>>,
+        sounds: Arc<Mutex<Vec<bool>>>,
         fail_show: bool,
     }
 
@@ -228,6 +293,7 @@ mod tests {
                 grant_on_request,
                 requests: Arc::new(Mutex::new(0)),
                 shown: Arc::new(Mutex::new(Vec::new())),
+                sounds: Arc::new(Mutex::new(Vec::new())),
                 fail_show: false,
             }
         }
@@ -247,10 +313,11 @@ mod tests {
             *self.state.lock().unwrap() = next;
             next
         }
-        fn show(&self, title: &str, body: &str) -> Result<(), String> {
+        fn show(&self, title: &str, body: &str, sound: bool) -> Result<(), String> {
             if self.fail_show {
                 return Err("boom".into());
             }
+            self.sounds.lock().unwrap().push(sound);
             self.shown
                 .lock()
                 .unwrap()
@@ -356,16 +423,95 @@ mod tests {
         let granted = FakeToaster::new(Authorization::Granted, false);
         let notifier = SystemNotifier::new(granted.clone());
         notifier.focus_drift("Write report", "Slack");
-        notifier.focus_finished("Write report");
+        assert!(notifier.focus_finished(&end(FocusKind::Focus, "Write report", None, false)));
         let shown = granted.shown.lock().unwrap();
         assert_eq!(shown.len(), 2);
         assert!(shown[0].1.contains("Slack") && shown[0].1.contains("Write report"));
-        assert_eq!(shown[1].0, "Focus session complete");
+        assert_eq!(shown[1].0, "Focus block done");
         drop(shown);
+        // Drift alerts are silent; the end of a block rings.
+        assert_eq!(*granted.sounds.lock().unwrap(), vec![false, true]);
 
         let denied = FakeToaster::new(Authorization::Denied, false);
-        SystemNotifier::new(denied.clone()).focus_drift("a", "b");
+        let notifier = SystemNotifier::new(denied.clone());
+        notifier.focus_drift("a", "b");
+        assert!(
+            !notifier.focus_finished(&end(FocusKind::Timer, "a", None, false)),
+            "the popover chimes instead"
+        );
         assert!(denied.shown.lock().unwrap().is_empty());
+    }
+
+    fn end(
+        kind: FocusKind,
+        intent: &str,
+        next: Option<(FocusKind, i64)>,
+        auto: bool,
+    ) -> FocusEndAlert {
+        FocusEndAlert {
+            kind,
+            intent: intent.into(),
+            next,
+            auto_started: auto,
+            sound: true,
+        }
+    }
+
+    #[test]
+    fn the_end_message_says_what_comes_next() {
+        const MIN: i64 = 60_000;
+        let body = |alert| focus_finished_message(&alert).1;
+        assert_eq!(
+            body(end(
+                FocusKind::Focus,
+                "Write report",
+                Some((FocusKind::Break, 5 * MIN)),
+                false
+            )),
+            "Write report. Time for a 5-minute break."
+        );
+        assert_eq!(
+            body(end(
+                FocusKind::Timer,
+                "",
+                Some((FocusKind::Break, 15 * MIN)),
+                true
+            )),
+            "Your 15-minute break has started."
+        );
+        assert_eq!(
+            focus_finished_message(&end(
+                FocusKind::Break,
+                "",
+                Some((FocusKind::Timer, 25 * MIN)),
+                false
+            )),
+            (
+                "Break is over".to_owned(),
+                "Ready for another 25 minutes?".to_owned()
+            )
+        );
+        assert_eq!(
+            body(end(
+                FocusKind::Break,
+                "",
+                Some((FocusKind::Focus, 50 * MIN)),
+                true
+            )),
+            "Your next 50-minute block has started."
+        );
+        assert_eq!(body(end(FocusKind::Timer, "", None, false)), "Nice work.");
+        assert_eq!(
+            focus_heads_up_message(FocusKind::Timer, "Write report"),
+            (
+                "One minute left".to_owned(),
+                "Time to wrap up: Write report.".to_owned()
+            )
+        );
+        assert_eq!(
+            focus_heads_up_message(FocusKind::Break, "").1,
+            "Your break ends in a minute."
+        );
     }
 
     #[test]

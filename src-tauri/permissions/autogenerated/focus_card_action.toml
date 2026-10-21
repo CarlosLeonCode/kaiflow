@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-focus-card-action"
+description = "Enables the focus_card_action command without any pre-configured scope."
+commands.allow = ["focus_card_action"]
+
+[[permission]]
+identifier = "deny-focus-card-action"
+description = "Denies the focus_card_action command without any pre-configured scope."
+commands.deny = ["focus_card_action"]

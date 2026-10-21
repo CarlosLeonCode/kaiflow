@@ -64,7 +64,7 @@ export function TrackingPopoverContainer({ notice }: { notice?: ReactNode }) {
       )}
       togglePending={toggle.isPending}
       notice={notice}
-      focus={<FocusSessionContainer compact />}
+      focus={<FocusSessionContainer variant="popover" />}
       onToggle={(command) => toggle.mutate(command)}
       onOpenDashboard={() => openMain.mutate()}
       onOpenAccessibilitySettings={() => openSettings.mutate()}

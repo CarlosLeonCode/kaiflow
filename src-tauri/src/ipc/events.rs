@@ -11,7 +11,7 @@ use tauri::{AppHandle, Wry};
 use tauri_specta::Event;
 
 use super::dto::{
-    DegradedReasonDto, FocusDto, GoalEventKindDto, IdleGapDto, IdleResolutionDto,
+    DegradedReasonDto, FocusDto, FocusKindDto, GoalEventKindDto, IdleGapDto, IdleResolutionDto,
     PermissionStateDto, ShortcutStatusDto, TrackingStatusDto, UpdateInfoDto,
 };
 
@@ -130,6 +130,17 @@ pub struct FocusChanged {
     pub active: bool,
     /// An unacknowledged drift alert is showing.
     pub drifting: bool,
+}
+
+/// A focus block, timer or break ran its course. The popover opens with the end card; it
+/// plays its own chime when `chime` is set (sound on, and no system notification with sound
+/// could be shown, e.g. notifications are denied).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type, Event)]
+pub struct FocusEnded {
+    pub kind: FocusKindDto,
+    /// The next block already started (auto-start).
+    pub auto_started: bool,
+    pub chime: bool,
 }
 
 /// Everything the backend can push, as one value so translation is testable.

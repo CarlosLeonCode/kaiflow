@@ -77,6 +77,8 @@ export function useBackendEventSync(): void {
   useTauriEvent(events.goalCrossed, () => invalidate(queryKeys.goals));
   // A session started, ended or changed, or a drift alert was raised or cleared.
   useTauriEvent(events.focusChanged, () => invalidate(queryKeys.focus));
+  // A block ran its course: the end card (or the next block) is waiting.
+  useTauriEvent(events.focusEnded, () => invalidate(queryKeys.focus));
   useTauriEvent(events.idleGapPending, () => invalidate(queryKeys.idleGaps));
   useTauriEvent(events.idleGapResolved, () => {
     invalidate(queryKeys.idleGaps);

@@ -125,6 +125,12 @@ export const commands = {
 	/**  Ends the session now ("End session"); its summary waits until dismissed. */
 	focusStop: () => typedError<FocusStatusDto, AppError>(__TAURI_INVOKE("focus_stop")),
 	focusExtend: (minutes: number) => typedError<FocusStatusDto, AppError>(__TAURI_INVOKE("focus_extend", { minutes })),
+	/**  Freezes the countdown of the running block. */
+	focusPause: () => typedError<FocusStatusDto, AppError>(__TAURI_INVOKE("focus_pause")),
+	/**  Continues a paused block with the time it had left. */
+	focusResume: () => typedError<FocusStatusDto, AppError>(__TAURI_INVOKE("focus_resume")),
+	/**  Answers the end card of a block that ran its course. */
+	focusCardAction: (action: FocusCardActionDto) => typedError<FocusStatusDto, AppError>(__TAURI_INVOKE("focus_card_action", { action })),
 	/**  "Back to it": acknowledges the drift alert and holds the next one back for `minutes`. */
 	focusSnooze: (minutes: number) => typedError<FocusStatusDto, AppError>(__TAURI_INVOKE("focus_snooze", { minutes })),
 	/**  "Allow this app" for the rest of the session. */
@@ -192,6 +198,7 @@ export const events = {
 	currentSegmentChanged: makeEvent<CurrentSegmentChanged>("current-segment-changed"),
 	dataChanged: makeEvent<DataChanged>("data-changed"),
 	focusChanged: makeEvent<FocusChanged>("focus-changed"),
+	focusEnded: makeEvent<FocusEnded>("focus-ended"),
 	goalCrossed: makeEvent<GoalCrossed>("goal-crossed"),
 	idleGapPending: makeEvent<IdleGapPending>("idle-gap-pending"),
 	idleGapResolved: makeEvent<IdleGapResolved>("idle-gap-resolved"),
@@ -424,12 +431,18 @@ export type DocumentKindDto = "backup" | "export";
 
 export type EndReasonDto = "focus_change" | "idle" | "sleep" | "lock" | "pause" | "stop" | "shutdown" | "recovered";
 
-/**  The running session. */
+/**  The running block. */
 export type FocusActiveDto = {
 	id: number,
+	kind: FocusKindDto,
 	intent: string,
 	started_at: number,
+	/**  Moves on resume by the paused time. */
 	planned_end: number,
+	/**  Set while paused: the time left is `planned_end - paused_at`. */
+	paused_at: number | null,
+	/**  Planned length without the pauses, for the progress ring. */
+	planned_ms: number,
 	drift_alerts: number,
 	allowed: FocusAllowedDto,
 	/**  The app in front; `null` while nothing is observed (tracking paused, idle...). */
@@ -451,6 +464,22 @@ export type FocusAppDto = {
 	activity_id: number,
 };
 
+/**  The user's answer to the end card. */
+export type FocusCardActionDto = 
+/**  Start what the card offers. */
+{ kind: "start_next" } | { kind: "skip" } | 
+/**  A few more minutes of the block that ended. */
+{ kind: "more_time"; minutes: number };
+
+/**  Shown when a block ran its course, until the user answers it. */
+export type FocusCardDto = {
+	/**  The block that ended. */
+	finished: FocusStepDto,
+	ended_at: number,
+	/**  What comes next; `null` when the pomodoro cycle is off. */
+	next: FocusStepDto | null,
+};
+
 /**
  *  The focus session changed: it started, ended, was extended, or a drift alert was raised
  *  or cleared. The windows refetch `focus_status`.
@@ -459,6 +488,15 @@ export type FocusChanged = {
 	active: boolean,
 	/**  An unacknowledged drift alert is showing. */
 	drifting: boolean,
+};
+
+/**  Where the pomodoro cycle stands (round dots). */
+export type FocusCycleDto = {
+	enabled: boolean,
+	/**  Work blocks completed in this cycle. */
+	round: number,
+	/**  Work blocks before the long break. */
+	every: number,
 };
 
 export type FocusDistractionDto = {
@@ -475,12 +513,28 @@ export type FocusDto = {
 
 export type FocusEndDto = "completed" | "cancelled" | "recovered";
 
+/**
+ *  A focus block, timer or break ran its course. The popover opens with the end card; it
+ *  plays its own chime when `chime` is set (sound on, and no system notification with sound
+ *  could be shown, e.g. notifications are denied).
+ */
+export type FocusEnded = {
+	kind: FocusKindDto,
+	/**  The next block already started (auto-start). */
+	auto_started: boolean,
+	chime: boolean,
+};
+
+/**  What a block is for: a focus block watches for drift, a timer only counts down. */
+export type FocusKindDto = "focus" | "timer" | "break";
+
 /**  Productive share of productive plus distracting time; `no_signal` when both are zero. */
 export type FocusRatioDto = { kind: "no_signal" } | { kind: "ratio"; ratio: number | null };
 
 /**  A finished session with its summary. */
 export type FocusSessionDto = {
 	id: number,
+	kind: FocusKindDto,
 	intent: string,
 	started_at: number,
 	planned_end: number,
@@ -495,10 +549,16 @@ export type FocusSessionDto = {
 	top_distractions: FocusDistractionDto[],
 	/**  The user acknowledged the end summary. */
 	seen: boolean,
+	/**  Time actually spent in the block (its length without the pauses). */
+	worked_ms: number,
 };
 
-/**  What the user starts a session with. */
+/**
+ *  What the user starts a block with. The task name (`intent`) may be empty; only a focus
+ *  block needs something allowed.
+ */
 export type FocusStartDto = {
+	kind: FocusKindDto,
 	intent: string,
 	planned_minutes: number,
 	allowed: FocusAllowedDto,
@@ -509,8 +569,38 @@ export type FocusStatusDto = {
 	active: FocusActiveDto | null,
 	/**  The latest finished session whose summary the user has not dismissed yet. */
 	unseen: FocusSessionDto | null,
-	/**  Why a session cannot start right now (tracking is degraded); `null` when it can. */
+	/**  The end card of the block that just ran its course, until answered. */
+	card: FocusCardDto | null,
+	cycle: FocusCycleDto,
+	/**
+	 *  Why a focus block cannot start right now (tracking is degraded); `null` when it can.
+	 *  Timers and breaks can always start.
+	 */
 	unavailable: DegradedReasonDto | null,
+};
+
+/**  A block the end card offers or reports. */
+export type FocusStepDto = {
+	kind: FocusKindDto,
+	intent: string,
+	planned_ms: number,
+	long_break: boolean,
+};
+
+/**  Pomodoro cycle, sound and heads-up of focus blocks; patches replace the whole blob. */
+export type FocusTimerSettingsDto = {
+	/**  Offer a break after each work block, and a long one every few. */
+	cycle_enabled: boolean,
+	short_break_minutes: number,
+	long_break_minutes: number,
+	/**  Work blocks before a long break. */
+	long_break_every: number,
+	/**  Start what comes next without asking. */
+	auto_start_next: boolean,
+	/**  Sound with the end-of-block alert. */
+	sound: boolean,
+	/**  A notification one minute before a block ends. */
+	heads_up: boolean,
 };
 
 export type GapStatusDto = { kind: "pending" } | { kind: "resolved"; resolution: IdleResolutionDto } | { kind: "expired" };
@@ -780,6 +870,7 @@ export type SettingsDto = {
 	week_start: number,
 	/**  Seconds outside a focus session's allowed set before a drift alert. */
 	focus_drift_after_secs: number,
+	focus_timer: FocusTimerSettingsDto,
 	ui: UiSettingsDto,
 };
 
@@ -797,6 +888,7 @@ export type SettingsPatchDto = {
 	tray_display: TrayDisplayDto | null,
 	week_start: number | null,
 	focus_drift_after_secs: number | null,
+	focus_timer: FocusTimerSettingsDto | null,
 	ui: UiSettingsDto | null,
 };
 

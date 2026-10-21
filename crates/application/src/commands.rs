@@ -18,9 +18,9 @@ use crate::ports::{
 };
 use crate::queries::Range;
 use crate::settings_blobs::{
-    DEFAULT_FOCUS_DRIFT_AFTER_SECS, FOCUS_DRIFT_AFTER_RANGE_SECS, KEY_FOCUS_DRIFT_AFTER, KEY_UI,
-    KEY_WEEK_START, UiSettings, read_blob, read_focus_drift_after_secs, read_week_start,
-    write_blob,
+    DEFAULT_FOCUS_DRIFT_AFTER_SECS, FOCUS_DRIFT_AFTER_RANGE_SECS, FocusTimerSettings,
+    KEY_FOCUS_DRIFT_AFTER, KEY_FOCUS_TIMER, KEY_UI, KEY_WEEK_START, UiSettings, read_blob,
+    read_focus_drift_after_secs, read_week_start, write_blob,
 };
 
 /// How long a confirmation token stays valid.
@@ -198,6 +198,8 @@ pub struct Settings {
     pub week_start: u8,
     /// Seconds outside a focus session's allowed set before a drift alert.
     pub focus_drift_after_secs: u32,
+    /// Pomodoro cycle, sound and heads-up of focus blocks (`focus_timer` blob).
+    pub focus_timer: FocusTimerSettings,
     /// Interface state kept across restarts (`ui` blob).
     pub ui: UiSettings,
 }
@@ -217,6 +219,7 @@ impl Default for Settings {
             tray_display: TrayDisplay::default(),
             week_start: 0,
             focus_drift_after_secs: DEFAULT_FOCUS_DRIFT_AFTER_SECS,
+            focus_timer: FocusTimerSettings::default(),
             ui: UiSettings::default(),
         }
     }
@@ -238,6 +241,8 @@ pub struct SettingsPatch {
     pub tray_display: Option<TrayDisplay>,
     pub week_start: Option<u8>,
     pub focus_drift_after_secs: Option<u32>,
+    /// Replaces the whole `focus_timer` blob.
+    pub focus_timer: Option<FocusTimerSettings>,
     /// Replaces the whole `ui` blob.
     pub ui: Option<UiSettings>,
 }
@@ -372,6 +377,7 @@ impl Commands {
             tray_display: self.read(KEY_TRAY_DISPLAY, parse_tray_display, d.tray_display)?,
             week_start: read_week_start(self.settings.as_ref())?,
             focus_drift_after_secs: read_focus_drift_after_secs(self.settings.as_ref())?,
+            focus_timer: read_blob(self.settings.as_ref(), KEY_FOCUS_TIMER)?,
             ui: read_blob(self.settings.as_ref(), KEY_UI)?,
         })
     }
@@ -418,6 +424,9 @@ impl Commands {
         }
         if let Some(v) = patch.focus_drift_after_secs {
             set(KEY_FOCUS_DRIFT_AFTER, v.to_string())?;
+        }
+        if let Some(v) = &patch.focus_timer {
+            write_blob(self.settings.as_ref(), KEY_FOCUS_TIMER, v)?;
         }
         if let Some(v) = &patch.ui {
             write_blob(self.settings.as_ref(), KEY_UI, &v.clone().normalized())?;
@@ -595,6 +604,9 @@ fn validate_patch(p: &SettingsPatch) -> Result<(), CommandError> {
         return bad("the week must start on a day from Monday (0) to Sunday (6)");
     }
     if let Some(Err(message)) = p.ui.as_ref().map(UiSettings::validate) {
+        return bad(&message);
+    }
+    if let Some(Err(message)) = p.focus_timer.as_ref().map(FocusTimerSettings::validate) {
         return bad(&message);
     }
     Ok(())
@@ -1221,6 +1233,48 @@ mod tests {
             Err(CommandError::Invalid(_))
         ));
         assert_eq!(f.cmd.get_settings().unwrap().week_start, 6);
+    }
+
+    #[test]
+    fn focus_timer_settings_default_save_and_are_validated() {
+        let f = fixture();
+        let defaults = f.cmd.get_settings().unwrap().focus_timer;
+        assert!(defaults.cycle_enabled && defaults.sound);
+        assert!(!defaults.auto_start_next && !defaults.heads_up);
+        assert_eq!(
+            (
+                defaults.short_break_minutes,
+                defaults.long_break_minutes,
+                defaults.long_break_every
+            ),
+            (5, 15, 4)
+        );
+        let wanted = FocusTimerSettings {
+            auto_start_next: true,
+            short_break_minutes: 10,
+            ..FocusTimerSettings::default()
+        };
+        let saved = f
+            .cmd
+            .update_settings(&SettingsPatch {
+                focus_timer: Some(wanted.clone()),
+                ..SettingsPatch::default()
+            })
+            .unwrap();
+        assert_eq!(saved.focus_timer, wanted);
+        let bad = FocusTimerSettings {
+            long_break_every: 0,
+            ..FocusTimerSettings::default()
+        };
+        assert!(
+            f.cmd
+                .update_settings(&SettingsPatch {
+                    focus_timer: Some(bad),
+                    ..SettingsPatch::default()
+                })
+                .is_err()
+        );
+        assert_eq!(f.cmd.get_settings().unwrap().focus_timer, wanted);
     }
 
     #[test]

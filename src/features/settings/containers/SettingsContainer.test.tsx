@@ -140,6 +140,27 @@ describe("SettingsContainer", () => {
     await waitFor(() => expect(lastUpdate(calls)).toMatchObject({ focus_drift_after_secs: 180 }));
   });
 
+  it("saves the pomodoro cycle, sound and heads-up as one blob", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockBackend({
+      get_status: () => status(),
+      settings_update: (args) => mergePatch(args.patch),
+    });
+    renderWithProviders(<SettingsContainer />);
+
+    await user.selectOptions(await screen.findByRole("combobox", { name: "Short break" }), "10 min");
+    await waitFor(() =>
+      expect(lastUpdate(calls)).toMatchObject({ focus_timer: { short_break_minutes: 10, long_break_minutes: 15, sound: true } }),
+    );
+    await user.click(screen.getByRole("switch", { name: "One-minute heads-up" }));
+    await waitFor(() => expect(lastUpdate(calls)).toMatchObject({ focus_timer: { heads_up: true, short_break_minutes: 10 } }));
+    await user.click(screen.getByRole("switch", { name: "Pomodoro cycle" }));
+    await waitFor(() => expect(lastUpdate(calls)).toMatchObject({ focus_timer: { cycle_enabled: false } }));
+    // Without the cycle there are no breaks to configure.
+    await waitFor(() => expect(screen.queryByRole("combobox", { name: "Short break" })).not.toBeInTheDocument());
+    expect(screen.getByRole("switch", { name: "Sound" })).toBeChecked();
+  });
+
   it("toggles autostart and title storage", async () => {
     const user = userEvent.setup();
     const { calls } = mockBackend({

@@ -11,22 +11,26 @@
 //!
 //! A drift alert is gentle: a silent system notification (best effort), the tray marker and
 //! the card in the popover and the Focus views. It never opens a window or blocks an app.
+//!
+//! The end of a block is not: a notification with sound, and the popover opens with the end
+//! card. When no notification could be shown, the popover plays its own chime instead.
 
 use std::sync::Arc;
 use std::time::Duration;
 
 use application::engine::{Command, Reply};
 use application::focus::FocusService;
-use application::ports::{Clock, Notifier, TrackingKind, TrackingStatus};
+use application::ports::{Clock, FocusEndAlert, Notifier, TrackingKind, TrackingStatus};
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender, unbounded};
-use domain::{FocusSnapshot, UtcMs};
+use domain::{FocusKind, FocusSnapshot, UtcMs};
 use tauri::{AppHandle, Manager, Wry};
 use tauri_specta::Event;
 
 use crate::composition::AppState;
-use crate::ipc::events::FocusChanged;
+use crate::ipc::events::{FocusChanged, FocusEnded};
 use crate::notifications::{SystemNotifier, TauriToaster};
 use crate::tray_text::TrayText;
+use crate::windows;
 
 /// Added to every computed wake-up so the deadline has passed when the worker looks.
 const SLACK_MS: i64 = 250;
@@ -44,8 +48,14 @@ pub enum Announce {
     Changed { active: bool, drifting: bool },
     /// A drift alert is due (notification).
     Drift { intent: String, app_name: String },
-    /// The session ran its course.
-    Finished { intent: String },
+    /// The block ran its course (notification, end card, chime).
+    Ended(FocusEndAlert),
+    /// A minute is left (optional notification).
+    HeadsUp {
+        kind: FocusKind,
+        intent: String,
+        sound: bool,
+    },
 }
 
 /// What the user is looking at, as far as a focus session may know it.
@@ -73,10 +83,15 @@ pub fn step(
                 app_name: app.app_name,
             });
         }
-        if let Some(done) = &outcome.finished {
-            announce.push(Announce::Finished {
-                intent: done.intent.clone(),
+        if let Some((kind, intent)) = outcome.heads_up {
+            announce.push(Announce::HeadsUp {
+                kind,
+                intent,
+                sound: focus.timer_settings().sound,
             });
+        }
+        if let Some(ended) = outcome.ended {
+            announce.push(Announce::Ended(ended));
         }
         if outcome.changed {
             let tray = focus.tray(now);
@@ -197,7 +212,22 @@ fn perform(app: &AppHandle<Wry>, notifier: &dyn Notifier, announce: Vec<Announce
     for item in announce {
         match item {
             Announce::Drift { intent, app_name } => notifier.focus_drift(&intent, &app_name),
-            Announce::Finished { intent } => notifier.focus_finished(&intent),
+            Announce::HeadsUp {
+                kind,
+                intent,
+                sound,
+            } => notifier.focus_heads_up(kind, &intent, sound),
+            Announce::Ended(alert) => {
+                let shown = notifier.focus_finished(&alert);
+                let _ = FocusEnded {
+                    kind: alert.kind.into(),
+                    auto_started: alert.auto_started,
+                    chime: alert.sound && !shown,
+                }
+                .emit(app);
+                // The end card (or the block that auto-started) waits in the popover.
+                windows::show_popover(app);
+            }
             Announce::Changed { active, drifting } => {
                 let _ = FocusChanged { active, drifting }.emit(app);
             }
@@ -248,6 +278,7 @@ mod tests {
         focus
             .start(
                 StartRequest {
+                    kind: FocusKind::Focus,
                     intent: "Write report".into(),
                     planned_ms: 50 * MIN,
                     allowed: FocusAllowed {
@@ -362,9 +393,13 @@ mod tests {
         assert_eq!(
             announce,
             vec![
-                Announce::Finished {
-                    intent: "Write report".into()
-                },
+                Announce::Ended(FocusEndAlert {
+                    kind: FocusKind::Focus,
+                    intent: "Write report".into(),
+                    next: Some((FocusKind::Break, 5 * MIN)),
+                    auto_started: false,
+                    sound: true,
+                }),
                 Announce::Changed {
                     active: false,
                     drifting: false

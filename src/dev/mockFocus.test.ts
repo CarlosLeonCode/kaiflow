@@ -2,7 +2,22 @@ import { describe, expect, it } from "vitest";
 
 import type { FocusAppDto, FocusStartDto } from "@/shared/ipc";
 
-import { ALERT_COOLDOWN_MS, observe, startProblem, summarize, type MockSession } from "./mockFocus";
+import {
+  ALERT_COOLDOWN_MS,
+  cycleAnswer,
+  cycleCompleted,
+  cycleStarted,
+  emptyCycle,
+  observe,
+  pause,
+  plannedMs,
+  remaining,
+  resume,
+  startProblem,
+  summarize,
+  type MockSession,
+  type MockStep,
+} from "./mockFocus";
 import type { MockSegment } from "./seed";
 
 const S = 1000;
@@ -15,9 +30,12 @@ const slack: FocusAppDto = { app_id: "slack", app_name: "Slack", activity_id: 5 
 function session(): MockSession {
   return {
     id: 1,
+    kind: "focus",
     intent: "Write report",
     started_at: 0,
     planned_end: 50 * MIN,
+    paused_at: null,
+    paused_ms: 0,
     allowed: { activity_ids: [2], app_ids: ["excel"] },
     drift_alerts: 0,
     outside_since: null,
@@ -121,6 +139,7 @@ describe("the mock summary", () => {
 
 describe("start validation", () => {
   const start = (changes: Partial<FocusStartDto> = {}): FocusStartDto => ({
+    kind: "focus",
     intent: "Write report",
     planned_minutes: 25,
     allowed: { activity_ids: [], app_ids: ["excel"] },
@@ -129,8 +148,64 @@ describe("start validation", () => {
 
   it("accepts a good request and explains the bad ones", () => {
     expect(startProblem(start())).toBeNull();
-    expect(startProblem(start({ intent: " " }))).toMatch(/describe/);
+    expect(startProblem(start({ intent: " " }))).toBeNull();
+    expect(startProblem(start({ intent: "x".repeat(81) }))).toMatch(/too long/);
     expect(startProblem(start({ planned_minutes: 0 }))).toMatch(/1 minute and 12 hours/);
     expect(startProblem(start({ allowed: { activity_ids: [], app_ids: [] } }))).toMatch(/allow at least one/);
+    expect(startProblem(start({ kind: "timer", allowed: { activity_ids: [], app_ids: [] } }))).toBeNull();
+  });
+});
+
+describe("pause and resume", () => {
+  it("freezes the time left and moves the end on resume", () => {
+    const s = session();
+    pause(s, 10 * MIN);
+    expect(remaining(s, 30 * MIN)).toBe(40 * MIN);
+    observe(s, slack, 30 * MIN, DRIFT);
+    expect(s.outside_since).toBeNull();
+    resume(s, 70 * MIN);
+    expect([s.planned_end, s.paused_ms, s.paused_at]).toEqual([110 * MIN, 60 * MIN, null]);
+    expect(plannedMs(s, 70 * MIN)).toBe(50 * MIN);
+  });
+});
+
+describe("the mock pomodoro cycle mirrors the domain", () => {
+  const timer = {
+    cycle_enabled: true,
+    short_break_minutes: 5,
+    long_break_minutes: 15,
+    long_break_every: 2,
+    auto_start_next: false,
+    sound: true,
+    heads_up: false,
+  };
+  const work: MockStep = { kind: "timer", planned_ms: 25 * MIN, intent: "Read", allowed: { activity_ids: [], app_ids: [] }, long_break: false };
+
+  it("offers a short break, then a long one that closes the cycle", () => {
+    const c = emptyCycle();
+    cycleStarted(c, work, 0);
+    cycleCompleted(c, work, 25 * MIN, timer);
+    expect(c.card?.next).toMatchObject({ kind: "break", planned_ms: 5 * MIN, long_break: false });
+    const brk = cycleAnswer(c, { kind: "start_next" }, 25 * MIN)!;
+    cycleCompleted(c, brk, 30 * MIN, timer);
+    expect(c.card?.next).toMatchObject({ kind: "timer", intent: "Read" });
+    cycleAnswer(c, { kind: "skip" }, 30 * MIN);
+    cycleStarted(c, work, 31 * MIN);
+    cycleCompleted(c, work, 56 * MIN, timer);
+    expect(c.card?.next).toMatchObject({ long_break: true, planned_ms: 15 * MIN });
+    expect(c.round).toBe(2);
+    cycleAnswer(c, { kind: "skip" }, 57 * MIN);
+    expect(c.round).toBe(0);
+  });
+
+  it("more time keeps the offer and counts the round once", () => {
+    const c = emptyCycle();
+    cycleStarted(c, work, 0);
+    cycleCompleted(c, work, 25 * MIN, timer);
+    const more = cycleAnswer(c, { kind: "more_time", minutes: 5 }, 25 * MIN)!;
+    expect([more.kind, more.planned_ms]).toEqual(["timer", 5 * MIN]);
+    cycleCompleted(c, more, 30 * MIN, timer);
+    expect(c.card?.next?.kind).toBe("break");
+    expect(c.round).toBe(1);
   });
 });

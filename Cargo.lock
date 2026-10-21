@@ -2436,6 +2436,7 @@ dependencies = [
  "crossbeam-channel",
  "domain",
  "objc2",
+ "objc2-app-kit",
  "serde",
  "serde_json",
  "specta",

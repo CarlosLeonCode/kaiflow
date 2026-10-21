@@ -34,7 +34,7 @@ function backend(initial: Partial<Rig> = {}) {
     focus_start: (args) => {
       const start = args.start as FocusStartDto;
       rig.status = idleFocus({
-        active: running({ intent: start.intent, allowed: start.allowed, current: null }),
+        active: running({ kind: start.kind, intent: start.intent, allowed: start.allowed, current: null }),
       });
       return rig.status;
     },
@@ -43,6 +43,10 @@ function backend(initial: Partial<Rig> = {}) {
       return rig.status;
     },
     focus_extend: () => rig.status,
+    focus_card_action: () => {
+      rig.status = idleFocus();
+      return rig.status;
+    },
     focus_snooze: () => {
       rig.status = idleFocus({ active: running({ alerting: null }) });
       return rig.status;
@@ -63,84 +67,105 @@ const sent = (calls: { cmd: string; args: Record<string, unknown> }[], cmd: stri
   calls.filter((c) => c.cmd === cmd).map((c) => c.args);
 
 describe("FocusContainer", () => {
-  it("invites the user to start a first session when there is none", async () => {
-    const user = userEvent.setup();
-    backend();
+  it("opens on the start view with today's numbers", async () => {
+    backend({
+      history: [
+        focusSession({ id: 4, kind: "timer", started_at: Date.now() - 30 * MINUTE, worked_ms: 25 * MINUTE }),
+        focusSession({ id: 3, started_at: Date.now() - 2 * 86_400_000 }),
+      ],
+    });
     renderWithProviders(<FocusContainer />);
 
-    expect(await screen.findByText("No focus sessions yet")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Start a session" }));
-    expect(screen.getByRole("dialog", { name: "Start a focus session" })).toBeInTheDocument();
+    const form = await screen.findByRole("form", { name: "Start a block" });
+    expect(within(form).getByRole("radio", { name: "25 min" })).toBeChecked();
+    expect(within(form).getByRole("button", { name: "Start timer" })).toBeInTheDocument();
+    const today = screen.getByLabelText("Today");
+    expect(within(today).getByText("Blocks done today").nextSibling).toHaveTextContent("1");
+    expect(within(today).getByText("Focus time today").nextSibling).toHaveTextContent("25m");
   });
 
-  it("starts a session from the intent, a duration preset and what is allowed", async () => {
+  it("starts a plain timer from a preset, with an optional task", async () => {
     const user = userEvent.setup();
     const { calls } = backend();
     renderWithProviders(<FocusContainer />);
 
-    await user.click(await screen.findByRole("button", { name: "Start session" }));
-    const dialog = screen.getByRole("dialog", { name: "Start a focus session" });
-    // Nothing is chosen for the user.
-    expect(within(dialog).getByRole("radio", { name: "25 min" })).toBeChecked();
-    expect(within(dialog).getAllByRole("checkbox").every((box) => !(box as HTMLInputElement).checked)).toBe(true);
+    const form = await screen.findByRole("form", { name: "Start a block" });
+    await user.type(within(form).getByRole("textbox", { name: "Task" }), "Write report");
+    await user.click(within(form).getByRole("radio", { name: "50 min" }));
+    await user.click(within(form).getByRole("button", { name: "Start timer" }));
 
-    await user.type(within(dialog).getByRole("textbox", { name: /What do you want to focus on/ }), "Write report");
-    await user.click(within(dialog).getByRole("radio", { name: "50 min" }));
-    await user.click(within(within(dialog).getByRole("group", { name: "Allowed activities" })).getByRole("checkbox", { name: "Deep work" }));
-    await user.click(within(within(dialog).getByRole("group", { name: "Allowed apps" })).getByRole("checkbox", { name: "Excel" }));
-    await user.click(within(dialog).getByRole("button", { name: "Start session" }));
-
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    expect(sent(calls, "focus_start")).toEqual([
-      {
-        start: {
-          intent: "Write report",
-          planned_minutes: 50,
-          allowed: { activity_ids: [2], app_ids: ["com.microsoft.Excel"] },
+    await waitFor(() =>
+      expect(sent(calls, "focus_start")).toEqual([
+        {
+          start: {
+            kind: "timer",
+            intent: "Write report",
+            planned_minutes: 50,
+            allowed: { activity_ids: [], app_ids: [] },
+          },
         },
-      },
-    ]);
-    const card = await screen.findByRole("region", { name: "Focus session" });
+      ]),
+    );
+    const card = await screen.findByRole("region", { name: "Active timer" });
     expect(within(card).getByText("Write report")).toBeInTheDocument();
     expect(within(card).getByTestId("focus-countdown")).toHaveTextContent(/^(39|40):\d\d$/);
-    // The one running session blocks starting another.
-    expect(screen.getByRole("button", { name: "Start session" })).toBeDisabled();
+    expect(screen.queryByRole("form", { name: "Start a block" })).not.toBeInTheDocument();
   });
 
-  it("takes a custom length and refuses an incomplete form without calling the backend", async () => {
+  it("turns into a focus block with drift nudges when something is allowed under Advanced", async () => {
     const user = userEvent.setup();
     const { calls } = backend();
     renderWithProviders(<FocusContainer />);
 
-    await user.click(await screen.findByRole("button", { name: "Start session" }));
-    const dialog = screen.getByRole("dialog", { name: "Start a focus session" });
-    await user.click(within(dialog).getByRole("button", { name: "Start session" }));
-    expect(within(dialog).getByRole("alert")).toHaveTextContent("Describe what you want to focus on.");
+    const form = await screen.findByRole("form", { name: "Start a block" });
+    const advanced = within(form).getByRole("button", { name: /Advanced: drift nudges/ });
+    expect(advanced).toHaveAttribute("aria-expanded", "false");
+    await user.click(advanced);
+    await user.click(within(within(form).getByRole("group", { name: "Allowed activities" })).getByRole("checkbox", { name: "Deep work" }));
+    await user.click(within(within(form).getByRole("group", { name: "Allowed apps" })).getByRole("checkbox", { name: "Excel" }));
+    await user.click(within(form).getByRole("radio", { name: "Custom" }));
+    await user.clear(within(form).getByRole("spinbutton", { name: "Minutes" }));
+    await user.type(within(form).getByRole("spinbutton", { name: "Minutes" }), "35");
+    await user.click(within(form).getByRole("button", { name: "Start focus" }));
 
-    await user.type(within(dialog).getByRole("textbox", { name: /What do you want/ }), "Plan");
-    await user.click(within(dialog).getByRole("radio", { name: "Custom" }));
-    await user.clear(within(dialog).getByRole("spinbutton", { name: "Minutes" }));
-    await user.type(within(dialog).getByRole("spinbutton", { name: "Minutes" }), "35");
-    await user.click(within(dialog).getByRole("button", { name: "Start session" }));
-    expect(within(dialog).getByRole("alert")).toHaveTextContent(/Allow at least one activity or app/);
-    expect(sent(calls, "focus_start")).toEqual([]);
-
-    await user.click(within(within(dialog).getByRole("group", { name: "Allowed activities" })).getByRole("checkbox", { name: "Deep work" }));
-    await user.click(within(dialog).getByRole("button", { name: "Start session" }));
     await waitFor(() => expect(sent(calls, "focus_start")).toHaveLength(1));
-    expect((sent(calls, "focus_start")[0]!.start as FocusStartDto).planned_minutes).toBe(35);
+    expect(sent(calls, "focus_start")[0]!.start).toEqual({
+      kind: "focus",
+      intent: "",
+      planned_minutes: 35,
+      allowed: { activity_ids: [2], app_ids: ["com.microsoft.Excel"] },
+    });
   });
 
-  it("blocks starting with a clear reason while tracking is degraded", async () => {
+  it("refuses a bad custom length without calling the backend", async () => {
+    const user = userEvent.setup();
+    const { calls } = backend();
+    renderWithProviders(<FocusContainer />);
+
+    const form = await screen.findByRole("form", { name: "Start a block" });
+    await user.click(within(form).getByRole("radio", { name: "Custom" }));
+    await user.clear(within(form).getByRole("spinbutton", { name: "Minutes" }));
+    await user.type(within(form).getByRole("spinbutton", { name: "Minutes" }), "0");
+    await user.click(within(form).getByRole("button", { name: "Start timer" }));
+    expect(within(form).getByRole("alert")).toHaveTextContent("A block lasts between 1 minute and 12 hours.");
+    expect(sent(calls, "focus_start")).toEqual([]);
+  });
+
+  it("keeps timers available but explains why drift nudges are not while tracking is degraded", async () => {
+    const user = userEvent.setup();
     backend({ status: idleFocus({ unavailable: "wayland_session" }) });
     renderWithProviders(<FocusContainer />);
 
-    expect(await screen.findByText("Focus sessions are unavailable")).toBeInTheDocument();
+    expect(await screen.findByText("Drift nudges are unavailable")).toBeInTheDocument();
     expect(screen.getByText(/Window tracking is unavailable on Wayland/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Start session" })).toBeDisabled();
+    const form = screen.getByRole("form", { name: "Start a block" });
+    expect(within(form).getByRole("button", { name: "Start timer" })).toBeEnabled();
+    await user.click(within(form).getByRole("button", { name: /Advanced/ }));
+    expect(within(form).getByText(/Drift nudges need window tracking/)).toBeInTheDocument();
+    expect(within(form).queryAllByRole("checkbox")).toHaveLength(0);
   });
 
-  it("shows the reason in the dialog when the backend refuses to start", async () => {
+  it("shows the reason when the backend refuses to start", async () => {
     const user = userEvent.setup();
     mockBackend({
       activities_list: () => [SYSTEM, WORK],
@@ -153,23 +178,22 @@ describe("FocusContainer", () => {
     });
     renderWithProviders(<FocusContainer />);
 
-    await user.click(await screen.findByRole("button", { name: "Start session" }));
-    const dialog = screen.getByRole("dialog", { name: "Start a focus session" });
-    await user.type(within(dialog).getByRole("textbox", { name: /What do you want/ }), "Plan");
-    await user.click(within(within(dialog).getByRole("group", { name: "Allowed activities" })).getByRole("checkbox", { name: "Deep work" }));
-    await user.click(within(dialog).getByRole("button", { name: "Start session" }));
+    const form = await screen.findByRole("form", { name: "Start a block" });
+    await user.click(within(form).getByRole("button", { name: /Advanced/ }));
+    await user.click(within(within(form).getByRole("group", { name: "Allowed activities" })).getByRole("checkbox", { name: "Deep work" }));
+    await user.click(within(form).getByRole("button", { name: "Start focus" }));
 
-    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Focus sessions need window tracking");
+    expect(await within(form).findByRole("alert")).toHaveTextContent("Focus sessions need window tracking");
   });
 
-  it("ends the session, then shows how it went until it is dismissed", async () => {
+  it("ends the block, then shows how it went until it is dismissed", async () => {
     const user = userEvent.setup();
     const { calls } = backend({ status: idleFocus({ active: running() }) });
     renderWithProviders(<FocusContainer />);
 
-    const card = await screen.findByRole("region", { name: "Focus session" });
+    const card = await screen.findByRole("region", { name: "Active timer" });
     expect(within(card).getByText(/Allowed: 1 activity and 1 app/)).toBeInTheDocument();
-    await user.click(within(card).getByRole("button", { name: "End session" }));
+    await user.click(within(card).getByRole("button", { name: "End" }));
 
     const summary = await screen.findByRole("region", { name: "Session summary" });
     expect(sent(calls, "focus_stop")).toHaveLength(1);
@@ -185,6 +209,33 @@ describe("FocusContainer", () => {
     expect(sent(calls, "focus_summary_dismiss")).toEqual([{ id: 3 }]);
   });
 
+  it("draws the ring in the mode color and shows the round dots", async () => {
+    backend({ status: idleFocus({ active: running({ kind: "break", intent: "" }), cycle: { enabled: true, round: 2, every: 4 } }) });
+    renderWithProviders(<FocusContainer />);
+
+    const card = await screen.findByRole("region", { name: "Active timer" });
+    expect(within(card).getByText("Break")).toBeInTheDocument();
+    expect(within(card).getByTestId("timer-ring-progress")).toHaveAttribute("stroke", "var(--success)");
+    expect(within(card).getByRole("img", { name: "2 of 4 blocks before the long break" })).toBeInTheDocument();
+    expect(within(card).queryByText(/Allowed:/)).not.toBeInTheDocument();
+  });
+
+  it("answers the end card with more time", async () => {
+    const user = userEvent.setup();
+    const card = {
+      finished: { kind: "timer" as const, intent: "Write report", planned_ms: 25 * MINUTE, long_break: false },
+      ended_at: Date.now(),
+      next: { kind: "break" as const, intent: "", planned_ms: 15 * MINUTE, long_break: true },
+    };
+    const { calls } = backend({ status: idleFocus({ card }) });
+    renderWithProviders(<FocusContainer />);
+
+    const end = await screen.findByRole("region", { name: "Block finished" });
+    expect(within(end).getByText("Take a 15-minute long break?")).toBeInTheDocument();
+    await user.click(within(end).getByRole("button", { name: "+5 min" }));
+    await waitFor(() => expect(sent(calls, "focus_card_action")).toEqual([{ action: { kind: "more_time", minutes: 5 } }]));
+  });
+
   it("explains an empty summary when nothing was tracked", async () => {
     backend({ status: idleFocus({ unseen: focusSession({ percent_inside: null, inside_ms: 0, outside_ms: 0, top_distractions: [], drift_alerts: 0 }) }) });
     renderWithProviders(<FocusContainer />);
@@ -193,13 +244,13 @@ describe("FocusContainer", () => {
     expect(screen.queryByRole("list", { name: "Top distractions" })).not.toBeInTheDocument();
   });
 
-  it("extends the session by ten minutes", async () => {
+  it("extends the block by five minutes", async () => {
     const user = userEvent.setup();
     const { calls } = backend({ status: idleFocus({ active: running() }) });
     renderWithProviders(<FocusContainer />);
 
-    await user.click(await screen.findByRole("button", { name: "+10 min" }));
-    await waitFor(() => expect(sent(calls, "focus_extend")).toEqual([{ minutes: 10 }]));
+    await user.click(await screen.findByRole("button", { name: "+5 min" }));
+    await waitFor(() => expect(sent(calls, "focus_extend")).toEqual([{ minutes: 5 }]));
   });
 
   it("offers the three ways out of a drift and acts on each", async () => {

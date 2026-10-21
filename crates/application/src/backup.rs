@@ -210,6 +210,15 @@ pub struct FocusSessionRecord {
     pub allowed_apps: Vec<String>,
     #[serde(default)]
     pub allowed_activities: Vec<i64>,
+    /// `focus`, `timer` or `break`; documents written before timers lack it (focus).
+    #[serde(default)]
+    pub kind: Option<String>,
+    /// The block had no task name (`intent` holds a placeholder).
+    #[serde(default)]
+    pub untitled: bool,
+    /// Time the block spent paused.
+    #[serde(default)]
+    pub paused_ms: i64,
 }
 
 /// An AI weekly review kept in the history. API keys are never part of it.
@@ -456,6 +465,14 @@ impl Document {
             if known_reason.is_none() {
                 session.end_reason = Some("recovered".into());
             }
+            if session
+                .kind
+                .as_deref()
+                .is_some_and(|k| domain::FocusKind::parse(k).is_none())
+            {
+                session.kind = None;
+            }
+            session.paused_ms = session.paused_ms.max(0);
             if session.intent.trim().is_empty() || session.intent.chars().count() > 80 {
                 return bad("a focus session has an invalid intent");
             }
@@ -637,6 +654,9 @@ mod tests {
                 seen: true,
                 allowed_apps: vec!["excel".into()],
                 allowed_activities: vec![2],
+                kind: Some("focus".into()),
+                untitled: false,
+                paused_ms: 0,
             }],
             ai_reviews: vec![AiReviewRecord {
                 id: 3,

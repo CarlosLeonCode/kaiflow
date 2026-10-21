@@ -15,9 +15,13 @@ import { Switch } from "@/shared/ui/switch";
 import { DegradedBanner } from "@/features/tracking/components/StatusBanners";
 
 import {
+  LONG_BREAK_EVERY,
+  LONG_BREAK_MINUTES,
+  SHORT_BREAK_MINUTES,
   TRAY_DISPLAY_OPTIONS,
   autoDiscardOptions,
   focusDriftOptions,
+  minuteOptions,
   idleThresholdOptions,
   parseTrayDisplay,
   promptTimeoutOptions,
@@ -195,8 +199,107 @@ export function SettingsView({
 
           <Panel title="Focus sessions">
             <Row
+              label="Pomodoro cycle"
+              description="Offer a break after each block, and a long one every few blocks."
+              controlId="setting-focus-cycle"
+            >
+              <Switch
+                id="setting-focus-cycle"
+                aria-describedby="setting-focus-cycle-hint"
+                checked={settings.focus_timer.cycle_enabled}
+                onCheckedChange={(cycle_enabled) => onChange({ focus_timer: { ...settings.focus_timer, cycle_enabled } })}
+              />
+            </Row>
+            {settings.focus_timer.cycle_enabled && (
+              <>
+                <Row label="Short break" controlId="setting-focus-short-break">
+                  <Select
+                    id="setting-focus-short-break"
+                    value={settings.focus_timer.short_break_minutes}
+                    onChange={(event) =>
+                      onChange({ focus_timer: { ...settings.focus_timer, short_break_minutes: Number(event.target.value) } })
+                    }
+                  >
+                    {minuteOptions(SHORT_BREAK_MINUTES, settings.focus_timer.short_break_minutes).map((minutes) => (
+                      <option key={minutes} value={minutes}>
+                        {minutes} min
+                      </option>
+                    ))}
+                  </Select>
+                </Row>
+                <Row label="Long break" controlId="setting-focus-long-break">
+                  <Select
+                    id="setting-focus-long-break"
+                    value={settings.focus_timer.long_break_minutes}
+                    onChange={(event) =>
+                      onChange({ focus_timer: { ...settings.focus_timer, long_break_minutes: Number(event.target.value) } })
+                    }
+                  >
+                    {minuteOptions(LONG_BREAK_MINUTES, settings.focus_timer.long_break_minutes).map((minutes) => (
+                      <option key={minutes} value={minutes}>
+                        {minutes} min
+                      </option>
+                    ))}
+                  </Select>
+                </Row>
+                <Row label="Long break after" controlId="setting-focus-long-every">
+                  <Select
+                    id="setting-focus-long-every"
+                    value={settings.focus_timer.long_break_every}
+                    onChange={(event) =>
+                      onChange({ focus_timer: { ...settings.focus_timer, long_break_every: Number(event.target.value) } })
+                    }
+                  >
+                    {minuteOptions(LONG_BREAK_EVERY, settings.focus_timer.long_break_every).map((blocks) => (
+                      <option key={blocks} value={blocks}>
+                        {blocks === 1 ? "1 block" : `${blocks} blocks`}
+                      </option>
+                    ))}
+                  </Select>
+                </Row>
+                <Row
+                  label="Start the next block automatically"
+                  description="Off: the end card asks first."
+                  controlId="setting-focus-auto-start"
+                >
+                  <Switch
+                    id="setting-focus-auto-start"
+                    aria-describedby="setting-focus-auto-start-hint"
+                    checked={settings.focus_timer.auto_start_next}
+                    onCheckedChange={(auto_start_next) =>
+                      onChange({ focus_timer: { ...settings.focus_timer, auto_start_next } })
+                    }
+                  />
+                </Row>
+              </>
+            )}
+            <Row
+              label="Sound"
+              description="A short chime when a block or a break ends."
+              controlId="setting-focus-sound"
+            >
+              <Switch
+                id="setting-focus-sound"
+                aria-describedby="setting-focus-sound-hint"
+                checked={settings.focus_timer.sound}
+                onCheckedChange={(sound) => onChange({ focus_timer: { ...settings.focus_timer, sound } })}
+              />
+            </Row>
+            <Row
+              label="One-minute heads-up"
+              description="A notification one minute before a block ends."
+              controlId="setting-focus-heads-up"
+            >
+              <Switch
+                id="setting-focus-heads-up"
+                aria-describedby="setting-focus-heads-up-hint"
+                checked={settings.focus_timer.heads_up}
+                onCheckedChange={(heads_up) => onChange({ focus_timer: { ...settings.focus_timer, heads_up } })}
+              />
+            </Row>
+            <Row
               label="Nudge me after"
-              description="Time away from what a session allows, in a row, before a gentle alert. Never more than one alert every 5 minutes."
+              description="Focus blocks with allowed apps: time away from them, in a row, before a gentle alert. Never more than one alert every 5 minutes."
               controlId="setting-focus-drift"
             >
               <Select

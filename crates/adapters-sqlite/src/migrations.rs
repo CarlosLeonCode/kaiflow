@@ -34,6 +34,10 @@ pub const MIGRATIONS: &[Migration] = &[
         version: 5,
         sql: include_str!("../migrations/0005_ai_reviews.sql"),
     },
+    Migration {
+        version: 6,
+        sql: include_str!("../migrations/0006_focus_timer.sql"),
+    },
 ];
 
 pub fn current_version(conn: &Connection) -> Result<u32, DbError> {
@@ -97,7 +101,7 @@ mod tests {
     fn fresh_database_gets_full_schema_and_system_activity() {
         let mut conn = Connection::open_in_memory().unwrap();
         migrate(&mut conn, MIGRATIONS, None).unwrap();
-        assert_eq!(current_version(&conn).unwrap(), 5);
+        assert_eq!(current_version(&conn).unwrap(), 6);
         for t in [
             "activities",
             "segments",
@@ -154,13 +158,13 @@ mod tests {
         );
     }
 
-    const V6_OK: Migration = Migration {
-        version: 6,
+    const V7_OK: Migration = Migration {
+        version: 7,
         sql: "CREATE TABLE extra(x INTEGER);",
     };
     // The first statement succeeds, the second fails: the whole migration must roll back.
-    const V7_BROKEN: Migration = Migration {
-        version: 7,
+    const V8_BROKEN: Migration = Migration {
+        version: 8,
         sql: "CREATE TABLE half_done(x INTEGER); INSERT INTO no_such_table VALUES (1);",
     };
 
@@ -185,17 +189,18 @@ mod tests {
                 MIGRATIONS[2],
                 MIGRATIONS[3],
                 MIGRATIONS[4],
-                V6_OK,
+                MIGRATIONS[5],
+                V7_OK,
             ],
             Some(&path),
         )
         .unwrap();
 
-        let backup = backup_path(&path, 5);
+        let backup = backup_path(&path, 6);
         assert!(backup.exists());
-        assert_eq!(current_version(&conn).unwrap(), 6);
+        assert_eq!(current_version(&conn).unwrap(), 7);
         let copy = Connection::open(&backup).unwrap();
-        assert_eq!(current_version(&copy).unwrap(), 5);
+        assert_eq!(current_version(&copy).unwrap(), 6);
         assert!(!table_exists(&copy, "extra"));
         let kept: String = copy
             .query_row("SELECT value FROM settings WHERE key='k'", [], |r| r.get(0))
@@ -218,16 +223,17 @@ mod tests {
             MIGRATIONS[2],
             MIGRATIONS[3],
             MIGRATIONS[4],
-            V6_OK,
-            V7_BROKEN,
+            MIGRATIONS[5],
+            V7_OK,
+            V8_BROKEN,
         ];
         assert!(migrate(&mut conn, &all, Some(&path)).is_err());
 
-        // v6 committed on its own; v7 rolled back completely.
-        assert_eq!(current_version(&conn).unwrap(), 6);
+        // v7 committed on its own; v8 rolled back completely.
+        assert_eq!(current_version(&conn).unwrap(), 7);
         assert!(table_exists(&conn, "extra"));
         assert!(!table_exists(&conn, "half_done"));
-        assert!(backup_path(&path, 5).exists());
+        assert!(backup_path(&path, 6).exists());
         let kept: String = conn
             .query_row("SELECT value FROM settings WHERE key='k'", [], |r| r.get(0))
             .unwrap();
@@ -236,6 +242,6 @@ mod tests {
 
         // Reopening through the public entry point surfaces the failure and keeps the file usable.
         let reopened = Connection::open(&path).unwrap();
-        assert_eq!(current_version(&reopened).unwrap(), 6);
+        assert_eq!(current_version(&reopened).unwrap(), 7);
     }
 }

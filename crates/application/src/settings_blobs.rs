@@ -60,6 +60,70 @@ pub fn read_focus_drift_after_secs(repo: &dyn SettingsRepository) -> PortResult<
     }
 }
 
+/// Key of the [`FocusTimerSettings`] blob.
+pub const KEY_FOCUS_TIMER: &str = "focus_timer";
+
+/// Key of the pomodoro cycle state (not a user setting: where the cycle stands, so a restart
+/// resumes it).
+pub const KEY_FOCUS_CYCLE: &str = "focus_cycle";
+
+/// The pomodoro cycle, alerts and sound of focus blocks.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct FocusTimerSettings {
+    /// Offer a break after each work block, and a long one every few.
+    pub cycle_enabled: bool,
+    pub short_break_minutes: u32,
+    pub long_break_minutes: u32,
+    /// Work blocks before a long break.
+    pub long_break_every: u32,
+    /// Start what comes next without asking.
+    pub auto_start_next: bool,
+    /// Sound with the end-of-block alert (notification and popover chime).
+    pub sound: bool,
+    /// A notification one minute before a block ends.
+    pub heads_up: bool,
+}
+
+impl Default for FocusTimerSettings {
+    fn default() -> Self {
+        Self {
+            cycle_enabled: true,
+            short_break_minutes: 5,
+            long_break_minutes: 15,
+            long_break_every: 4,
+            auto_start_next: false,
+            sound: true,
+            heads_up: false,
+        }
+    }
+}
+
+impl FocusTimerSettings {
+    pub fn validate(&self) -> Result<(), String> {
+        if !(1..=60).contains(&self.short_break_minutes) {
+            return Err("a short break lasts between 1 and 60 minutes".into());
+        }
+        if !(1..=120).contains(&self.long_break_minutes) {
+            return Err("a long break lasts between 1 and 120 minutes".into());
+        }
+        if !(1..=12).contains(&self.long_break_every) {
+            return Err("a long break comes after 1 to 12 work blocks".into());
+        }
+        Ok(())
+    }
+
+    /// The cycle rules these settings describe.
+    pub fn cycle(&self) -> domain::focus_cycle::CycleConfig {
+        domain::focus_cycle::CycleConfig {
+            enabled: self.cycle_enabled,
+            short_break_ms: i64::from(self.short_break_minutes.clamp(1, 60)) * 60_000,
+            long_break_ms: i64::from(self.long_break_minutes.clamp(1, 120)) * 60_000,
+            long_every: self.long_break_every.clamp(1, 12),
+        }
+    }
+}
+
 /// Most dismissed apps remembered; the oldest fall off first.
 pub const MAX_DISMISSED_APPS: usize = 500;
 

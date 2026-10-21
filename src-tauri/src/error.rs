@@ -215,7 +215,9 @@ mod tests {
             }
         );
         assert!(matches!(
-            AppError::from(FocusServiceError::Invalid(domain::FocusError::EmptyIntent)),
+            AppError::from(FocusServiceError::Invalid(
+                domain::FocusError::NothingAllowed
+            )),
             AppError::Invalid { .. }
         ));
         assert_eq!(

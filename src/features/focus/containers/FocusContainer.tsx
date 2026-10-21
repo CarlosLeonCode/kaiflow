@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 
 import { toSubmitResult, type SubmitResult } from "@/features/activities/lib/submit";
 import { useSectionIntro } from "@/features/shell/hooks/useSectionIntro";
@@ -15,18 +15,19 @@ import {
 } from "@/shared/ipc";
 import { appOptions, RECENT_APP_DAYS } from "@/shared/lib/apps";
 import { addLocalDays } from "@/shared/lib/time";
-import { Dialog } from "@/shared/ui/dialog";
 
-import { FocusStartForm } from "../components/FocusStartForm";
+import { FocusStartPanel } from "../components/FocusStartPanel";
 import { FocusView } from "../components/FocusView";
 import { SessionSummary } from "../components/SessionSummary";
+import { todayStats } from "../lib/focus";
 import { FocusSessionContainer } from "./FocusSessionContainer";
 
-/** Wires the Focus section: the running session, the last summary, the history and the start dialog. */
+/** Wires the Focus section: today's numbers, the timer or the start view, the last summary, history. */
 export function FocusContainer() {
   const intro = useSectionIntro("focus");
   const now = useNow(60_000);
   const today = addLocalDays(now, 0);
+  const tomorrow = addLocalDays(now, 1);
   const range = useMemo(() => ({ from: addLocalDays(today, -RECENT_APP_DAYS), to: addLocalDays(today, 1) }), [today]);
   const status = useFocusStatusQuery();
   const history = useFocusHistoryQuery();
@@ -34,16 +35,15 @@ export function FocusContainer() {
   const recent = useReportQuery(range);
   const start = useStartFocusMutation();
   const dismiss = useDismissFocusSummaryMutation();
-  const [dialogOpen, setDialogOpen] = useState(false);
 
   const apps = useMemo(() => appOptions(recent.data?.by_app ?? []), [recent.data]);
+  const stats = useMemo(() => todayStats(history.data ?? [], today, tomorrow), [history.data, today, tomorrow]);
   const unseen = status.data?.unseen ?? null;
-  const running = status.data?.active != null;
+  const busy = status.data?.active != null || status.data?.card != null;
 
   async function submit(request: FocusStartDto): Promise<SubmitResult> {
     try {
       await start.mutateAsync(request);
-      setDialogOpen(false);
       return null;
     } catch (error) {
       return toSubmitResult(error);
@@ -57,30 +57,25 @@ export function FocusContainer() {
       loading={status.isPending || history.isPending}
       error={failure ? errorMessage(failure) : null}
       unavailable={status.data?.unavailable ?? null}
-      running={running}
-      activeCard={running ? <FocusSessionContainer /> : null}
+      today={stats}
+      main={
+        busy ? (
+          <FocusSessionContainer variant="section" />
+        ) : (
+          <FocusStartPanel
+            activities={activities.data ?? []}
+            apps={apps}
+            driftUnavailable={status.data?.unavailable != null}
+            onSubmit={submit}
+          />
+        )
+      }
       summary={
-        !running && unseen ? (
+        status.data?.active == null && unseen ? (
           <SessionSummary session={unseen} busy={dismiss.isPending} onDismiss={() => dismiss.mutate(unseen.id)} />
         ) : null
       }
       history={history.data ?? []}
-      onStart={() => setDialogOpen(true)}
-      dialog={
-        <Dialog
-          open={dialogOpen}
-          onOpenChange={setDialogOpen}
-          title="Start a focus session"
-          description="Choose what you are working on and what counts as being on track."
-        >
-          <FocusStartForm
-            activities={activities.data ?? []}
-            apps={apps}
-            onSubmit={submit}
-            onCancel={() => setDialogOpen(false)}
-          />
-        </Dialog>
-      }
-      />
+    />
   );
 }

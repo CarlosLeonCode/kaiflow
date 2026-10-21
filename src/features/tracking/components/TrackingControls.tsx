@@ -53,7 +53,7 @@ export function TrackingFooter({ state, shortcut, pending, onToggle, onOpenDashb
       ) : (
         <Button variant="secondary" disabled>
           <Pause aria-hidden="true" />
-          Pause
+          Pause tracking
         </Button>
       )}
       {shortcut && <Kbd title="Global shortcut">{shortcut}</Kbd>}

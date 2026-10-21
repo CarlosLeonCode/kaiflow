@@ -184,8 +184,8 @@ fn replace_in(tx: &rusqlite::Transaction<'_>, data: &BackupData) -> PortResult<(
         };
         tx.execute(
             "INSERT INTO focus_sessions(id, intent, started_at, planned_end, ended_at, end_reason,
-               drift_alerts, inside_ms, outside_ms, distractions, seen)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+               drift_alerts, inside_ms, outside_ms, distractions, seen, kind, untitled, paused_ms)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
             params![
                 f.id,
                 f.intent,
@@ -197,7 +197,10 @@ fn replace_in(tx: &rusqlite::Transaction<'_>, data: &BackupData) -> PortResult<(
                 f.inside_ms,
                 f.outside_ms,
                 distractions_json(&f.distractions),
-                f.seen
+                f.seen,
+                f.kind.as_deref().unwrap_or("focus"),
+                f.untitled,
+                f.paused_ms.max(0)
             ],
         )
         .map_err(port_err)?;
@@ -420,7 +423,7 @@ fn read_focus_sessions(c: &Connection, from: i64, to: i64) -> PortResult<Vec<Foc
     let mut stmt = c
         .prepare(
             "SELECT id, intent, started_at, planned_end, ended_at, end_reason, drift_alerts,
-                    inside_ms, outside_ms, distractions, seen
+                    inside_ms, outside_ms, distractions, seen, kind, untitled, paused_ms
              FROM focus_sessions
              WHERE ended_at IS NOT NULL AND started_at < ?2 AND ended_at >= ?1
              ORDER BY started_at, id",
@@ -443,6 +446,9 @@ fn read_focus_sessions(c: &Connection, from: i64, to: i64) -> PortResult<Vec<Foc
                     seen: r.get::<_, i64>(10)? != 0,
                     allowed_apps: Vec::new(),
                     allowed_activities: Vec::new(),
+                    kind: Some(r.get(11)?),
+                    untitled: r.get::<_, i64>(12)? != 0,
+                    paused_ms: r.get(13)?,
                 },
                 r.get::<_, String>(9)?,
             ))

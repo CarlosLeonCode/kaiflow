@@ -4,6 +4,7 @@ pub mod activity;
 pub mod backup_retention;
 pub mod calendar;
 pub mod focus;
+pub mod focus_cycle;
 pub mod focus_session;
 pub mod goals;
 pub mod idle_gap;
@@ -22,7 +23,7 @@ pub use calendar::{HourSlot, Period};
 pub use focus::FocusSnapshot;
 pub use focus_session::{
     Allowed as FocusAllowed, AppRef as FocusApp, Config as FocusConfig, FocusEnd, FocusError,
-    FocusMachine, Summary as FocusSummary,
+    FocusKind, FocusMachine, Summary as FocusSummary,
 };
 pub use goals::{
     ClosedPeriod, CurrentPeriod, EventKind as GoalEventKind, Goal, GoalError, GoalKind, GoalScope,

@@ -1,4 +1,10 @@
-import { installMockBackend } from "./mockBackend";
+import { installMockBackend, type DemoFocus } from "./mockBackend";
+
+const DEMO_FOCUS: readonly DemoFocus[] = ["running", "drift", "break", "paused", "ended"];
+
+function demoFocus(value: string | null): DemoFocus | undefined {
+  return DEMO_FOCUS.find((demo) => demo === value);
+}
 
 /**
  * Installs the mocked backend. Query flags tweak the scenario so one dev server covers the
@@ -8,8 +14,9 @@ import { installMockBackend } from "./mockBackend";
  * - `?update=manual`: an update is only offered when "Check now" is pressed.
  * - `?data=empty`: no tracked time at all (empty states).
  * - `?goals=demo`: four goals with progress, an exceeded limit and streaks.
- * - `?focus=running`: a focus session is running with the app in front on target;
- *   `?focus=drift` has the drift alert already showing.
+ * - `?focus=running`: a focus block is running with the app in front on target;
+ *   `?focus=drift` has the drift alert already showing, `?focus=break` runs a short break,
+ *   `?focus=paused` holds a paused timer and `?focus=ended` shows the end card.
  * - `?backup=failing`: the daily backup cannot write (Settings > Data error state).
  * - `?ai=on`: the Ollama provider is already switched on (Review can analyze right away);
  *   `?ai=offline` makes every analysis fail as if the network were down.
@@ -24,7 +31,7 @@ export function installMockIpc(search: string = window.location.search): void {
     emptyActivities: params.get("activities") === "empty",
     emptyHistory: params.get("data") === "empty",
     demoGoals: params.get("goals") === "demo",
-    demoFocus: params.get("focus") === "drift" ? "drift" : params.get("focus") === "running" ? "running" : undefined,
+    demoFocus: demoFocus(params.get("focus")),
     backupFails: params.get("backup") === "failing",
     aiOn: params.get("ai") === "on" || params.get("ai") === "offline",
     aiOffline: params.get("ai") === "offline",

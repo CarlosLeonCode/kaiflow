@@ -51,8 +51,8 @@ export function TrackingPopover(props: TrackingPopoverProps) {
           {shortcut.kind === "unavailable" && (
             <ShortcutBanner shortcut={shortcut.shortcut} reason={shortcut.reason} />
           )}
-          {props.notice}
           {props.focus}
+          {props.notice}
         </div>
         <TodayTotal totalMs={props.totalMs} live={props.state === "running"} />
         <CurrentActivity state={props.state} current={props.current} elapsedMs={props.currentElapsedMs} />

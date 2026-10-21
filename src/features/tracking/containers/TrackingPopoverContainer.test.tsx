@@ -83,9 +83,9 @@ describe("TrackingPopoverContainer", () => {
     });
     renderWithProviders(<TrackingPopoverContainer />);
 
-    await user.click(await screen.findByRole("button", { name: "Pause" }));
+    await user.click(await screen.findByRole("button", { name: "Pause tracking" }));
 
-    expect(await screen.findByRole("button", { name: "Resume" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Resume tracking" })).toBeInTheDocument();
     expect(calls.some((call) => call.cmd === "pause")).toBe(true);
     expect(screen.getByText("Paused. Resume to keep counting.")).toBeInTheDocument();
   });
@@ -142,7 +142,7 @@ describe("TrackingPopoverContainer", () => {
     expect(await screen.findByText("Shortcut ⌃⌥⌘T is unavailable")).toBeInTheDocument();
     expect(screen.getByText(/already in use/)).toBeInTheDocument();
     // Tracking stays usable: the pause button is still there.
-    expect(screen.getByRole("button", { name: "Pause" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Pause tracking" })).toBeEnabled();
   });
 
   it("disables pause while idle or asleep", async () => {
@@ -153,7 +153,7 @@ describe("TrackingPopoverContainer", () => {
     renderWithProviders(<TrackingPopoverContainer />);
 
     expect(await screen.findByText("You seem to be away.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Pause" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Pause tracking" })).toBeDisabled();
   });
 
   it("refetches the report when the backend announces data changes", async () => {
@@ -176,13 +176,13 @@ describe("TrackingPopoverContainer", () => {
   it("applies a pushed status without another request", async () => {
     mockBackend({ get_status: () => status(), get_report: () => report() });
     renderWithProviders(<TrackingPopoverContainer />);
-    await screen.findByRole("button", { name: "Pause" });
+    await screen.findByRole("button", { name: "Pause tracking" });
 
     await act(async () => {
       await emit("tracking-status-changed", status({ state: "paused", current: null, since: null }));
     });
 
-    expect(await screen.findByRole("button", { name: "Resume" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Resume tracking" })).toBeInTheDocument();
   });
 
   describe("live total", () => {
@@ -239,10 +239,12 @@ describe("TrackingPopoverContainer", () => {
       });
       renderWithProviders(<TrackingPopoverContainer />);
 
-      const card = await screen.findByRole("region", { name: "Focus session" });
+      const card = await screen.findByRole("region", { name: "Active timer" });
       expect(within(card).getByText("Write report")).toBeInTheDocument();
       expect(within(card).getByTestId("focus-countdown")).toHaveTextContent(/^(22|23):\d\d$/);
-      expect(within(card).queryByRole("button", { name: /\+10 min/ })).not.toBeInTheDocument();
+      expect(within(card).getByText("Focus")).toBeInTheDocument();
+      expect(within(card).getByRole("button", { name: "Pause" })).toBeInTheDocument();
+      expect(within(card).getByRole("button", { name: "+5 min" })).toBeInTheDocument();
       expect(within(card).queryByText(/Allowed:/)).not.toBeInTheDocument();
     });
 
@@ -276,8 +278,81 @@ describe("TrackingPopoverContainer", () => {
       });
       renderWithProviders(<TrackingPopoverContainer />);
 
-      await user.click(await screen.findByRole("button", { name: "End session" }));
+      await user.click(await screen.findByRole("button", { name: "End" }));
       await waitFor(() => expect(calls.some((c) => c.cmd === "focus_stop")).toBe(true));
+    });
+
+    it("pauses and resumes the countdown", async () => {
+      const user = userEvent.setup();
+      const now = Date.now();
+      let paused_at: number | null = null;
+      const { calls } = mockBackend({
+        get_status: () => status(),
+        get_report: () => report(),
+        focus_status: () => idleFocus({ active: focusActive({ started_at: now - 600_000, planned_end: now + 600_000, paused_at }) }),
+        focus_pause: () => {
+          paused_at = now;
+          return idleFocus({ active: focusActive({ started_at: now - 600_000, planned_end: now + 600_000, paused_at }) });
+        },
+        focus_resume: () => {
+          paused_at = null;
+          return idleFocus({ active: focusActive({ started_at: now - 600_000, planned_end: now + 600_000 }) });
+        },
+      });
+      renderWithProviders(<TrackingPopoverContainer />);
+
+      await user.click(await screen.findByRole("button", { name: "Pause" }));
+      const card = await screen.findByRole("region", { name: "Active timer" });
+      expect(await within(card).findByText("· Paused")).toBeInTheDocument();
+      expect(within(card).getByRole("timer")).toHaveAccessibleName(/^Paused, 10 minutes left$/);
+      await user.click(within(card).getByRole("button", { name: "Resume" }));
+      await waitFor(() => expect(calls.map((c) => c.cmd).filter((c) => c.startsWith("focus_p") || c.startsWith("focus_r"))).toEqual(["focus_pause", "focus_resume"]));
+    });
+
+    it("starts a timer in one click, with an optional task", async () => {
+      const user = userEvent.setup();
+      const { calls } = mockBackend({
+        get_status: () => status(),
+        get_report: () => report(),
+        focus_start: () => idleFocus({ active: focusActive({ kind: "timer" }) }),
+      });
+      renderWithProviders(<TrackingPopoverContainer />);
+
+      const start = await screen.findByRole("region", { name: "Start a timer" });
+      await user.type(within(start).getByRole("textbox", { name: "Task (optional)" }), "Read the doc");
+      await user.click(within(start).getByRole("button", { name: "50 min" }));
+      await waitFor(() =>
+        expect(calls.filter((c) => c.cmd === "focus_start").map((c) => c.args.start)).toEqual([
+          { kind: "timer", intent: "Read the doc", planned_minutes: 50, allowed: { activity_ids: [], app_ids: [] } },
+        ]),
+      );
+      expect(await screen.findByRole("region", { name: "Active timer" })).toBeInTheDocument();
+    });
+
+    it("shows the end card and answers it", async () => {
+      const user = userEvent.setup();
+      const card = {
+        finished: { kind: "focus" as const, intent: "Write report", planned_ms: 25 * 60_000, long_break: false },
+        ended_at: Date.now(),
+        next: { kind: "break" as const, intent: "", planned_ms: 5 * 60_000, long_break: false },
+      };
+      const { calls } = mockBackend({
+        get_status: () => status(),
+        get_report: () => report(),
+        focus_status: () => idleFocus({ card, cycle: { enabled: true, round: 1, every: 4 } }),
+        focus_card_action: () => idleFocus(),
+      });
+      renderWithProviders(<TrackingPopoverContainer />);
+
+      const end = await screen.findByRole("region", { name: "Block finished" });
+      expect(within(end).getByRole("heading", { name: "Focus done" })).toBeInTheDocument();
+      expect(within(end).getByText("Take a 5-minute break?")).toBeInTheDocument();
+      expect(within(end).getByRole("img", { name: "1 of 4 blocks before the long break" })).toBeInTheDocument();
+      expect(screen.queryByRole("region", { name: "Start a timer" })).not.toBeInTheDocument();
+      await user.click(within(end).getByRole("button", { name: "Start break" }));
+      await waitFor(() =>
+        expect(calls.filter((c) => c.cmd === "focus_card_action").map((c) => c.args.action)).toEqual([{ kind: "start_next" }]),
+      );
     });
 
     it("does not show the end summary (Today and Focus do)", async () => {
@@ -303,7 +378,8 @@ describe("TrackingPopoverContainer", () => {
       renderWithProviders(<TrackingPopoverContainer />);
 
       await screen.findByRole("region", { name: "Top apps today" });
-      expect(screen.queryByRole("region", { name: "Focus session" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("region", { name: "Active timer" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("region", { name: "Start a timer" })).not.toBeInTheDocument();
     });
   });
 });

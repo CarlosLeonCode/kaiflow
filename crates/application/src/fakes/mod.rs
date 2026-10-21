@@ -7,9 +7,9 @@ use std::sync::{Arc, Mutex};
 
 use crossbeam_channel::Sender;
 use domain::{
-    Activity, ActivityId, ActivityRule, AssignedSpan, EndReason, FocusAllowed, FocusEnd,
-    FocusSnapshot, FocusSummary, GapId, GapStatus, Goal, GoalEventKind, IdleGap, PermissionState,
-    PrivacyPolicy, Productivity, SeenApp, Segment, SegmentId, SegmentSource, UtcMs,
+    Activity, ActivityId, ActivityRule, AssignedSpan, EndReason, FocusEnd, FocusSnapshot,
+    FocusSummary, GapId, GapStatus, Goal, GoalEventKind, IdleGap, PermissionState, PrivacyPolicy,
+    Productivity, SeenApp, Segment, SegmentId, SegmentSource, UtcMs,
 };
 
 use crate::ai::{
@@ -506,8 +506,12 @@ impl Notifier for RecordingNotifier {
             .unwrap()
             .push((intent.into(), app_name.into()));
     }
-    fn focus_finished(&self, intent: &str) {
-        self.focus_finishes.lock().unwrap().push(intent.into());
+    fn focus_finished(&self, alert: &FocusEndAlert) -> bool {
+        self.focus_finishes
+            .lock()
+            .unwrap()
+            .push(alert.intent.clone());
+        true
     }
 }
 
@@ -872,13 +876,7 @@ impl FakeFocus {
 }
 
 impl FocusRepository for FakeFocus {
-    fn insert(
-        &self,
-        intent: &str,
-        started_at: UtcMs,
-        planned_end: UtcMs,
-        allowed: &FocusAllowed,
-    ) -> PortResult<i64> {
+    fn insert(&self, new: &NewFocus<'_>) -> PortResult<i64> {
         let mut f = self.0.lock().unwrap();
         if f.sessions.iter().any(|s| s.ended_at.is_none()) {
             return Err(PortError("a focus session is already running".into()));
@@ -887,33 +885,32 @@ impl FocusRepository for FakeFocus {
         let id = f.next_id;
         f.sessions.push(StoredFocus {
             id,
-            intent: intent.into(),
-            started_at,
-            planned_end,
+            kind: new.kind,
+            intent: new.intent.into(),
+            started_at: new.started_at,
+            planned_end: new.planned_end,
+            paused_at: None,
+            paused_ms: 0,
             ended_at: None,
             end_reason: None,
             drift_alerts: 0,
-            allowed: allowed.clone(),
+            allowed: new.allowed.clone(),
             summary: FocusSummary::default(),
             seen: false,
         });
         Ok(id)
     }
 
-    fn update_running(
-        &self,
-        id: i64,
-        planned_end: UtcMs,
-        allowed: &FocusAllowed,
-        drift_alerts: u32,
-    ) -> PortResult<()> {
+    fn update_running(&self, id: i64, running: &RunningFocus<'_>) -> PortResult<()> {
         let mut f = self.0.lock().unwrap();
         let Some(s) = f.sessions.iter_mut().find(|s| s.id == id) else {
             return Err(PortError("focus session not found".into()));
         };
-        s.planned_end = planned_end;
-        s.allowed = allowed.clone();
-        s.drift_alerts = drift_alerts;
+        s.planned_end = running.planned_end;
+        s.paused_at = running.paused_at;
+        s.paused_ms = running.paused_ms;
+        s.allowed = running.allowed.clone();
+        s.drift_alerts = running.drift_alerts;
         Ok(())
     }
 

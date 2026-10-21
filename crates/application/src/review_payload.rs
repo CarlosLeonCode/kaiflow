@@ -6,6 +6,7 @@
 //! role agnostic and treats everything inside the data block as untrusted text.
 
 use domain::FocusEnd;
+use domain::FocusKind;
 use domain::Productivity;
 use domain::Trend;
 use domain::backup_retention::civil_from_days;
@@ -262,6 +263,11 @@ fn goal_json(week: &GoalWeek) -> Value {
 }
 
 fn focus_json(sessions: &[StoredFocus], include_text: bool) -> Value {
+    // Plain timers and breaks have no on-task share to review.
+    let sessions: Vec<&StoredFocus> = sessions
+        .iter()
+        .filter(|s| s.kind == FocusKind::Focus)
+        .collect();
     let completed = sessions
         .iter()
         .filter(|s| s.end_reason == Some(FocusEnd::Completed))
@@ -485,6 +491,9 @@ mod tests {
     fn focus(intent: &str) -> StoredFocus {
         StoredFocus {
             id: 1,
+            kind: domain::FocusKind::Focus,
+            paused_at: None,
+            paused_ms: 0,
             intent: intent.into(),
             started_at: UtcMs(FIRST_DAY * 86_400_000 + 9 * 3_600_000),
             planned_end: UtcMs(FIRST_DAY * 86_400_000 + 9 * 3_600_000 + 50 * MIN),

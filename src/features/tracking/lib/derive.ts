@@ -56,9 +56,9 @@ export interface ToggleAction {
 export function toggleAction(state: TrackingStateDto): ToggleAction | null {
   switch (state) {
     case "running":
-      return { command: "pause", label: "Pause" };
+      return { command: "pause", label: "Pause tracking" };
     case "paused":
-      return { command: "resume", label: "Resume" };
+      return { command: "resume", label: "Resume tracking" };
     case "stopped":
       return { command: "start", label: "Start tracking" };
     case "idle":

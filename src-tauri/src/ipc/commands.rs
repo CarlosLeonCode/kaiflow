@@ -15,8 +15,8 @@ use super::ai_dto::{
 };
 use super::dto::{
     ActivityDto, ApplyPresetResultDto, BackupReportDto, BackupStatusDto, DashboardDto, DeleteOpDto,
-    FocusSessionDto, FocusStartDto, FocusStatusDto, GoalDto, GoalStatusDto, IdleGapDto,
-    IdleResolutionDto, PermissionStateDto, PresetDto, PrivacyModeDto, PrivacyRulesDto,
+    FocusCardActionDto, FocusSessionDto, FocusStartDto, FocusStatusDto, GoalDto, GoalStatusDto,
+    IdleGapDto, IdleResolutionDto, PermissionStateDto, PresetDto, PrivacyModeDto, PrivacyRulesDto,
     ProductivityDto, RangeDto, ReportDto, RestorePreviewDto, RestoreResultDto, RetentionImpactDto,
     RuleDto, RuleInputDto, RulePreviewDto, RuleSpecDto, SettingsDto, SettingsPatchDto,
     SuggestionDto, TimelineItemDto, TrackingStatusDto, UpdateInfoDto,
@@ -650,6 +650,37 @@ pub async fn focus_extend(
     minutes: u32,
 ) -> Result<FocusStatusDto, AppError> {
     let status = run(state, move |s| s.focus_extend(minutes)).await?;
+    announce_focus(&app, &status);
+    Ok(status)
+}
+
+/// Freezes the countdown of the running block.
+#[tauri::command]
+#[specta::specta]
+pub async fn focus_pause(app: AppHandle, state: Shared<'_>) -> Result<FocusStatusDto, AppError> {
+    let status = run(state, AppState::focus_pause).await?;
+    announce_focus(&app, &status);
+    Ok(status)
+}
+
+/// Continues a paused block with the time it had left.
+#[tauri::command]
+#[specta::specta]
+pub async fn focus_resume(app: AppHandle, state: Shared<'_>) -> Result<FocusStatusDto, AppError> {
+    let status = run(state, AppState::focus_resume).await?;
+    announce_focus(&app, &status);
+    Ok(status)
+}
+
+/// Answers the end card of a block that ran its course.
+#[tauri::command]
+#[specta::specta]
+pub async fn focus_card_action(
+    app: AppHandle,
+    state: Shared<'_>,
+    action: FocusCardActionDto,
+) -> Result<FocusStatusDto, AppError> {
+    let status = run(state, move |s| s.focus_card_action(action)).await?;
     announce_focus(&app, &status);
     Ok(status)
 }

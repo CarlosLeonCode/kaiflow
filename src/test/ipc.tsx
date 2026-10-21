@@ -107,6 +107,15 @@ export function settings(overrides: Partial<SettingsDto> = {}): SettingsDto {
     tray_display: "today_total",
     week_start: 0,
     focus_drift_after_secs: 90,
+    focus_timer: {
+      cycle_enabled: true,
+      short_break_minutes: 5,
+      long_break_minutes: 15,
+      long_break_every: 4,
+      auto_start_next: false,
+      sound: true,
+      heads_up: false,
+    },
     ui: { dismissed_intros: [] },
     ...overrides,
   };
@@ -114,7 +123,14 @@ export function settings(overrides: Partial<SettingsDto> = {}): SettingsDto {
 
 /** No session running and nothing waiting; override what the test needs. */
 export function idleFocus(overrides: Partial<FocusStatusDto> = {}): FocusStatusDto {
-  return { active: null, unseen: null, unavailable: null, ...overrides };
+  return {
+    active: null,
+    unseen: null,
+    card: null,
+    cycle: { enabled: true, round: 0, every: 4 },
+    unavailable: null,
+    ...overrides,
+  };
 }
 
 export function backupStatus(overrides: Partial<BackupStatusDto> = {}): BackupStatusDto {
@@ -189,9 +205,12 @@ const MIN = 60_000;
 export function focusActive(overrides: Partial<FocusActiveDto> = {}): FocusActiveDto {
   return {
     id: 7,
+    kind: "focus",
     intent: "Write report",
     started_at: FIXED_NOW - 10 * MIN,
     planned_end: FIXED_NOW + 40 * MIN,
+    paused_at: null,
+    planned_ms: 50 * MIN,
     drift_alerts: 0,
     allowed: { activity_ids: [2], app_ids: ["com.microsoft.Excel"] },
     current: { app_id: "com.apple.dt.Xcode", app_name: "Xcode", activity_id: 2 },
@@ -204,6 +223,7 @@ export function focusActive(overrides: Partial<FocusActiveDto> = {}): FocusActiv
 export function focusSession(overrides: Partial<FocusSessionDto> = {}): FocusSessionDto {
   return {
     id: 3,
+    kind: "focus",
     intent: "Write report",
     started_at: FIXED_NOW - 2 * 3_600_000,
     planned_end: FIXED_NOW - 3_600_000,
@@ -216,6 +236,7 @@ export function focusSession(overrides: Partial<FocusSessionDto> = {}): FocusSes
     percent_inside: 75,
     top_distractions: [{ app_id: "com.tinyspeck.slackmacgap", app_name: "Slack", ms: 12 * MIN }],
     seen: false,
+    worked_ms: 60 * MIN,
     ...overrides,
   };
 }

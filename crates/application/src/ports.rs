@@ -6,7 +6,7 @@ use std::path::Path;
 use crate::backup::BackupData;
 use crossbeam_channel::Sender;
 use domain::{
-    Activity, ActivityId, ActivityRule, AssignedSpan, EndReason, FocusAllowed, FocusEnd,
+    Activity, ActivityId, ActivityRule, AssignedSpan, EndReason, FocusAllowed, FocusEnd, FocusKind,
     FocusSnapshot, FocusSummary, GapId, GapStatus, Goal, GoalEventKind, HourSlot, IdleGap,
     PermissionState, PrivacyPolicy, Productivity, SeenApp, Segment, SegmentId, UtcMs,
 };
@@ -284,9 +284,15 @@ pub trait GoalRepository: Send + Sync {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StoredFocus {
     pub id: i64,
+    pub kind: FocusKind,
+    /// May be empty: the task name is optional.
     pub intent: String,
     pub started_at: UtcMs,
     pub planned_end: UtcMs,
+    /// Set while the block is paused.
+    pub paused_at: Option<UtcMs>,
+    /// Time spent paused (already added to the planned end).
+    pub paused_ms: i64,
     pub ended_at: Option<UtcMs>,
     pub end_reason: Option<FocusEnd>,
     pub drift_alerts: u32,
@@ -297,24 +303,41 @@ pub struct StoredFocus {
     pub seen: bool,
 }
 
-/// Focus sessions and what they allowed (migration 0004). At most one runs at a time.
+impl StoredFocus {
+    /// Time actually spent in the block: its length without the pauses.
+    pub fn worked_ms(&self) -> i64 {
+        let end = self.ended_at.unwrap_or(self.planned_end);
+        (end.since(self.started_at) - self.paused_ms).max(0)
+    }
+}
+
+/// A block about to be stored.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewFocus<'a> {
+    pub kind: FocusKind,
+    pub intent: &'a str,
+    pub started_at: UtcMs,
+    pub planned_end: UtcMs,
+    pub allowed: &'a FocusAllowed,
+}
+
+/// What can change while a block runs.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RunningFocus<'a> {
+    pub planned_end: UtcMs,
+    pub paused_at: Option<UtcMs>,
+    pub paused_ms: i64,
+    pub allowed: &'a FocusAllowed,
+    pub drift_alerts: u32,
+}
+
+/// Focus sessions and what they allowed (migrations 0004 and 0006). At most one runs at a
+/// time.
 pub trait FocusRepository: Send + Sync {
     /// Stores a new running session and returns its id.
-    fn insert(
-        &self,
-        intent: &str,
-        started_at: UtcMs,
-        planned_end: UtcMs,
-        allowed: &FocusAllowed,
-    ) -> PortResult<i64>;
+    fn insert(&self, new: &NewFocus<'_>) -> PortResult<i64>;
     /// Stores what can change while a session runs.
-    fn update_running(
-        &self,
-        id: i64,
-        planned_end: UtcMs,
-        allowed: &FocusAllowed,
-        drift_alerts: u32,
-    ) -> PortResult<()>;
+    fn update_running(&self, id: i64, running: &RunningFocus<'_>) -> PortResult<()>;
     /// Closes the session with its summary; it then waits, unseen, for the user.
     fn close(
         &self,
@@ -406,6 +429,24 @@ pub trait Notifier: Send {
     /// The user has been outside a focus session's allowed set for a while. Silent by
     /// design: it never makes a sound or opens a window.
     fn focus_drift(&self, _intent: &str, _app_name: &str) {}
-    /// A focus session ran its course.
-    fn focus_finished(&self, _intent: &str) {}
+    /// A block ran its course. Returns whether a system notification was shown (the popover
+    /// plays its own chime when it was not).
+    fn focus_finished(&self, _alert: &FocusEndAlert) -> bool {
+        false
+    }
+    /// A minute is left in the block (optional setting).
+    fn focus_heads_up(&self, _kind: FocusKind, _intent: &str, _sound: bool) {}
+}
+
+/// What to tell the user about a block that ran its course.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FocusEndAlert {
+    pub kind: FocusKind,
+    pub intent: String,
+    /// What comes next and its planned length, when the cycle offers something.
+    pub next: Option<(FocusKind, i64)>,
+    /// The next block already started (auto-start).
+    pub auto_started: bool,
+    /// Play a sound with the notification.
+    pub sound: bool,
 }

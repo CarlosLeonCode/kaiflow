@@ -16,9 +16,18 @@
 //! a FIGURE SPACE (U+2007, exactly one digit wide) when they stand alone (`␣5m`). The width
 //! then changes only when the number of digit columns changes (59m -> 1h 00m, 9h -> 10h).
 //!
+//! On macOS the status item also gets the system font with monospaced digits
+//! (`monospacedDigitSystemFont`), so the per-second countdown never jitters either.
+//!
 //! Cadence: a refresh on every status / segment change event, and while running one wake-up
-//! when a shown total crosses the next whole minute (minute resolution, never per second).
-//! Paused, idle and asleep only wake at local midnight so the day total resets.
+//! when a shown total crosses the next whole minute (minute resolution). Paused, idle and
+//! asleep only wake at local midnight so the day total resets.
+//!
+//! Focus blocks: while one runs it takes over the text whatever `tray_display` says
+//! (`◔ 24:13 · Write report`, `☕︎ 04:12` for a break, `⏸︎ 24:13` while paused) and the text
+//! ticks every second, the only per-second cadence in the app. That path reads nothing but the
+//! focus service (no engine round trip, no report), and a paused block waits for events only.
+//! When the block ends, the normal text comes back on the next refresh.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -28,7 +37,7 @@ use application::engine::{Command, Reply};
 use application::ports::{Clock, TrackingKind};
 use application::queries::Range;
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender, unbounded};
-use domain::UtcMs;
+use domain::{FocusKind, UtcMs};
 use tauri::{AppHandle, Manager, Wry};
 
 use crate::composition::AppState;
@@ -45,11 +54,16 @@ const PAUSED_MARKER: &str = "\u{23F8}\u{FE0E}";
 const SEPARATOR: &str = " · ";
 /// Quarter-filled circle: a countdown in progress.
 const FOCUS_MARKER: &str = "◔";
+/// U+2615 HOT BEVERAGE followed by VS15: a monochrome cup for a break.
+const BREAK_MARKER: &str = "\u{2615}\u{FE0E}";
 /// Replaces the separator while a drift alert is showing.
 const DRIFT_SEPARATOR: &str = " ! ";
 const APP_NAME: &str = "Kaiflow";
 
 const MINUTE_MS: i64 = 60_000;
+const SECOND_MS: i64 = 1_000;
+/// Added to the per-second wake-up so the new second is already due when the worker looks.
+const SECOND_SLACK_MS: i64 = 15;
 /// Added to every computed wake-up: the open segment is persisted on a 2 s heartbeat, so
 /// waking a bit after the exact minute guarantees the new minute is already visible.
 const SLACK_MS: i64 = 2_500;
@@ -74,12 +88,15 @@ pub struct GoalTray {
     pub target_ms: i64,
 }
 
-/// A focus session in progress; while one runs it takes over the text (unless the tray text
-/// is off): the countdown matters more than the day total.
+/// A focus block, timer or break in progress; while one runs it takes over the text (even
+/// with the tray text off): the countdown matters more than the day total.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FocusTray<'a> {
+    pub kind: FocusKind,
+    /// May be empty: then only the glyph and the countdown show.
     pub intent: &'a str,
     pub remaining_ms: i64,
+    pub paused: bool,
     /// A drift alert is showing: the separator turns into `!`.
     pub drifting: bool,
 }
@@ -129,31 +146,64 @@ fn goal_text(goal: GoalTray) -> String {
     )
 }
 
-/// Whole minutes left, rounded up: `◔ 1m` stays until the session ends.
-fn remaining_minutes_ms(remaining_ms: i64) -> i64 {
-    minutes_left(remaining_ms) * MINUTE_MS
+/// Seconds left, rounded up: `00:01` stays until the block ends, never `00:00` early.
+fn seconds_left(remaining_ms: i64) -> i64 {
+    (remaining_ms.max(0) + SECOND_MS - 1) / SECOND_MS
 }
 
-/// Minutes left, rounded up.
-fn minutes_left(remaining_ms: i64) -> i64 {
-    (remaining_ms.max(0) + MINUTE_MS - 1) / MINUTE_MS
+/// `24:13`, or `1:05:00` from an hour up.
+pub fn format_clock(remaining_ms: i64) -> String {
+    let total = seconds_left(remaining_ms);
+    let (hours, minutes, seconds) = (total / 3600, total % 3600 / 60, total % 60);
+    if hours > 0 {
+        format!("{hours}:{minutes:02}:{seconds:02}")
+    } else {
+        format!("{minutes:02}:{seconds:02}")
+    }
 }
 
-/// `◔ 23m · Write report`, the intent shortened to keep the label within the limit.
-fn focus_text(focus: FocusTray<'_>) -> String {
+/// `◔ 24:13 · Write report`: the glyph says what runs (a cup for a break, the pause sign while
+/// paused), then the countdown, then the task name shortened to keep the label short. The
+/// name is the first thing to go when there is no room for it.
+pub fn focus_text(focus: FocusTray<'_>) -> String {
+    let marker = match (focus.paused, focus.kind) {
+        (true, _) => PAUSED_MARKER,
+        (false, FocusKind::Break) => BREAK_MARKER,
+        (false, _) => FOCUS_MARKER,
+    };
+    let prefix = format!("{marker} {}", format_clock(focus.remaining_ms));
     let separator = if focus.drifting {
         DRIFT_SEPARATOR
     } else {
         SEPARATOR
     };
-    let prefix = format!(
-        "{FOCUS_MARKER} {}{separator}",
-        format_duration(remaining_minutes_ms(focus.remaining_ms))
-    );
-    let budget = MAX_LABEL_CHARS
-        .saturating_sub(prefix.chars().count())
-        .max(MIN_NAME_CHARS);
-    format!("{prefix}{}", truncate(focus.intent, budget))
+    let intent = focus.intent.trim();
+    let budget = MAX_LABEL_CHARS.saturating_sub(prefix.chars().count() + separator.chars().count());
+    if intent.is_empty() || budget < MIN_NAME_CHARS {
+        return if focus.drifting {
+            format!("{prefix}{}", DRIFT_SEPARATOR.trim_end())
+        } else {
+            prefix
+        };
+    }
+    format!("{prefix}{separator}{}", truncate(intent, budget))
+}
+
+/// When the shown countdown changes: right after the next whole second goes by. A paused
+/// block waits for events only.
+pub fn focus_refresh(focus: FocusTray<'_>) -> Option<Duration> {
+    if focus.paused {
+        return None;
+    }
+    let left = focus.remaining_ms.max(0);
+    let shown = seconds_left(left);
+    // At zero the watcher ends the block and asks for a refresh; poll once a second meanwhile.
+    let wait = if shown == 0 {
+        SECOND_MS
+    } else {
+        left - (shown - 1) * SECOND_MS + SECOND_SLACK_MS
+    };
+    Some(Duration::from_millis(wait.max(1).unsigned_abs()))
 }
 
 /// Trims `text` and shortens it to at most `max_chars` characters, ending with `…` when cut.
@@ -175,12 +225,13 @@ fn with_name(prefix: &str, name: &str, sep: &str, tail: &str) -> String {
 
 /// Text next to the icon; empty means icon only.
 pub fn tray_text(display: TrayDisplay, snap: &TraySnapshot<'_>) -> String {
-    if display == TrayDisplay::Off {
-        return String::new();
-    }
-    // A session runs independently of tracking, so it shows in every tracking state.
+    // A block runs independently of tracking, so it shows in every tracking state, and it
+    // overrides the display choice: the user started a timer to see it.
     if let Some(focus) = snap.focus {
         return focus_text(focus);
+    }
+    if display == TrayDisplay::Off {
+        return String::new();
     }
     // The goal variant replaces the day total; without a goal it falls back to the total.
     let total = match (display, snap.goal) {
@@ -225,13 +276,8 @@ pub fn next_refresh(
 ) -> Option<Duration> {
     let as_wait = |ms: i64| Duration::from_millis(ms.max(MIN_WAIT_MS).unsigned_abs());
     let midnight = until_midnight_ms.max(0) + SLACK_MS;
-    if display != TrayDisplay::Off
-        && let Some(focus) = snap.focus
-    {
-        // The countdown changes when the minutes left (rounded up) drop by one.
-        let left = focus.remaining_ms.max(1);
-        let minutes = minutes_left(left);
-        return Some(as_wait(left - (minutes - 1) * MINUTE_MS + SLACK_MS));
+    if let Some(focus) = snap.focus {
+        return focus_refresh(focus);
     }
     match snap.kind {
         _ if display == TrayDisplay::Off => None,
@@ -374,6 +420,18 @@ fn drain(rx: &Receiver<Msg>) -> bool {
 
 /// Reads the setting, the status and today's totals. Runs on the worker thread only.
 fn compute(state: &AppState) -> Result<(String, Option<Duration>), String> {
+    // A running block is all the text shows: the cheap per-second path, no engine round trip.
+    let now = state.clock.now();
+    if let Some(session) = state.focus.tray(now) {
+        let focus = FocusTray {
+            kind: session.kind,
+            intent: &session.intent,
+            remaining_ms: session.remaining_ms,
+            paused: session.paused,
+            drifting: session.drifting,
+        };
+        return Ok((focus_text(focus), focus_refresh(focus)));
+    }
     let display = state
         .commands
         .get_settings()
@@ -390,7 +448,6 @@ fn compute(state: &AppState) -> Result<(String, Option<Duration>), String> {
         Reply::Status(status) => status,
         other => return Err(format!("unexpected engine reply: {other:?}")),
     };
-    let now = state.clock.now();
     let day = local_day(now).ok_or("could not resolve the local day")?;
     let (today_ms, app) = if status.kind == TrackingKind::Stopped {
         (0, None)
@@ -409,7 +466,6 @@ fn compute(state: &AppState) -> Result<(String, Option<Duration>), String> {
         });
         (report.total_ms, app)
     };
-    let session = state.focus.tray(now);
     let goal = if display == TrayDisplay::GoalProgress {
         state
             .goals
@@ -430,11 +486,7 @@ fn compute(state: &AppState) -> Result<(String, Option<Duration>), String> {
             today_ms: *today_ms,
         }),
         goal,
-        focus: session.as_ref().map(|s| FocusTray {
-            intent: &s.intent,
-            remaining_ms: s.remaining_ms,
-            drifting: s.drifting,
-        }),
+        focus: None,
     };
     Ok((
         tray_text(display, &snap),
@@ -450,11 +502,36 @@ fn apply(app: &AppHandle<Wry>, text: String) {
         let Some(icon) = handle.tray_by_id(tray::TRAY_ID) else {
             return;
         };
+        #[cfg(target_os = "macos")]
+        let _ = icon.with_inner_tray_icon(|inner| {
+            if let Some(item) = inner.ns_status_item() {
+                monospaced_digits(&item);
+            }
+        });
         // Windows has no tray text; there the tooltip below is the only carrier.
         #[cfg(not(target_os = "windows"))]
         let _ = icon.set_title((!text.is_empty()).then_some(text.as_str()));
         let _ = icon.set_tooltip(Some(tooltip(&text)));
     });
+}
+
+/// Gives the status item the menu-bar system font with fixed-width digits, so a ticking
+/// countdown keeps its width. Main thread only (it is a no-op elsewhere).
+#[cfg(target_os = "macos")]
+fn monospaced_digits(item: &objc2_app_kit::NSStatusItem) {
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::{NSFont, NSFontWeightRegular};
+
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    let Some(button) = item.button(mtm) else {
+        return;
+    };
+    // SAFETY: reading an immutable AppKit constant.
+    let weight = unsafe { NSFontWeightRegular };
+    let font = NSFont::monospacedDigitSystemFontOfSize_weight(NSFont::systemFontSize(), weight);
+    button.setFont(Some(&font));
 }
 
 #[cfg(test)]
@@ -693,43 +770,67 @@ mod tests {
             current: xcode(40 * MIN),
             goal: None,
             focus: Some(FocusTray {
+                kind: FocusKind::Focus,
                 intent,
                 remaining_ms,
+                paused: false,
                 drifting,
             }),
         }
     }
 
+    fn block(kind: FocusKind, intent: &str, remaining_ms: i64, paused: bool) -> FocusTray<'_> {
+        FocusTray {
+            kind,
+            intent,
+            remaining_ms,
+            paused,
+            drifting: false,
+        }
+    }
+
     #[test]
-    fn a_running_session_shows_the_countdown_and_the_intent() {
-        let snap = with_focus(TrackingKind::Running, "Write report", 23 * MIN, false);
+    fn the_clock_rounds_up_to_the_second_and_adds_hours_when_needed() {
+        assert_eq!(format_clock(24 * MIN + 13_000), "24:13");
+        assert_eq!(format_clock(24 * MIN + 12_001), "24:13");
+        assert_eq!(format_clock(4 * MIN + 12_000), "04:12");
+        assert_eq!(format_clock(1), "00:01");
+        assert_eq!(format_clock(0), "00:00");
+        assert_eq!(format_clock(-5), "00:00");
+        assert_eq!(format_clock(HOUR + 5 * MIN), "1:05:00");
+        assert_eq!(format_clock(60 * MIN), "1:00:00");
+        // Same digit count, same width (the font has fixed-width digits).
+        assert_eq!(format_clock(MIN).len(), format_clock(59 * MIN).len());
+    }
+
+    #[test]
+    fn a_running_block_shows_the_countdown_and_the_task_in_every_display() {
+        let snap = with_focus(
+            TrackingKind::Running,
+            "Write report",
+            24 * MIN + 13_000,
+            false,
+        );
         for display in [
+            TrayDisplay::Off,
             TrayDisplay::TodayTotal,
             TrayDisplay::CurrentApp,
             TrayDisplay::TodayAndCurrent,
             TrayDisplay::GoalProgress,
         ] {
-            assert_eq!(tray_text(display, &snap), "◔ 23m · Write report");
+            assert_eq!(tray_text(display, &snap), "◔ 24:13 · Write report");
         }
-        // Minutes are rounded up and keep their two columns.
-        assert_eq!(
-            tray_text(
-                TrayDisplay::TodayTotal,
-                &with_focus(TrackingKind::Running, "Write report", 4 * MIN + 1, false)
-            ),
-            "◔ \u{2007}5m · Write report"
-        );
         assert_eq!(
             tray_text(
                 TrayDisplay::TodayTotal,
                 &with_focus(TrackingKind::Running, "Write report", HOUR + 5 * MIN, false)
             ),
-            "◔ 1h 05m · Write report"
+            "◔ 1:05:00 · Write report"
         );
     }
 
     #[test]
-    fn a_session_shows_whatever_the_tracking_state_is_unless_the_tray_is_off() {
+    fn a_block_shows_whatever_the_tracking_state_is() {
         for kind in [
             TrackingKind::Running,
             TrackingKind::Paused,
@@ -740,10 +841,25 @@ mod tests {
             let snap = with_focus(kind, "Write report", 10 * MIN, false);
             assert_eq!(
                 tray_text(TrayDisplay::TodayTotal, &snap),
-                "◔ 10m · Write report"
+                "◔ 10:00 · Write report"
             );
-            assert_eq!(tray_text(TrayDisplay::Off, &snap), "");
         }
+    }
+
+    #[test]
+    fn breaks_pauses_and_untitled_blocks_have_their_own_look() {
+        assert_eq!(
+            focus_text(block(FocusKind::Break, "", 4 * MIN + 12_000, false)),
+            "\u{2615}\u{FE0E} 04:12"
+        );
+        assert_eq!(
+            focus_text(block(FocusKind::Timer, "", 25 * MIN, false)),
+            "◔ 25:00"
+        );
+        assert_eq!(
+            focus_text(block(FocusKind::Timer, "Read", 25 * MIN, true)),
+            "\u{23F8}\u{FE0E} 25:00 · Read"
+        );
     }
 
     #[test]
@@ -751,12 +867,12 @@ mod tests {
         let snap = with_focus(TrackingKind::Running, "Write report", 23 * MIN, true);
         assert_eq!(
             tray_text(TrayDisplay::TodayTotal, &snap),
-            "◔ 23m ! Write report"
+            "◔ 23:00 ! Write report"
         );
     }
 
     #[test]
-    fn a_long_intent_is_cut_to_the_label_limit() {
+    fn a_long_task_name_is_cut_to_the_label_limit() {
         for (intent, remaining) in [
             (
                 "Prepare the quarterly planning review for the board",
@@ -787,38 +903,29 @@ mod tests {
                     false
                 )
             ),
-            "◔ 23m · Prepare the qua…"
+            "◔ 23:00 · Prepare the q…"
         );
     }
 
     #[test]
-    fn the_countdown_wakes_when_the_minutes_left_change() {
-        let wake = |remaining| {
-            next_refresh(
-                TrayDisplay::TodayTotal,
-                &with_focus(TrackingKind::Paused, "x", remaining, false),
-                10 * HOUR,
-            )
-        };
-        // 23 min 20 s left shows 24m until 23 min are left: 20 s away.
+    fn the_countdown_ticks_every_second_and_a_paused_block_waits_for_events() {
+        let wake = |remaining| focus_refresh(block(FocusKind::Focus, "x", remaining, false));
+        // 23:20.400 shows 23:21 until 23:20 is left: 400 ms away.
         assert_eq!(
-            wake(23 * MIN + 20_000),
-            Some(Duration::from_millis(20_000 + 2_500))
+            wake(23 * MIN + 20_400),
+            Some(Duration::from_millis(400 + 15))
         );
-        assert_eq!(
-            wake(5 * MIN),
-            Some(Duration::from_millis(MIN as u64 + 2_500))
-        );
-        // The last minute counts down to the end.
-        assert_eq!(wake(30_000), Some(Duration::from_millis(30_000 + 2_500)));
-        // Off never wakes.
+        assert_eq!(wake(5 * MIN), Some(Duration::from_millis(1_000 + 15)));
+        assert_eq!(wake(0), Some(Duration::from_millis(1_000)));
+        assert_eq!(focus_refresh(block(FocusKind::Focus, "x", MIN, true)), None);
+        // Through the snapshot too, whatever the display.
         assert_eq!(
             next_refresh(
                 TrayDisplay::Off,
-                &with_focus(TrackingKind::Running, "x", MIN, false),
+                &with_focus(TrackingKind::Paused, "x", 5 * MIN, false),
                 HOUR
             ),
-            None
+            Some(Duration::from_millis(1_015))
         );
     }
 

@@ -49,6 +49,19 @@ tauri-specta = { version = "=2.0.0-rc.25", features = ["derive", "typescript"] }
 [target.'cfg(target_os = "macos")'.dependencies]
 adapters-macos = { path = "../crates/adapters-macos" }
 objc2 = "0.6"
+# Fixed-width digits for the menu-bar countdown (tray_text.rs); already in the tree via tray-icon.
+objc2-app-kit = { version = "0.3", default-features = false, features = [
+  "std",
+  "objc2-core-foundation",
+  "NSButton",
+  "NSControl",
+  "NSFont",
+  "NSFontDescriptor",
+  "NSResponder",
+  "NSStatusBarButton",
+  "NSStatusItem",
+  "NSView",
+] }
 
 [target.'cfg(windows)'.dependencies]
 adapters-windows = { path = "../crates/adapters-windows" }

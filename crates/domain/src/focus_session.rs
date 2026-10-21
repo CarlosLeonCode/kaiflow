@@ -1,5 +1,10 @@
-//! Focus sessions: a timed block of work with an intent and a list of allowed activities and
-//! apps. Pure: the caller supplies every instant, so nothing here reads a clock.
+//! Focus sessions: a timed block with an optional task name. Three kinds share one machine:
+//! a focus block (with a list of allowed activities and apps and the drift rule), a plain
+//! timer (countdown and alert only) and a break. Pure: the caller supplies every instant, so
+//! nothing here reads a clock.
+//!
+//! A block can be paused: the countdown freezes and the drift rule is suspended; resuming
+//! moves the planned end by the paused time, so the remaining time is kept.
 //!
 //! The machine is separate from the tracking machine (`machine.rs`) and knows nothing about
 //! tracking. It is told what the user is looking at (`FocusChanged`) and when time passes
@@ -24,12 +29,15 @@ pub const MIN_PLANNED_MS: i64 = 60_000;
 /// Planned time of a session, extensions included.
 pub const MAX_PLANNED_MS: i64 = 12 * 3_600_000;
 pub const MAX_INTENT_CHARS: usize = 80;
+/// The optional heads-up comes this long before the end.
+pub const HEADS_UP_MS: i64 = 60_000;
+/// Blocks shorter than this get no heads-up (it would come right after the start).
+const HEADS_UP_MIN_BLOCK_MS: i64 = 3 * HEADS_UP_MS;
 /// Distractions kept in a summary.
 pub const TOP_DISTRACTIONS: usize = 3;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FocusError {
-    EmptyIntent,
     IntentTooLong,
     /// The planned time is outside `MIN_PLANNED_MS..=MAX_PLANNED_MS`.
     BadDuration,
@@ -42,10 +50,9 @@ pub enum FocusError {
 impl std::fmt::Display for FocusError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            Self::EmptyIntent => "describe what you want to focus on",
             Self::IntentTooLong => "the intent is too long (80 characters at most)",
             Self::BadDuration => "a session lasts between 1 minute and 12 hours",
-            Self::NothingAllowed => "allow at least one activity or app",
+            Self::NothingAllowed => "allow at least one activity or app for drift alerts",
             Self::AlreadyActive => "a focus session is already running",
             Self::NotActive => "no focus session is running",
         })
@@ -53,6 +60,50 @@ impl std::fmt::Display for FocusError {
 }
 
 impl std::error::Error for FocusError {}
+
+/// What a block is for. Only a focus block watches for drift.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
+pub enum FocusKind {
+    /// Work with an allowed set and gentle drift alerts.
+    #[default]
+    Focus,
+    /// Work with a countdown and an alert only.
+    Timer,
+    Break,
+}
+
+impl FocusKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Focus => "focus",
+            Self::Timer => "timer",
+            Self::Break => "break",
+        }
+    }
+
+    pub fn parse(name: &str) -> Option<Self> {
+        match name {
+            "focus" => Some(Self::Focus),
+            "timer" => Some(Self::Timer),
+            "break" => Some(Self::Break),
+            _ => None,
+        }
+    }
+
+    /// A focus block or a timer: what the pomodoro cycle counts.
+    pub fn is_work(self) -> bool {
+        !matches!(self, Self::Break)
+    }
+
+    /// Human label, used where a block has no task name.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Focus => "Focus",
+            Self::Timer => "Timer",
+            Self::Break => "Break",
+        }
+    }
+}
 
 /// Why a session ended.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -119,19 +170,22 @@ pub struct AppRef {
     pub activity: ActivityId,
 }
 
-/// Trims and checks the user-supplied parts of a session.
-pub fn validate(intent: &str, planned_ms: i64, allowed: &Allowed) -> Result<String, FocusError> {
+/// Trims and checks the user-supplied parts of a session. The task name is optional; only a
+/// focus block needs an allowed set (the others never look at it).
+pub fn validate(
+    kind: FocusKind,
+    intent: &str,
+    planned_ms: i64,
+    allowed: &Allowed,
+) -> Result<String, FocusError> {
     let intent = intent.trim();
-    if intent.is_empty() {
-        return Err(FocusError::EmptyIntent);
-    }
     if intent.chars().count() > MAX_INTENT_CHARS {
         return Err(FocusError::IntentTooLong);
     }
     if !(MIN_PLANNED_MS..=MAX_PLANNED_MS).contains(&planned_ms) {
         return Err(FocusError::BadDuration);
     }
-    if allowed.is_empty() {
+    if kind == FocusKind::Focus && allowed.is_empty() {
         return Err(FocusError::NothingAllowed);
     }
     Ok(intent.to_owned())
@@ -140,12 +194,15 @@ pub fn validate(intent: &str, planned_ms: i64, allowed: &Allowed) -> Result<Stri
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Config {
     pub drift_after_ms: i64,
+    /// Raise [`Effect::HeadsUp`] a minute before the end.
+    pub heads_up: bool,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
             drift_after_ms: DEFAULT_DRIFT_AFTER_MS,
+            heads_up: false,
         }
     }
 }
@@ -153,16 +210,22 @@ impl Default for Config {
 /// A session as stored, enough to resume it after a restart.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Persisted {
+    pub kind: FocusKind,
     pub intent: String,
     pub started_at: UtcMs,
     pub planned_end: UtcMs,
     pub allowed: Allowed,
     pub drift_alerts: u32,
+    /// Set while the block is paused.
+    pub paused_at: Option<UtcMs>,
+    /// Paused time of earlier pauses (the planned end already moved by it).
+    pub paused_ms: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Event {
     Start {
+        kind: FocusKind,
         intent: String,
         planned_ms: i64,
         allowed: Allowed,
@@ -187,6 +250,14 @@ pub enum Event {
     Cancel {
         now: UtcMs,
     },
+    /// Freezes the countdown and suspends the drift rule.
+    Pause {
+        now: UtcMs,
+    },
+    /// Continues a paused block with the time it had left.
+    Resume {
+        now: UtcMs,
+    },
     /// "Back to it": acknowledges the alert and holds further ones back until `until`.
     Snooze {
         until: UtcMs,
@@ -209,33 +280,86 @@ pub enum Effect {
     DriftAlert(AppRef),
     /// The alert no longer applies (back inside, snoozed, suspended).
     DriftCleared,
+    /// A minute is left (only with [`Config::heads_up`]); raised once per block.
+    HeadsUp,
     /// The session is over; `at` is its end instant.
     Finished { reason: FocusEnd, at: UtcMs },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct Active {
+    kind: FocusKind,
     intent: String,
     started_at: UtcMs,
     planned_end: UtcMs,
     allowed: Allowed,
     drift_alerts: u32,
+    paused_at: Option<UtcMs>,
+    paused_ms: i64,
     current: Option<AppRef>,
     outside_since: Option<UtcMs>,
     last_alert: Option<UtcMs>,
     snoozed_until: Option<UtcMs>,
     alerting: bool,
+    heads_up_sent: bool,
 }
 
 impl Active {
+    fn new(saved: Persisted, current: Option<AppRef>) -> Self {
+        Self {
+            kind: saved.kind,
+            intent: saved.intent,
+            started_at: saved.started_at,
+            planned_end: saved.planned_end,
+            allowed: saved.allowed.deduped(),
+            drift_alerts: saved.drift_alerts,
+            paused_at: saved.paused_at,
+            paused_ms: saved.paused_ms.max(0),
+            current,
+            outside_since: None,
+            last_alert: None,
+            snoozed_until: None,
+            alerting: false,
+            heads_up_sent: false,
+        }
+    }
+
     fn is_outside(&self) -> bool {
-        self.current
-            .as_ref()
-            .is_some_and(|a| !self.allowed.permits(&a.app_id, a.activity))
+        self.kind == FocusKind::Focus
+            && self.paused_at.is_none()
+            && self
+                .current
+                .as_ref()
+                .is_some_and(|a| !self.allowed.permits(&a.app_id, a.activity))
+    }
+
+    fn remaining_ms(&self, now: UtcMs) -> i64 {
+        self.planned_end.since(self.paused_at.unwrap_or(now)).max(0)
+    }
+
+    /// Planned length of the block: the planned end minus the time spent paused.
+    fn planned_ms(&self, now: UtcMs) -> i64 {
+        let paused_now = self.paused_at.map_or(0, |at| now.since(at).max(0));
+        self.planned_end
+            .since(self.started_at)
+            .saturating_sub(self.paused_ms)
+            .saturating_sub(paused_now)
+            .max(0)
+    }
+
+    /// When the one-minute heads-up is due, if it still is.
+    fn heads_up_at(&self, config: &Config) -> Option<UtcMs> {
+        let long_enough =
+            self.planned_end.since(self.started_at) - self.paused_ms >= HEADS_UP_MIN_BLOCK_MS;
+        (config.heads_up && !self.heads_up_sent && self.paused_at.is_none() && long_enough)
+            .then(|| self.planned_end.plus_ms(-HEADS_UP_MS))
     }
 
     /// When the next alert is due: after the threshold, the cooldown and any snooze.
     fn alert_at(&self, config: &Config) -> Option<UtcMs> {
+        if self.paused_at.is_some() {
+            return None;
+        }
         let since = self.outside_since?;
         let mut at = since.plus_ms(config.drift_after_ms);
         if let Some(last) = self.last_alert {
@@ -275,6 +399,16 @@ pub struct FocusMachine {
 pub struct SessionView<'a>(&'a Active);
 
 impl SessionView<'_> {
+    pub fn kind(&self) -> FocusKind {
+        self.0.kind
+    }
+    pub fn paused_at(&self) -> Option<UtcMs> {
+        self.0.paused_at
+    }
+    /// Planned length without the paused time.
+    pub fn planned_ms(&self, now: UtcMs) -> i64 {
+        self.0.planned_ms(now)
+    }
     pub fn intent(&self) -> &str {
         &self.0.intent
     }
@@ -297,16 +431,20 @@ impl SessionView<'_> {
     pub fn alerting(&self) -> Option<&AppRef> {
         self.0.alerting.then_some(self.0.current.as_ref()).flatten()
     }
+    /// Time left; frozen while paused.
     pub fn remaining_ms(&self, now: UtcMs) -> i64 {
-        self.0.planned_end.since(now).max(0)
+        self.0.remaining_ms(now)
     }
     pub fn persisted(&self) -> Persisted {
         Persisted {
+            kind: self.0.kind,
             intent: self.0.intent.clone(),
             started_at: self.0.started_at,
             planned_end: self.0.planned_end,
             allowed: self.0.allowed.clone(),
             drift_alerts: self.0.drift_alerts,
+            paused_at: self.0.paused_at,
+            paused_ms: self.0.paused_ms,
         }
     }
 }
@@ -323,20 +461,11 @@ impl FocusMachine {
         self.config = config;
     }
 
-    /// Resumes a stored session after a restart. Timers start afresh at `now`.
+    /// Resumes a stored session after a restart. Timers start afresh at `now`; a paused
+    /// block stays paused, and a heads-up already due is not raised again.
     pub fn restore(&mut self, saved: Persisted, current: Option<AppRef>, now: UtcMs) {
-        let mut active = Active {
-            intent: saved.intent,
-            started_at: saved.started_at,
-            planned_end: saved.planned_end,
-            allowed: saved.allowed.deduped(),
-            drift_alerts: saved.drift_alerts,
-            current,
-            outside_since: None,
-            last_alert: None,
-            snoozed_until: None,
-            alerting: false,
-        };
+        let mut active = Active::new(saved, current);
+        active.heads_up_sent = active.remaining_ms(now) <= HEADS_UP_MS;
         active.reevaluate(now);
         self.active = Some(active);
     }
@@ -350,19 +479,33 @@ impl FocusMachine {
         self.active.as_ref().map(SessionView)
     }
 
-    /// The next instant `Tick` has something to do: the planned end or the next alert.
+    /// The next instant `Tick` has something to do: the planned end, the heads-up or the
+    /// next alert. `None` without a session and while it is paused (nothing can happen).
     pub fn next_deadline(&self) -> Option<UtcMs> {
         let active = self.active.as_ref()?;
+        if active.paused_at.is_some() {
+            return None;
+        }
         Some(
-            active
-                .alert_at(&self.config)
-                .map_or(active.planned_end, |at| at.min(active.planned_end)),
+            [
+                active.alert_at(&self.config),
+                active.heads_up_at(&self.config),
+            ]
+            .into_iter()
+            .flatten()
+            .fold(active.planned_end, UtcMs::min),
         )
+    }
+
+    /// Whether a session exists (running or paused).
+    pub fn is_active(&self) -> bool {
+        self.active.is_some()
     }
 
     pub fn handle(&mut self, event: Event) -> Result<Vec<Effect>, FocusError> {
         match event {
             Event::Start {
+                kind,
                 intent,
                 planned_ms,
                 allowed,
@@ -372,19 +515,25 @@ impl FocusMachine {
                 if self.active.is_some() {
                     return Err(FocusError::AlreadyActive);
                 }
-                let intent = validate(&intent, planned_ms, &allowed)?;
-                let mut active = Active {
-                    intent,
-                    started_at: now,
-                    planned_end: now.plus_ms(planned_ms),
-                    allowed: allowed.deduped(),
-                    drift_alerts: 0,
-                    current,
-                    outside_since: None,
-                    last_alert: None,
-                    snoozed_until: None,
-                    alerting: false,
+                let intent = validate(kind, &intent, planned_ms, &allowed)?;
+                let allowed = if kind == FocusKind::Focus {
+                    allowed
+                } else {
+                    Allowed::default()
                 };
+                let mut active = Active::new(
+                    Persisted {
+                        kind,
+                        intent,
+                        started_at: now,
+                        planned_end: now.plus_ms(planned_ms),
+                        allowed,
+                        drift_alerts: 0,
+                        paused_at: None,
+                        paused_ms: 0,
+                    },
+                    current,
+                );
                 active.reevaluate(now);
                 self.active = Some(active);
                 Ok(vec![Effect::Started])
@@ -406,15 +555,42 @@ impl FocusMachine {
                     return Ok(effects);
                 }
                 let active = self.active.as_mut().ok_or(FocusError::NotActive)?;
-                let total = active
-                    .planned_end
-                    .since(active.started_at)
-                    .saturating_add(by_ms);
+                let total = active.planned_ms(now).saturating_add(by_ms);
                 if by_ms <= 0 || total > MAX_PLANNED_MS {
                     return Err(FocusError::BadDuration);
                 }
                 active.planned_end = active.planned_end.plus_ms(by_ms);
+                // More time means a fresh heads-up when the new last minute comes.
+                if active.remaining_ms(now) > HEADS_UP_MS {
+                    active.heads_up_sent = false;
+                }
                 Ok(vec![Effect::Updated])
+            }
+            Event::Pause { now } => {
+                if self.active.as_ref().is_some_and(|a| a.paused_at.is_some()) {
+                    return Ok(Vec::new());
+                }
+                let mut effects = self.advance(now)?;
+                if finished(&effects) {
+                    return Ok(effects);
+                }
+                let active = self.active.as_mut().ok_or(FocusError::NotActive)?;
+                active.paused_at = Some(now);
+                effects.push(Effect::Updated);
+                effects.extend(active.reevaluate(now));
+                Ok(effects)
+            }
+            Event::Resume { now } => {
+                let active = self.active.as_mut().ok_or(FocusError::NotActive)?;
+                let Some(paused_at) = active.paused_at.take() else {
+                    return Ok(Vec::new());
+                };
+                let paused = now.since(paused_at).max(0);
+                active.planned_end = active.planned_end.plus_ms(paused);
+                active.paused_ms = active.paused_ms.saturating_add(paused);
+                let mut effects = vec![Effect::Updated];
+                effects.extend(active.reevaluate(now));
+                Ok(effects)
             }
             Event::Cancel { now } => {
                 let active = self.active.take().ok_or(FocusError::NotActive)?;
@@ -453,10 +629,14 @@ impl FocusMachine {
         }
     }
 
-    /// Time passed: finish at the planned end, or raise a due alert.
+    /// Time passed: finish at the planned end, or raise a due heads-up or alert. Nothing
+    /// happens while paused.
     fn advance(&mut self, now: UtcMs) -> Result<Vec<Effect>, FocusError> {
         let config = self.config;
         let active = self.active.as_mut().ok_or(FocusError::NotActive)?;
+        if active.paused_at.is_some() {
+            return Ok(Vec::new());
+        }
         if now >= active.planned_end {
             let at = active.planned_end;
             self.active = None;
@@ -465,14 +645,19 @@ impl FocusMachine {
                 at,
             }]);
         }
+        let mut effects = Vec::new();
+        if active.heads_up_at(&config).is_some_and(|at| now >= at) {
+            active.heads_up_sent = true;
+            effects.push(Effect::HeadsUp);
+        }
         let due = active.alert_at(&config).is_some_and(|at| now >= at);
         if due && let Some(app) = active.current.clone() {
             active.alerting = true;
             active.last_alert = Some(now);
             active.drift_alerts += 1;
-            return Ok(vec![Effect::DriftAlert(app), Effect::Updated]);
+            effects.extend([Effect::DriftAlert(app), Effect::Updated]);
         }
-        Ok(Vec::new())
+        Ok(effects)
     }
 }
 
@@ -573,6 +758,7 @@ mod tests {
     fn started(current: Option<AppRef>) -> FocusMachine {
         let mut m = FocusMachine::new(Config::default());
         m.handle(Event::Start {
+            kind: FocusKind::Focus,
             intent: " Write report ".into(),
             planned_ms: 50 * MIN,
             allowed: allowed(),
@@ -616,6 +802,7 @@ mod tests {
     fn start_is_validated() {
         let go = |intent: &str, planned_ms: i64, allowed: Allowed| {
             FocusMachine::default().handle(Event::Start {
+                kind: FocusKind::Focus,
                 intent: intent.into(),
                 planned_ms,
                 allowed,
@@ -623,7 +810,8 @@ mod tests {
                 current: None,
             })
         };
-        assert_eq!(go("  ", 25 * MIN, allowed()), Err(FocusError::EmptyIntent));
+        // The task name is optional.
+        assert!(go("  ", 25 * MIN, allowed()).is_ok());
         assert_eq!(
             go(&"x".repeat(81), 25 * MIN, allowed()),
             Err(FocusError::IntentTooLong)
@@ -644,6 +832,7 @@ mod tests {
     fn only_one_session_runs_at_a_time() {
         let mut m = started(None);
         let again = m.handle(Event::Start {
+            kind: FocusKind::Focus,
             intent: "b".into(),
             planned_ms: 25 * MIN,
             allowed: allowed(),
@@ -880,8 +1069,10 @@ mod tests {
     fn the_drift_threshold_is_configurable() {
         let mut m = FocusMachine::new(Config {
             drift_after_ms: 30 * S,
+            ..Config::default()
         });
         m.handle(Event::Start {
+            kind: FocusKind::Focus,
             intent: "a".into(),
             planned_ms: 25 * MIN,
             allowed: allowed(),
@@ -897,11 +1088,14 @@ mod tests {
         let mut m = FocusMachine::default();
         m.restore(
             Persisted {
+                kind: FocusKind::Focus,
                 intent: "Write report".into(),
                 started_at: UtcMs(0),
                 planned_end: UtcMs(50 * MIN),
                 allowed: allowed(),
                 drift_alerts: 2,
+                paused_at: None,
+                paused_ms: 0,
             },
             Some(app("slack", 5)),
             UtcMs(20 * MIN),
@@ -910,6 +1104,172 @@ mod tests {
         assert_eq!(view.drift_alerts(), 2);
         assert_eq!(view.remaining_ms(UtcMs(20 * MIN)), 30 * MIN);
         assert_eq!(m.next_deadline(), Some(UtcMs(20 * MIN + 90 * S)));
+    }
+
+    fn started_kind(kind: FocusKind, config: Config) -> FocusMachine {
+        let mut m = FocusMachine::new(config);
+        m.handle(Event::Start {
+            kind,
+            intent: "".into(),
+            planned_ms: 25 * MIN,
+            allowed: Allowed::default(),
+            now: UtcMs(0),
+            current: Some(app("slack", 5)),
+        })
+        .unwrap();
+        m
+    }
+
+    #[test]
+    fn a_timer_and_a_break_need_nothing_allowed_and_never_alert() {
+        for kind in [FocusKind::Timer, FocusKind::Break] {
+            let mut m = started_kind(kind, Config::default());
+            let view = m.session().unwrap();
+            assert_eq!((view.kind(), view.intent()), (kind, ""));
+            assert!(view.allowed().is_empty());
+            assert_eq!(m.next_deadline(), Some(UtcMs(25 * MIN)));
+            assert_eq!(alerts(&tick(&mut m, 10 * MIN)), 0);
+            assert!(finished(&tick(&mut m, 25 * MIN)));
+        }
+    }
+
+    #[test]
+    fn a_timer_drops_any_allowed_set_it_was_given() {
+        let mut m = FocusMachine::default();
+        m.handle(Event::Start {
+            kind: FocusKind::Timer,
+            intent: "Read".into(),
+            planned_ms: 25 * MIN,
+            allowed: allowed(),
+            now: UtcMs(0),
+            current: None,
+        })
+        .unwrap();
+        assert!(m.session().unwrap().allowed().is_empty());
+    }
+
+    #[test]
+    fn pausing_freezes_the_countdown_and_resuming_keeps_the_time_left() {
+        let mut m = started(Some(app("slack", 5)));
+        let paused = m
+            .handle(Event::Pause {
+                now: UtcMs(10 * MIN),
+            })
+            .unwrap();
+        assert!(paused.contains(&Effect::Updated));
+        let view = m.session().unwrap();
+        assert_eq!(view.paused_at(), Some(UtcMs(10 * MIN)));
+        assert_eq!(view.remaining_ms(UtcMs(30 * MIN)), 40 * MIN);
+        assert_eq!(m.next_deadline(), None, "nothing happens while paused");
+        // Ticks and focus changes do nothing; the old planned end does not finish it.
+        assert!(tick(&mut m, 60 * MIN).is_empty());
+        assert!(focus(&mut m, Some(app("slack", 5)), 61 * MIN).is_empty());
+        assert!(
+            m.handle(Event::Pause {
+                now: UtcMs(62 * MIN)
+            })
+            .unwrap()
+            .is_empty()
+        );
+
+        let resumed = m
+            .handle(Event::Resume {
+                now: UtcMs(70 * MIN),
+            })
+            .unwrap();
+        assert_eq!(resumed, vec![Effect::Updated]);
+        let view = m.session().unwrap();
+        assert_eq!(view.planned_end(), UtcMs(110 * MIN));
+        assert_eq!(view.remaining_ms(UtcMs(70 * MIN)), 40 * MIN);
+        assert_eq!(view.planned_ms(UtcMs(70 * MIN)), 50 * MIN);
+        assert_eq!(view.persisted().paused_ms, 60 * MIN);
+        // The drift rule starts afresh after the pause.
+        assert_eq!(m.next_deadline(), Some(UtcMs(70 * MIN + 90 * S)));
+        assert!(
+            m.handle(Event::Resume {
+                now: UtcMs(71 * MIN)
+            })
+            .unwrap()
+            .is_empty()
+        );
+        assert!(finished(&tick(&mut m, 110 * MIN)));
+    }
+
+    #[test]
+    fn pausing_clears_a_drift_alert() {
+        let mut m = started(None);
+        focus(&mut m, Some(app("slack", 5)), 0);
+        tick(&mut m, 91 * S);
+        let effects = m.handle(Event::Pause { now: UtcMs(95 * S) }).unwrap();
+        assert!(effects.contains(&Effect::DriftCleared));
+        assert!(m.session().unwrap().alerting().is_none());
+    }
+
+    #[test]
+    fn a_paused_block_restores_paused() {
+        let mut m = FocusMachine::default();
+        m.restore(
+            Persisted {
+                kind: FocusKind::Timer,
+                intent: String::new(),
+                started_at: UtcMs(0),
+                planned_end: UtcMs(25 * MIN),
+                allowed: Allowed::default(),
+                drift_alerts: 0,
+                paused_at: Some(UtcMs(5 * MIN)),
+                paused_ms: 0,
+            },
+            None,
+            UtcMs(99 * MIN),
+        );
+        assert_eq!(m.session().unwrap().remaining_ms(UtcMs(99 * MIN)), 20 * MIN);
+        assert_eq!(m.next_deadline(), None);
+    }
+
+    #[test]
+    fn the_heads_up_comes_once_a_minute_before_the_end_when_enabled() {
+        let config = Config {
+            heads_up: true,
+            ..Config::default()
+        };
+        let mut m = started_kind(FocusKind::Timer, config);
+        assert_eq!(m.next_deadline(), Some(UtcMs(24 * MIN)));
+        assert!(tick(&mut m, 23 * MIN).is_empty());
+        assert_eq!(tick(&mut m, 24 * MIN), vec![Effect::HeadsUp]);
+        assert!(tick(&mut m, 24 * MIN + S).is_empty(), "only once");
+        assert_eq!(m.next_deadline(), Some(UtcMs(25 * MIN)));
+        // Extending re-arms it for the new last minute.
+        m.handle(Event::Extend {
+            by_ms: 5 * MIN,
+            now: UtcMs(24 * MIN + 2 * S),
+        })
+        .unwrap();
+        assert_eq!(tick(&mut m, 29 * MIN), vec![Effect::HeadsUp]);
+
+        // Off by default; and never for very short blocks.
+        let mut off = started_kind(FocusKind::Timer, Config::default());
+        assert!(tick(&mut off, 24 * MIN).is_empty());
+        let mut short = FocusMachine::new(config);
+        short
+            .handle(Event::Start {
+                kind: FocusKind::Timer,
+                intent: String::new(),
+                planned_ms: 2 * MIN,
+                allowed: Allowed::default(),
+                now: UtcMs(0),
+                current: None,
+            })
+            .unwrap();
+        assert_eq!(short.next_deadline(), Some(UtcMs(2 * MIN)));
+    }
+
+    #[test]
+    fn kinds_round_trip_by_name() {
+        for kind in [FocusKind::Focus, FocusKind::Timer, FocusKind::Break] {
+            assert_eq!(FocusKind::parse(kind.as_str()), Some(kind));
+        }
+        assert_eq!(FocusKind::parse("nap"), None);
+        assert!(FocusKind::Timer.is_work() && !FocusKind::Break.is_work());
     }
 
     fn span(app_id: &str, activity: i64, start: i64, end: i64) -> Span {
@@ -997,6 +1357,7 @@ mod tests {
             ) {
                 let mut m = FocusMachine::default();
                 m.handle(Event::Start {
+            kind: FocusKind::Focus,
                     intent: "a".into(),
                     planned_ms: MAX_PLANNED_MS,
                     allowed: allowed(),

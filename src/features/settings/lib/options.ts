@@ -87,3 +87,13 @@ const FOCUS_DRIFT_SECS = [30, 60, 90, 120, 180, 300] as const;
 export function focusDriftOptions(current: number): ThresholdOption[] {
   return withCurrent(FOCUS_DRIFT_SECS, current).map((secs) => ({ secs, label: formatThreshold(secs) }));
 }
+
+/** Choices for the pomodoro breaks (minutes) and the blocks before a long break. */
+export const SHORT_BREAK_MINUTES = [3, 5, 10, 15] as const;
+export const LONG_BREAK_MINUTES = [10, 15, 20, 30] as const;
+export const LONG_BREAK_EVERY = [2, 3, 4, 5, 6] as const;
+
+/** The presets plus the stored value when it is not one of them, ascending. */
+export function minuteOptions(presets: readonly number[], current: number): number[] {
+  return [...new Set([...presets, current])].sort((a, b) => a - b);
+}

@@ -14,6 +14,7 @@ import type {
   ActivityTotalDto,
   BackupStatusDto,
   FocusAppDto,
+  FocusCardActionDto,
   FocusDto,
   FocusSessionDto,
   FocusStartDto,
@@ -47,12 +48,29 @@ import {
   type MockGoal,
   type MockGoalEvent,
 } from "./mockGoals";
-import { closed, observe, startProblem, summarize, type MockSession } from "./mockFocus";
+import {
+  closed,
+  cycleAnswer,
+  cycleCancelled,
+  cycleCompleted,
+  cycleStarted,
+  emptyCycle,
+  observe,
+  pause,
+  plannedMs,
+  resume,
+  startProblem,
+  summarize,
+  type MockSession,
+  type MockStep,
+} from "./mockFocus";
 import { matchPreset, mockPresets } from "./mockPresets";
 import { createMockReview } from "./mockReview";
 import { buildSeed, type MockData, type MockSegment } from "./seed";
 
 const SYSTEM_ACTIVITY = 1;
+
+export type DemoFocus = "running" | "drift" | "break" | "paused" | "ended";
 
 export interface MockOptions {
   /** Start with Accessibility revoked (onboarding and the degraded banner). */
@@ -68,10 +86,12 @@ export interface MockOptions {
   /** Start with a handful of goals (progress bars, an exceeded limit, streaks). */
   demoGoals?: boolean;
   /**
-   * Start with a focus session running: `running` has the app in front on target, `drift` has
-   * the drift alert already showing (the e2e clock is fixed, so time never passes by itself).
+   * Start with a focus block: `running` has the app in front on target, `drift` has the drift
+   * alert already showing, `break` runs a short break, `paused` holds a paused timer and
+   * `ended` shows the end card of a finished block (the e2e clock is fixed, so time never
+   * passes by itself).
    */
-  demoFocus?: "running" | "drift";
+  demoFocus?: DemoFocus;
   /** The OS has no secure key store (Linux without a Secret Service): keys are refused. */
   keychainMissing?: boolean;
   /** Every AI analysis fails as if the network were down. */
@@ -144,6 +164,15 @@ export function installMockBackend(options: MockOptions = {}): void {
     tray_display: "today_total",
     week_start: 0,
     focus_drift_after_secs: 90,
+    focus_timer: {
+      cycle_enabled: true,
+      short_break_minutes: 5,
+      long_break_minutes: 15,
+      long_break_every: 4,
+      auto_start_next: false,
+      sound: true,
+      heads_up: false,
+    },
     ui: { dismissed_intros: [] },
   };
   const goals: MockGoal[] = [];
@@ -241,56 +270,143 @@ export function installMockBackend(options: MockOptions = {}): void {
     };
   };
   const driftAfterMs = () => settings.focus_drift_after_secs * 1000;
+  const cycle = emptyCycle();
+  const newSession = (step: MockStep, now: number): MockSession => ({
+    id: nextSessionId++,
+    kind: step.kind,
+    intent: step.intent.trim(),
+    started_at: now,
+    planned_end: now + step.planned_ms,
+    paused_at: null,
+    paused_ms: 0,
+    allowed:
+      step.kind === "focus"
+        ? { activity_ids: [...step.allowed.activity_ids], app_ids: [...step.allowed.app_ids] }
+        : { activity_ids: [], app_ids: [] },
+    drift_alerts: 0,
+    outside_since: null,
+    last_alert: null,
+    snoozed_until: null,
+    alerting: false,
+  });
   const finishSession = (at: number, reason: FocusSessionDto["end_reason"]) => {
     const done = session;
     if (!done) return;
-    const summary = summarize(data.segments, done.allowed, (s) => classify(s, data.rules), done.started_at, at, clock());
+    const summary =
+      done.kind === "focus"
+        ? summarize(data.segments, done.allowed, (s) => classify(s, data.rules), done.started_at, at, clock())
+        : summarize([], done.allowed, () => SYSTEM_ACTIVITY, done.started_at, at, clock());
     history.unshift(closed(done, at, reason, summary));
     session = null;
+    if (reason !== "completed") {
+      cycleCancelled(cycle, at);
+      return;
+    }
+    const finished: MockStep = {
+      kind: done.kind,
+      planned_ms: done.planned_end - done.started_at - done.paused_ms,
+      intent: done.intent,
+      allowed: done.allowed,
+      long_break: done.kind === "break" && cycle.long_break_running,
+    };
+    cycleCompleted(cycle, finished, at, settings.focus_timer);
+    let autoStarted = false;
+    if (settings.focus_timer.auto_start_next && cycle.card?.next) {
+      const next = cycleAnswer(cycle, { kind: "start_next" }, clock());
+      if (next) {
+        session = newSession(next, clock());
+        autoStarted = true;
+      }
+    }
+    // Like the focus watcher: no system notification here, so the popover chimes.
+    const ended = { kind: done.kind, auto_started: autoStarted, chime: settings.focus_timer.sound };
+    void import("@/shared/ipc").then(({ events }) => events.focusEnded.emit(ended));
   };
   /** Like the focus watcher: end the session on time, then look at what is in front. */
   const lookAtSession = () => {
     if (!session) return;
-    if (clock() >= session.planned_end) finishSession(session.planned_end, "completed");
+    if (session.paused_at === null && clock() >= session.planned_end) finishSession(session.planned_end, "completed");
     else observe(session, observedApp(), clock(), driftAfterMs());
   };
   const focusStatus = (): FocusStatusDto => {
     lookAtSession();
     const running = session;
+    const now = clock();
+    const every = Math.max(1, settings.focus_timer.long_break_every);
     return {
       active: running
         ? {
             id: running.id,
+            kind: running.kind,
             intent: running.intent,
             started_at: running.started_at,
             planned_end: running.planned_end,
+            paused_at: running.paused_at,
+            planned_ms: plannedMs(running, now),
             drift_alerts: running.drift_alerts,
             allowed: running.allowed,
-            current: observedApp(),
+            current: running.kind === "focus" ? observedApp() : null,
             alerting: running.alerting ? observedApp() : null,
           }
         : null,
       unseen: history.find((h) => !h.seen) ?? null,
+      card: cycle.card
+        ? {
+            finished: { ...cycle.card.finished },
+            ended_at: cycle.card.at,
+            next: cycle.card.next ? { ...cycle.card.next } : null,
+          }
+        : null,
+      cycle: { enabled: settings.focus_timer.cycle_enabled, round: Math.min(cycle.round, every), every },
       unavailable: permission === "denied" ? "accessibility_denied" : null,
     };
   };
   const runningSession = (): MockSession => session ?? fail({ kind: "invalid", message: "no focus session is running" });
   if (options.demoFocus) {
     const now = clock();
-    const drifting = options.demoFocus === "drift";
-    session = {
-      id: nextSessionId++,
+    const writeReport: MockStep = {
+      kind: "focus",
+      planned_ms: 50 * 60_000,
       intent: "Write report",
-      started_at: now - 10 * 60_000,
-      planned_end: now + 40 * 60_000,
       // The app in front is Xcode (Development): allowed in `running`, not in `drift`.
-      allowed: drifting ? { activity_ids: [3], app_ids: [] } : { activity_ids: [2], app_ids: [] },
-      drift_alerts: drifting ? 1 : 0,
-      outside_since: drifting ? now - 2 * 60_000 : null,
-      last_alert: drifting ? now - 30_000 : null,
-      snoozed_until: null,
-      alerting: drifting,
+      allowed: options.demoFocus === "drift" ? { activity_ids: [3], app_ids: [] } : { activity_ids: [2], app_ids: [] },
+      long_break: false,
     };
+    cycle.round = 1;
+    cycle.last_work = writeReport;
+    switch (options.demoFocus) {
+      case "running":
+      case "drift": {
+        const drifting = options.demoFocus === "drift";
+        cycleStarted(cycle, writeReport, now - 10 * 60_000);
+        session = {
+          ...newSession(writeReport, now - 10 * 60_000),
+          drift_alerts: drifting ? 1 : 0,
+          outside_since: drifting ? now - 2 * 60_000 : null,
+          last_alert: drifting ? now - 30_000 : null,
+          alerting: drifting,
+        };
+        break;
+      }
+      case "break": {
+        const shortBreak: MockStep = { kind: "break", planned_ms: 5 * 60_000, intent: "", allowed: { activity_ids: [], app_ids: [] }, long_break: false };
+        session = newSession(shortBreak, now - 48_000);
+        break;
+      }
+      case "paused": {
+        const timer: MockStep = { kind: "timer", planned_ms: 25 * 60_000, intent: "Read the design doc", allowed: { activity_ids: [], app_ids: [] }, long_break: false };
+        session = { ...newSession(timer, now - 6 * 60_000 - 30_000), paused_at: now - 60_000 };
+        break;
+      }
+      case "ended":
+        cycle.card = {
+          finished: { ...writeReport, planned_ms: 25 * 60_000 },
+          at: now - 20_000,
+          next: { kind: "break", planned_ms: 5 * 60_000, intent: "", allowed: { activity_ids: [], app_ids: [] }, long_break: false },
+        };
+        cycle.last_end_at = now - 20_000;
+        break;
+    }
   }
 
   const clip = (range: RangeDto) =>
@@ -793,23 +909,19 @@ export function installMockBackend(options: MockOptions = {}): void {
     focus_status: () => focusStatus(),
     focus_start: (args) => {
       const start = args.start as FocusStartDto;
-      if (permission === "denied") fail({ kind: "focus_unavailable", reason: "accessibility_denied" });
+      if (permission === "denied" && start.kind === "focus") fail({ kind: "focus_unavailable", reason: "accessibility_denied" });
       if (session) fail({ kind: "invalid", message: "a focus session is already running" });
       const problem = startProblem(start);
       if (problem) fail({ kind: "invalid", message: problem });
-      const now = clock();
-      session = {
-        id: nextSessionId++,
+      const step: MockStep = {
+        kind: start.kind,
+        planned_ms: start.planned_minutes * 60_000,
         intent: start.intent.trim(),
-        started_at: now,
-        planned_end: now + start.planned_minutes * 60_000,
-        allowed: { activity_ids: [...start.allowed.activity_ids], app_ids: [...start.allowed.app_ids] },
-        drift_alerts: 0,
-        outside_since: null,
-        last_alert: null,
-        snoozed_until: null,
-        alerting: false,
+        allowed: start.allowed,
+        long_break: false,
       };
+      session = newSession(step, clock());
+      cycleStarted(cycle, step, clock());
       return focusStatus();
     },
     focus_stop: () => {
@@ -820,10 +932,24 @@ export function installMockBackend(options: MockOptions = {}): void {
     focus_extend: (args) => {
       const running = runningSession();
       const minutes = args.minutes as number;
-      if (minutes <= 0 || running.planned_end - running.started_at + minutes * 60_000 > 12 * 3_600_000) {
+      if (minutes <= 0 || plannedMs(running, clock()) + minutes * 60_000 > 12 * 3_600_000) {
         fail({ kind: "invalid", message: "a session lasts between 1 minute and 12 hours" });
       }
       running.planned_end += minutes * 60_000;
+      return focusStatus();
+    },
+    focus_pause: () => {
+      pause(runningSession(), clock());
+      return focusStatus();
+    },
+    focus_resume: () => {
+      resume(runningSession(), clock());
+      return focusStatus();
+    },
+    focus_card_action: (args) => {
+      if (session) fail({ kind: "invalid", message: "a focus session is already running" });
+      const step = cycleAnswer(cycle, args.action as FocusCardActionDto, clock());
+      if (step) session = newSession(step, clock());
       return focusStatus();
     },
     focus_snooze: (args) => {

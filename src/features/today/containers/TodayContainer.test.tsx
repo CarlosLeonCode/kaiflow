@@ -328,7 +328,7 @@ describe("TodayContainer", () => {
       });
       renderWithProviders(<TodayContainer onOpenGoals={() => {}} />);
 
-      const card = await screen.findByRole("region", { name: "Focus session" });
+      const card = await screen.findByRole("region", { name: "Active timer" });
       expect(within(card).getByText("Write report")).toBeInTheDocument();
       expect(within(card).getByTestId("focus-countdown")).toHaveTextContent("40:00");
       // On an empty day too.
@@ -345,7 +345,7 @@ describe("TodayContainer", () => {
       });
       renderWithProviders(<TodayContainer onOpenGoals={() => {}} />);
 
-      expect(await screen.findByRole("region", { name: "Focus session" })).toBeInTheDocument();
+      expect(await screen.findByRole("region", { name: "Active timer" })).toBeInTheDocument();
       expect(screen.getByText("Nothing tracked yet today")).toBeInTheDocument();
     });
 
@@ -374,7 +374,7 @@ describe("TodayContainer", () => {
       renderWithProviders(<TodayContainer onOpenGoals={() => {}} />);
 
       await screen.findByText("Focused time");
-      expect(screen.queryByRole("region", { name: "Focus session" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("region", { name: "Active timer" })).not.toBeInTheDocument();
     });
   });
 });

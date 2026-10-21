@@ -1,31 +1,39 @@
-//! Focus sessions use cases: start, observe, end, recover.
+//! Focus sessions use cases: start, pause, observe, end, recover, and the pomodoro cycle.
 //!
-//! The pure machine (`domain::focus_session`) decides; this service feeds it what the user is
-//! looking at, stores the session, and derives the end summary from the tracked segments. One
-//! mutex owns the machine, so the commands and the focus watcher never race. The session is
-//! independent of tracking: it keeps counting down while tracking is paused, but then nothing
-//! is observed and the drift rule is suspended.
+//! The pure machine (`domain::focus_session`) decides when a block ends and when a drift alert
+//! is due; the pure cycle (`domain::focus_cycle`) decides what comes next. This service feeds
+//! them what the user is looking at, stores the block and the cycle, and derives the end
+//! summary from the tracked segments. One mutex owns the machine and the cycle, so the
+//! commands and the focus watcher never race. A block is independent of tracking: it keeps
+//! counting down while tracking is paused, but then nothing is observed and the drift rule is
+//! suspended.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, PoisonError};
 
+use domain::focus_cycle::{CardAction, Cycle, EndCard, Step};
 use domain::focus_session::{
     Config, Effect, Event, FocusMachine, Persisted, Span, summarize, validate,
 };
 use domain::{
-    Activity, ActivityId, FocusAllowed, FocusApp, FocusEnd, FocusError, FocusSnapshot,
+    Activity, ActivityId, FocusAllowed, FocusApp, FocusEnd, FocusError, FocusKind, FocusSnapshot,
     FocusSummary, Segment, SegmentId, SegmentSource, UtcMs,
 };
 
 use crate::dashboard::resolve;
 use crate::ports::{
-    ActivityRepository, DegradedReason, FocusRepository, PortError, ReportRepository,
-    SettingsRepository, StoredFocus,
+    ActivityRepository, DegradedReason, FocusEndAlert, FocusRepository, NewFocus, PortError,
+    ReportRepository, RunningFocus, SettingsRepository, StoredFocus,
 };
-use crate::settings_blobs::read_focus_drift_after_secs;
+use crate::settings_blobs::{
+    FocusTimerSettings, KEY_FOCUS_CYCLE, KEY_FOCUS_TIMER, read_blob, read_focus_drift_after_secs,
+    write_blob,
+};
 
 /// Longest snooze a user can ask for.
 const MAX_SNOOZE_MINUTES: u32 = 240;
+/// Longest "more time" from the end card.
+const MAX_MORE_MINUTES: u32 = 60;
 /// Sessions listed in the history.
 pub const HISTORY_LIMIT: u32 = 50;
 
@@ -64,18 +72,24 @@ impl std::error::Error for FocusServiceError {}
 /// What the user asked for.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StartRequest {
+    pub kind: FocusKind,
     pub intent: String,
     pub planned_ms: i64,
     pub allowed: FocusAllowed,
 }
 
-/// The running session as the UI shows it.
+/// The running block as the UI shows it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ActiveSession {
     pub id: i64,
+    pub kind: FocusKind,
     pub intent: String,
     pub started_at: UtcMs,
     pub planned_end: UtcMs,
+    /// Set while paused; the countdown is frozen at `planned_end - paused_at`.
+    pub paused_at: Option<UtcMs>,
+    /// Planned length without the pauses (for the progress ring).
+    pub planned_ms: i64,
     pub allowed: FocusAllowed,
     pub drift_alerts: u32,
     /// The app in front, when one is observed.
@@ -84,11 +98,23 @@ pub struct ActiveSession {
     pub alerting: Option<FocusApp>,
 }
 
-/// The running session (if any) and the summary waiting to be acknowledged (if any).
+/// Where the pomodoro cycle stands, for the round dots.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CycleView {
+    pub enabled: bool,
+    /// Work blocks completed in this cycle.
+    pub round: u32,
+    /// Work blocks per cycle (a long break after them).
+    pub every: u32,
+}
+
+/// The running block (if any), the summary and the end card waiting for the user (if any).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FocusState {
     pub active: Option<ActiveSession>,
     pub unseen: Option<StoredFocus>,
+    pub card: Option<EndCard>,
+    pub cycle: CycleView,
 }
 
 /// What changed after feeding the machine; the watcher announces it.
@@ -98,15 +124,21 @@ pub struct Outcome {
     pub alert: Option<(String, FocusApp)>,
     /// The session ended.
     pub finished: Option<StoredFocus>,
+    /// The block ran its course: what to tell the user.
+    pub ended: Option<FocusEndAlert>,
+    /// A minute is left: `(kind, intent)`.
+    pub heads_up: Option<(FocusKind, String)>,
     /// Anything the UI shows changed (alert raised or cleared, plan updated, session ended).
     pub changed: bool,
 }
 
-/// What the tray shows while a session runs.
+/// What the tray shows while a block runs.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TraySession {
+    pub kind: FocusKind,
     pub intent: String,
     pub remaining_ms: i64,
+    pub paused: bool,
     pub drifting: bool,
 }
 
@@ -114,6 +146,8 @@ struct Inner {
     machine: FocusMachine,
     /// Id of the stored row of the running session.
     id: Option<i64>,
+    cycle: Cycle,
+    timer: FocusTimerSettings,
 }
 
 pub struct FocusService {
@@ -139,6 +173,8 @@ impl FocusService {
             inner: Mutex::new(Inner {
                 machine: FocusMachine::new(Config::default()),
                 id: None,
+                cycle: Cycle::default(),
+                timer: FocusTimerSettings::default(),
             }),
         }
     }
@@ -147,29 +183,60 @@ impl FocusService {
         self.inner.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    /// Reads the drift threshold from the settings (also after the user changes it).
+    /// Reads the drift threshold and the timer settings (also after the user changes them).
+    /// A corrupt timer blob falls back to the defaults rather than disabling focus blocks.
     pub fn refresh_config(&self) -> Result<(), FocusServiceError> {
         let secs = read_focus_drift_after_secs(self.settings.as_ref())?;
-        self.lock().machine.set_config(Config {
+        let timer: FocusTimerSettings =
+            read_blob(self.settings.as_ref(), KEY_FOCUS_TIMER).unwrap_or_default();
+        let mut inner = self.lock();
+        inner.machine.set_config(Config {
             drift_after_ms: i64::from(secs) * 1_000,
+            heads_up: timer.heads_up,
         });
+        inner.timer = timer;
         Ok(())
     }
 
-    /// Resumes a session left running by a previous run of the app, or closes it as
+    /// The timer settings in effect (sound, auto-start...).
+    pub fn timer_settings(&self) -> FocusTimerSettings {
+        self.lock().timer.clone()
+    }
+
+    fn load_cycle(&self) -> Cycle {
+        read_blob::<stored::Cycle>(self.settings.as_ref(), KEY_FOCUS_CYCLE)
+            .map(Into::into)
+            .unwrap_or_default()
+    }
+
+    /// Best effort: losing the cycle state only resets the round dots.
+    fn save_cycle(&self, cycle: &Cycle) {
+        let _ = write_blob(
+            self.settings.as_ref(),
+            KEY_FOCUS_CYCLE,
+            &stored::Cycle::from(cycle),
+        );
+    }
+
+    /// Resumes a block left running (or paused) by a previous run of the app, or closes it as
     /// `Recovered` when its planned end already passed (its summary covers the time up to
-    /// that end). Call once at startup.
+    /// that end). Also picks up the stored cycle. Call once at startup.
     pub fn recover(
         &self,
         current: Option<&FocusSnapshot>,
         now: UtcMs,
     ) -> Result<Outcome, FocusServiceError> {
         self.refresh_config()?;
+        let cycle = self.load_cycle();
+        self.lock().cycle = cycle;
         let Some(stored) = self.focus.running()? else {
             return Ok(Outcome::default());
         };
-        if now >= stored.planned_end {
+        if stored.paused_at.is_none() && now >= stored.planned_end {
             let finished = self.close(&stored, stored.planned_end, FocusEnd::Recovered, now)?;
+            let mut inner = self.lock();
+            inner.cycle.cancelled(stored.planned_end);
+            self.save_cycle(&inner.cycle);
             return Ok(Outcome {
                 finished: Some(finished),
                 changed: true,
@@ -180,11 +247,14 @@ impl FocusService {
         let mut inner = self.lock();
         inner.machine.restore(
             Persisted {
+                kind: stored.kind,
                 intent: stored.intent,
                 started_at: stored.started_at,
                 planned_end: stored.planned_end,
                 allowed: stored.allowed,
                 drift_alerts: stored.drift_alerts,
+                paused_at: stored.paused_at,
+                paused_ms: stored.paused_ms,
             },
             app,
             now,
@@ -213,17 +283,31 @@ impl FocusService {
     pub fn status(&self, now: UtcMs) -> Result<FocusState, FocusServiceError> {
         let active = self.active(now);
         let unseen = self.focus.unseen()?;
-        Ok(FocusState { active, unseen })
+        let inner = self.lock();
+        let config = inner.timer.cycle();
+        Ok(FocusState {
+            active,
+            unseen,
+            card: inner.cycle.card.clone(),
+            cycle: CycleView {
+                enabled: config.enabled,
+                round: inner.cycle.round.min(config.long_every),
+                every: config.long_every,
+            },
+        })
     }
 
-    fn active(&self, _now: UtcMs) -> Option<ActiveSession> {
+    fn active(&self, now: UtcMs) -> Option<ActiveSession> {
         let inner = self.lock();
         let (view, id) = (inner.machine.session()?, inner.id?);
         Some(ActiveSession {
             id,
+            kind: view.kind(),
             intent: view.intent().to_owned(),
             started_at: view.started_at(),
             planned_end: view.planned_end(),
+            paused_at: view.paused_at(),
+            planned_ms: view.planned_ms(now),
             allowed: view.allowed().clone(),
             drift_alerts: view.drift_alerts(),
             current: view.current().cloned(),
@@ -231,8 +315,9 @@ impl FocusService {
         })
     }
 
-    /// Starts a session. `blocked` is why tracking is degraded (`None` when it is not):
-    /// without window observation there is no drift detection, so no session starts.
+    /// Starts a block. `blocked` is why tracking is degraded (`None` when it is not):
+    /// without window observation there is no drift detection, so no focus block starts (a
+    /// timer or a break needs no observation and always can).
     pub fn start(
         &self,
         request: StartRequest,
@@ -240,39 +325,73 @@ impl FocusService {
         current: Option<&FocusSnapshot>,
         now: UtcMs,
     ) -> Result<ActiveSession, FocusServiceError> {
-        if let Some(reason) = blocked {
+        if request.kind == FocusKind::Focus
+            && let Some(reason) = blocked
+        {
             return Err(FocusServiceError::Unavailable(reason));
         }
         self.refresh_config()?;
-        validate(&request.intent, request.planned_ms, &request.allowed)?;
-        let app = self.app_of(current, now)?;
+        let intent = validate(
+            request.kind,
+            &request.intent,
+            request.planned_ms,
+            &request.allowed,
+        )?;
+        let step = Step {
+            kind: request.kind,
+            planned_ms: request.planned_ms,
+            intent,
+            allowed: request.allowed,
+            long_break: false,
+        };
+        self.begin(step, current, now, true)
+    }
+
+    /// Starts `step`; `fresh` when the user asked for it (the cycle then records it).
+    fn begin(
+        &self,
+        step: Step,
+        current: Option<&FocusSnapshot>,
+        now: UtcMs,
+        fresh: bool,
+    ) -> Result<ActiveSession, FocusServiceError> {
+        let app = if step.kind == FocusKind::Focus {
+            self.app_of(current, now)?
+        } else {
+            None
+        };
         {
             let mut inner = self.lock();
             // Checked here too so a second start never reaches the store.
             inner.machine.handle(Event::Start {
-                intent: request.intent,
-                planned_ms: request.planned_ms,
-                allowed: request.allowed,
+                kind: step.kind,
+                intent: step.intent.clone(),
+                planned_ms: step.planned_ms,
+                allowed: step.allowed.clone(),
                 now,
                 current: app,
             })?;
-            let saved = inner
-                .machine
-                .session()
-                .map(|v| (v.persisted(), v.allowed().clone()));
-            let Some((saved, allowed)) = saved else {
+            let Some(saved) = inner.machine.session().map(|v| v.persisted()) else {
                 return Err(FocusError::NotActive.into());
             };
-            match self
-                .focus
-                .insert(&saved.intent, saved.started_at, saved.planned_end, &allowed)
-            {
+            let inserted = self.focus.insert(&NewFocus {
+                kind: saved.kind,
+                intent: &saved.intent,
+                started_at: saved.started_at,
+                planned_end: saved.planned_end,
+                allowed: &saved.allowed,
+            });
+            match inserted {
                 Ok(id) => inner.id = Some(id),
                 Err(e) => {
                     inner.machine.discard();
                     return Err(e.into());
                 }
             }
+            if fresh {
+                inner.cycle.started(step, now);
+            }
+            self.save_cycle(&inner.cycle);
         }
         self.active(now).ok_or(FocusError::NotActive.into())
     }
@@ -283,7 +402,7 @@ impl FocusService {
         current: Option<&FocusSnapshot>,
         now: UtcMs,
     ) -> Result<Outcome, FocusServiceError> {
-        if self.lock().machine.session().is_none() {
+        if !self.lock().machine.is_active() {
             return Ok(Outcome::default());
         }
         let app = self.app_of(current, now)?;
@@ -292,7 +411,7 @@ impl FocusService {
 
     /// Time passed: finishes the session or raises a due alert.
     pub fn tick(&self, now: UtcMs) -> Result<Outcome, FocusServiceError> {
-        if self.lock().machine.session().is_none() {
+        if !self.lock().machine.is_active() {
             return Ok(Outcome::default());
         }
         self.apply(Event::Tick { now }, now)
@@ -309,10 +428,47 @@ impl FocusService {
         )
     }
 
+    /// Freezes the countdown (and the drift rule) until [`Self::resume`].
+    pub fn pause(&self, now: UtcMs) -> Result<Outcome, FocusServiceError> {
+        self.apply(Event::Pause { now }, now)
+    }
+
+    /// Continues a paused block with the time it had left.
+    pub fn resume(&self, now: UtcMs) -> Result<Outcome, FocusServiceError> {
+        self.apply(Event::Resume { now }, now)
+    }
+
     /// Ends the session now; returns it with its summary.
     pub fn stop(&self, now: UtcMs) -> Result<StoredFocus, FocusServiceError> {
         let outcome = self.apply(Event::Cancel { now }, now)?;
         outcome.finished.ok_or_else(|| FocusError::NotActive.into())
+    }
+
+    /// Answers the end card: start what comes next, skip it, or a few more minutes of the
+    /// block that ended. Returns the block it started, if any. Without a card it does nothing.
+    pub fn answer_card(
+        &self,
+        action: CardAction,
+        current: Option<&FocusSnapshot>,
+        now: UtcMs,
+    ) -> Result<Option<ActiveSession>, FocusServiceError> {
+        let action = match action {
+            CardAction::MoreTime { ms } => CardAction::MoreTime {
+                ms: ms.clamp(60_000, i64::from(MAX_MORE_MINUTES) * 60_000),
+            },
+            other => other,
+        };
+        let step = {
+            let mut inner = self.lock();
+            if inner.machine.is_active() {
+                return Err(FocusError::AlreadyActive.into());
+            }
+            let step = inner.cycle.answer(action, now);
+            self.save_cycle(&inner.cycle);
+            step
+        };
+        step.map(|step| self.begin(step, current, now, false))
+            .transpose()
     }
 
     /// "Back to it": acknowledges the alert and holds the next one back for `minutes`.
@@ -362,21 +518,31 @@ impl FocusService {
         let inner = self.lock();
         let view = inner.machine.session()?;
         Some(TraySession {
+            kind: view.kind(),
             intent: view.intent().to_owned(),
             remaining_ms: view.remaining_ms(now),
+            paused: view.paused_at().is_some(),
             drifting: view.alerting().is_some(),
         })
     }
 
     /// Feeds one event to the machine and stores what it decided.
     fn apply(&self, event: Event, now: UtcMs) -> Result<Outcome, FocusServiceError> {
-        let (effects, before, id) = {
+        let (effects, before, planned_ms, id) = {
             let mut inner = self.lock();
-            let before = inner.machine.session().map(|v| v.persisted());
+            let before = inner
+                .machine
+                .session()
+                .map(|v| (v.persisted(), v.planned_ms(now)));
             let effects = inner.machine.handle(event)?;
-            (effects, before, inner.id)
+            (
+                effects,
+                before.as_ref().map(|b| b.0.clone()),
+                before.map(|b| b.1),
+                inner.id,
+            )
         };
-        let (Some(before), Some(id)) = (before, id) else {
+        let (Some(before), Some(planned_ms), Some(id)) = (before, planned_ms, id) else {
             return Err(FocusError::NotActive.into());
         };
         let mut outcome = Outcome::default();
@@ -389,9 +555,13 @@ impl FocusService {
                     if let Some(saved) = saved {
                         self.focus.update_running(
                             id,
-                            saved.planned_end,
-                            &saved.allowed,
-                            saved.drift_alerts,
+                            &RunningFocus {
+                                planned_end: saved.planned_end,
+                                paused_at: saved.paused_at,
+                                paused_ms: saved.paused_ms,
+                                allowed: &saved.allowed,
+                                drift_alerts: saved.drift_alerts,
+                            },
                         )?;
                     }
                 }
@@ -400,14 +570,18 @@ impl FocusService {
                     outcome.alert = Some((before.intent.clone(), app));
                 }
                 Effect::DriftCleared => outcome.changed = true,
+                Effect::HeadsUp => outcome.heads_up = Some((before.kind, before.intent.clone())),
                 Effect::Finished { reason, at } => {
                     outcome.changed = true;
                     // The alert count may have grown in this very event.
                     let stored = StoredFocus {
                         id,
+                        kind: before.kind,
                         intent: before.intent.clone(),
                         started_at: before.started_at,
                         planned_end: before.planned_end,
+                        paused_at: None,
+                        paused_ms: before.paused_ms,
                         ended_at: None,
                         end_reason: None,
                         drift_alerts: before.drift_alerts,
@@ -417,13 +591,66 @@ impl FocusService {
                     };
                     outcome.finished = Some(self.close(&stored, at, reason, now)?);
                     self.lock().id = None;
+                    if reason == FocusEnd::Completed {
+                        outcome.ended = Some(self.completed(&before, planned_ms, at, now));
+                    } else {
+                        let mut inner = self.lock();
+                        inner.cycle.cancelled(at);
+                        self.save_cycle(&inner.cycle);
+                    }
                 }
             }
         }
         Ok(outcome)
     }
 
-    /// Computes the summary of `[started_at, at)` and stores the closed session.
+    /// A block ran its course: moves the cycle on, starts what comes next when auto-start is
+    /// on, and says what to tell the user.
+    fn completed(
+        &self,
+        before: &Persisted,
+        planned_ms: i64,
+        at: UtcMs,
+        now: UtcMs,
+    ) -> FocusEndAlert {
+        let (next, auto, sound) = {
+            let mut inner = self.lock();
+            let config = inner.timer.cycle();
+            let long_break = inner.cycle.long_break_running;
+            let finished = Step {
+                kind: before.kind,
+                planned_ms,
+                intent: before.intent.clone(),
+                allowed: before.allowed.clone(),
+                long_break: before.kind == FocusKind::Break && long_break,
+            };
+            let next = inner
+                .cycle
+                .completed(finished, at, &config)
+                .next
+                .as_ref()
+                .map(|n| (n.kind, n.planned_ms));
+            let auto = if inner.timer.auto_start_next {
+                inner.cycle.auto_start(now)
+            } else {
+                None
+            };
+            self.save_cycle(&inner.cycle);
+            (next, auto, inner.timer.sound)
+        };
+        // The next block needs no observation to start; the watcher feeds it right after.
+        let auto_started = auto.is_some_and(|step| self.begin(step, None, now, false).is_ok());
+        FocusEndAlert {
+            kind: before.kind,
+            intent: before.intent.clone(),
+            next,
+            auto_started,
+            sound,
+        }
+    }
+
+    /// Computes the summary of `[started_at, at)` and stores the closed session. Only a focus
+    /// block has a summary to look at; timers and breaks are acknowledged right away.
     fn close(
         &self,
         stored: &StoredFocus,
@@ -431,12 +658,22 @@ impl FocusService {
         reason: FocusEnd,
         now: UtcMs,
     ) -> Result<StoredFocus, FocusServiceError> {
-        let summary = self.summary(stored, at, now)?;
+        let with_summary = stored.kind == FocusKind::Focus;
+        let summary = if with_summary {
+            self.summary(stored, at, now)?
+        } else {
+            FocusSummary::default()
+        };
         self.focus.close(stored.id, at, reason, &summary)?;
+        if !with_summary {
+            self.focus.mark_seen(stored.id)?;
+        }
         Ok(StoredFocus {
             ended_at: Some(at),
             end_reason: Some(reason),
+            paused_at: None,
             summary,
+            seen: !with_summary,
             ..stored.clone()
         })
     }
@@ -504,6 +741,108 @@ impl FocusService {
             app_name: focus.app_name.clone(),
             activity,
         }))
+    }
+}
+
+/// The cycle as stored in the `focus_cycle` settings blob (the domain stays serde-free).
+mod stored {
+    use domain::focus_cycle::{self, EndCard};
+    use domain::{ActivityId, FocusAllowed, FocusKind, UtcMs};
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+    #[serde(default)]
+    pub struct Step {
+        kind: String,
+        planned_ms: i64,
+        intent: String,
+        activities: Vec<i64>,
+        apps: Vec<String>,
+        long_break: bool,
+    }
+
+    #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+    #[serde(default)]
+    pub struct Card {
+        finished: Step,
+        at: i64,
+        next: Option<Step>,
+    }
+
+    #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+    #[serde(default)]
+    pub struct Cycle {
+        round: u32,
+        last_work: Option<Step>,
+        last_end_at: Option<i64>,
+        card: Option<Card>,
+        continuing: bool,
+        deferred: Option<Step>,
+        long_break_running: bool,
+    }
+
+    impl From<&focus_cycle::Step> for Step {
+        fn from(s: &focus_cycle::Step) -> Self {
+            Self {
+                kind: s.kind.as_str().to_owned(),
+                planned_ms: s.planned_ms,
+                intent: s.intent.clone(),
+                activities: s.allowed.activities.iter().map(|a| a.0).collect(),
+                apps: s.allowed.apps.clone(),
+                long_break: s.long_break,
+            }
+        }
+    }
+
+    impl From<Step> for focus_cycle::Step {
+        fn from(s: Step) -> Self {
+            Self {
+                kind: FocusKind::parse(&s.kind).unwrap_or(FocusKind::Timer),
+                planned_ms: s.planned_ms,
+                intent: s.intent,
+                allowed: FocusAllowed {
+                    activities: s.activities.into_iter().map(ActivityId).collect(),
+                    apps: s.apps,
+                },
+                long_break: s.long_break,
+            }
+        }
+    }
+
+    impl From<&focus_cycle::Cycle> for Cycle {
+        fn from(c: &focus_cycle::Cycle) -> Self {
+            Self {
+                round: c.round,
+                last_work: c.last_work.as_ref().map(Into::into),
+                last_end_at: c.last_end_at.map(|t| t.0),
+                card: c.card.as_ref().map(|card| Card {
+                    finished: (&card.finished).into(),
+                    at: card.at.0,
+                    next: card.next.as_ref().map(Into::into),
+                }),
+                continuing: c.continuing,
+                deferred: c.deferred.as_ref().map(Into::into),
+                long_break_running: c.long_break_running,
+            }
+        }
+    }
+
+    impl From<Cycle> for focus_cycle::Cycle {
+        fn from(c: Cycle) -> Self {
+            Self {
+                round: c.round,
+                last_work: c.last_work.map(Into::into),
+                last_end_at: c.last_end_at.map(UtcMs),
+                card: c.card.map(|card| EndCard {
+                    finished: card.finished.into(),
+                    at: UtcMs(card.at),
+                    next: card.next.map(Into::into),
+                }),
+                continuing: c.continuing,
+                deferred: c.deferred.map(Into::into),
+                long_break_running: c.long_break_running,
+            }
+        }
     }
 }
 
@@ -589,6 +928,7 @@ mod tests {
 
     fn request(rig: &Rig) -> StartRequest {
         StartRequest {
+            kind: FocusKind::Focus,
             intent: "Write report".into(),
             planned_ms: 50 * MIN,
             allowed: FocusAllowed {
@@ -640,11 +980,11 @@ mod tests {
     #[test]
     fn invalid_requests_and_a_second_session_are_rejected() {
         let r = rig();
-        let mut empty = request(&r);
-        empty.intent = " ".into();
+        let mut nothing = request(&r);
+        nothing.allowed = FocusAllowed::default();
         assert_eq!(
-            r.service.start(empty, None, None, UtcMs(T0)),
-            Err(FocusServiceError::Invalid(FocusError::EmptyIntent))
+            r.service.start(nothing, None, None, UtcMs(T0)),
+            Err(FocusServiceError::Invalid(FocusError::NothingAllowed))
         );
         start(&r, None);
         assert_eq!(
@@ -878,6 +1218,194 @@ mod tests {
         assert!(r.focus.running().unwrap().is_none());
     }
 
+    fn timer(minutes: i64) -> StartRequest {
+        StartRequest {
+            kind: FocusKind::Timer,
+            intent: String::new(),
+            planned_ms: minutes * MIN,
+            allowed: FocusAllowed::default(),
+        }
+    }
+
+    fn restarted(r: &Rig) -> FocusService {
+        FocusService::new(
+            Arc::new(r.focus.clone()),
+            Arc::new(r.store.clone()),
+            Arc::new(FakeActivities::default()),
+            Arc::new(r.settings.clone()),
+        )
+    }
+
+    #[test]
+    fn a_timer_runs_without_observation_even_when_tracking_is_degraded() {
+        let r = rig();
+        let active = r
+            .service
+            .start(
+                timer(25),
+                Some(DegradedReason::AccessibilityDenied),
+                Some(&app("slack")),
+                UtcMs(T0),
+            )
+            .unwrap();
+        assert_eq!(
+            (active.kind, active.intent.as_str()),
+            (FocusKind::Timer, "")
+        );
+        assert!(active.current.is_none() && active.allowed.is_empty());
+        assert_eq!(active.planned_ms, 25 * MIN);
+        let out = r.service.tick(UtcMs(T0 + 25 * MIN)).unwrap();
+        let done = out.finished.unwrap();
+        assert!(done.seen, "a timer has no summary to dismiss");
+        assert!(
+            r.service
+                .status(UtcMs(T0 + 26 * MIN))
+                .unwrap()
+                .unseen
+                .is_none()
+        );
+        let ended = out.ended.unwrap();
+        assert_eq!(ended.kind, FocusKind::Timer);
+        assert_eq!(ended.next, Some((FocusKind::Break, 5 * MIN)));
+        assert!(!ended.auto_started && ended.sound);
+    }
+
+    #[test]
+    fn pause_and_resume_are_stored_and_keep_the_time_left() {
+        let r = rig();
+        r.service.start(timer(25), None, None, UtcMs(T0)).unwrap();
+        r.service.pause(UtcMs(T0 + 10 * MIN)).unwrap();
+        assert_eq!(r.focus.all()[0].paused_at, Some(UtcMs(T0 + 10 * MIN)));
+        let tray = r.service.tray(UtcMs(T0 + 50 * MIN)).unwrap();
+        assert!(tray.paused);
+        assert_eq!(tray.remaining_ms, 15 * MIN);
+        assert_eq!(r.service.next_deadline(), None);
+        // Restarted while paused: still paused, with the same time left.
+        let again = restarted(&r);
+        again.recover(None, UtcMs(T0 + 90 * MIN)).unwrap();
+        let active = again.status(UtcMs(T0 + 90 * MIN)).unwrap().active.unwrap();
+        assert_eq!(active.paused_at, Some(UtcMs(T0 + 10 * MIN)));
+        again.resume(UtcMs(T0 + 100 * MIN)).unwrap();
+        let stored = &r.focus.all()[0];
+        assert_eq!((stored.paused_at, stored.paused_ms), (None, 90 * MIN));
+        assert_eq!(stored.planned_end, UtcMs(T0 + 115 * MIN));
+        assert_eq!(
+            again.tray(UtcMs(T0 + 100 * MIN)).unwrap().remaining_ms,
+            15 * MIN
+        );
+        let done = again.tick(UtcMs(T0 + 115 * MIN)).unwrap().finished.unwrap();
+        assert_eq!(done.worked_ms(), 25 * MIN);
+    }
+
+    #[test]
+    fn the_end_card_offers_a_break_and_starting_it_runs_one() {
+        let r = rig();
+        r.service.start(timer(25), None, None, UtcMs(T0)).unwrap();
+        r.service.tick(UtcMs(T0 + 25 * MIN)).unwrap();
+        let state = r.service.status(UtcMs(T0 + 25 * MIN)).unwrap();
+        let card = state.card.unwrap();
+        assert_eq!(card.finished.kind, FocusKind::Timer);
+        assert_eq!(card.next.as_ref().unwrap().planned_ms, 5 * MIN);
+        assert_eq!((state.cycle.round, state.cycle.every), (1, 4));
+        // The card and the round survive a restart.
+        let again = restarted(&r);
+        again.recover(None, UtcMs(T0 + 26 * MIN)).unwrap();
+        assert!(again.status(UtcMs(T0 + 26 * MIN)).unwrap().card.is_some());
+        let brk = again
+            .answer_card(CardAction::StartNext, None, UtcMs(T0 + 26 * MIN))
+            .unwrap()
+            .unwrap();
+        assert_eq!((brk.kind, brk.planned_ms), (FocusKind::Break, 5 * MIN));
+        let state = again.status(UtcMs(T0 + 27 * MIN)).unwrap();
+        assert!(state.card.is_none());
+        assert_eq!(state.cycle.round, 1);
+        // A card action while a block runs is refused.
+        assert_eq!(
+            again.answer_card(CardAction::Skip, None, UtcMs(T0 + 27 * MIN)),
+            Err(FocusServiceError::Invalid(FocusError::AlreadyActive))
+        );
+        let ended = again.tick(UtcMs(T0 + 31 * MIN)).unwrap().ended.unwrap();
+        assert_eq!(ended.next, Some((FocusKind::Timer, 25 * MIN)));
+    }
+
+    #[test]
+    fn more_time_runs_the_same_block_again_and_keeps_the_offer() {
+        let r = rig();
+        r.service.start(request(&r), None, None, UtcMs(T0)).unwrap();
+        r.service.tick(UtcMs(T0 + 50 * MIN)).unwrap();
+        let more = r
+            .service
+            .answer_card(
+                CardAction::MoreTime { ms: 5 * MIN },
+                Some(&app("excel")),
+                UtcMs(T0 + 51 * MIN),
+            )
+            .unwrap()
+            .unwrap();
+        assert_eq!((more.kind, more.planned_ms), (FocusKind::Focus, 5 * MIN));
+        assert_eq!(more.intent, "Write report");
+        assert_eq!(more.allowed, request(&r).allowed);
+        let ended = r.service.tick(UtcMs(T0 + 56 * MIN)).unwrap().ended.unwrap();
+        assert_eq!(ended.next, Some((FocusKind::Break, 5 * MIN)));
+        assert_eq!(
+            r.service.status(UtcMs(T0 + 56 * MIN)).unwrap().cycle.round,
+            1
+        );
+        // Skip clears the card.
+        r.service
+            .answer_card(CardAction::Skip, None, UtcMs(T0 + 57 * MIN))
+            .unwrap();
+        assert!(
+            r.service
+                .status(UtcMs(T0 + 57 * MIN))
+                .unwrap()
+                .card
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn auto_start_starts_the_break_right_away() {
+        let r = rig();
+        r.settings
+            .set(
+                "focus_timer",
+                r#"{"auto_start_next": true, "short_break_minutes": 3}"#,
+            )
+            .unwrap();
+        r.service.start(timer(25), None, None, UtcMs(T0)).unwrap();
+        let out = r.service.tick(UtcMs(T0 + 25 * MIN)).unwrap();
+        assert!(out.ended.unwrap().auto_started);
+        let state = r.service.status(UtcMs(T0 + 25 * MIN)).unwrap();
+        assert!(state.card.is_none());
+        let active = state.active.unwrap();
+        assert_eq!(
+            (active.kind, active.planned_ms),
+            (FocusKind::Break, 3 * MIN)
+        );
+    }
+
+    #[test]
+    fn ending_early_shows_no_card() {
+        let r = rig();
+        r.service.start(timer(25), None, None, UtcMs(T0)).unwrap();
+        r.service.stop(UtcMs(T0 + 5 * MIN)).unwrap();
+        let state = r.service.status(UtcMs(T0 + 5 * MIN)).unwrap();
+        assert!(state.card.is_none());
+        assert_eq!(state.cycle.round, 0);
+    }
+
+    #[test]
+    fn the_heads_up_follows_the_setting() {
+        let r = rig();
+        r.settings
+            .set("focus_timer", r#"{"heads_up": true}"#)
+            .unwrap();
+        r.service.start(timer(25), None, None, UtcMs(T0)).unwrap();
+        let out = r.service.tick(UtcMs(T0 + 24 * MIN)).unwrap();
+        assert_eq!(out.heads_up, Some((FocusKind::Timer, String::new())));
+    }
+
     #[test]
     fn the_drift_threshold_follows_the_setting() {
         let r = rig();
@@ -891,9 +1419,12 @@ mod tests {
         let r = rig();
         r.focus.seed(StoredFocus {
             id: 9,
+            kind: FocusKind::Focus,
             intent: "other".into(),
             started_at: UtcMs(1),
             planned_end: UtcMs(2),
+            paused_at: None,
+            paused_ms: 0,
             ended_at: None,
             end_reason: None,
             drift_alerts: 0,

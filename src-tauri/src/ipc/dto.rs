@@ -8,17 +8,18 @@ use application::commands::{
 };
 use application::dashboard::{Dashboard, DashboardActivity, ProductivityTotals, StackedBucket};
 use application::export::{BackupReport, BackupStatus, RestorePreview, RestoreReport};
-use application::focus::{ActiveSession, FocusState};
+use application::focus::{ActiveSession, CycleView, FocusState};
 use application::goals::GoalStatus;
 use application::ports::{DegradedReason, PrivacyMode, StoredFocus, TrackingKind, TrackingStatus};
 use application::presets::{ApplyOutcome, SuggestionView};
 use application::queries::{
     ActivityTotal, AppTotal, BucketTotal, Range, Report, RulePreview, TimelineItem, TitleTotal,
 };
-use application::settings_blobs::UiSettings;
+use application::settings_blobs::{FocusTimerSettings, UiSettings};
+use domain::focus_cycle::{CardAction, EndCard, Step};
 use domain::{
-    Activity, ActivityId, ActivityRule, EndReason, FocusAllowed, FocusApp, FocusEnd, FocusRatio,
-    FocusSnapshot, GapId, Goal, GoalEventKind, GoalKind, GoalScope, GoalState, IdleGap,
+    Activity, ActivityId, ActivityRule, EndReason, FocusAllowed, FocusApp, FocusEnd, FocusKind,
+    FocusRatio, FocusSnapshot, GapId, Goal, GoalEventKind, GoalKind, GoalScope, GoalState, IdleGap,
     IdleResolution, Period, PermissionState, Preset, PrivacyPolicy, Productivity, RuleKind,
     SegmentSource, Streak, Trend, UtcMs,
 };
@@ -1081,7 +1082,53 @@ pub struct SettingsDto {
     pub week_start: u8,
     /// Seconds outside a focus session's allowed set before a drift alert.
     pub focus_drift_after_secs: u32,
+    pub focus_timer: FocusTimerSettingsDto,
     pub ui: UiSettingsDto,
+}
+
+/// Pomodoro cycle, sound and heads-up of focus blocks; patches replace the whole blob.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct FocusTimerSettingsDto {
+    /// Offer a break after each work block, and a long one every few.
+    pub cycle_enabled: bool,
+    pub short_break_minutes: u32,
+    pub long_break_minutes: u32,
+    /// Work blocks before a long break.
+    pub long_break_every: u32,
+    /// Start what comes next without asking.
+    pub auto_start_next: bool,
+    /// Sound with the end-of-block alert.
+    pub sound: bool,
+    /// A notification one minute before a block ends.
+    pub heads_up: bool,
+}
+
+impl From<FocusTimerSettings> for FocusTimerSettingsDto {
+    fn from(t: FocusTimerSettings) -> Self {
+        Self {
+            cycle_enabled: t.cycle_enabled,
+            short_break_minutes: t.short_break_minutes,
+            long_break_minutes: t.long_break_minutes,
+            long_break_every: t.long_break_every,
+            auto_start_next: t.auto_start_next,
+            sound: t.sound,
+            heads_up: t.heads_up,
+        }
+    }
+}
+
+impl From<FocusTimerSettingsDto> for FocusTimerSettings {
+    fn from(t: FocusTimerSettingsDto) -> Self {
+        Self {
+            cycle_enabled: t.cycle_enabled,
+            short_break_minutes: t.short_break_minutes,
+            long_break_minutes: t.long_break_minutes,
+            long_break_every: t.long_break_every,
+            auto_start_next: t.auto_start_next,
+            sound: t.sound,
+            heads_up: t.heads_up,
+        }
+    }
 }
 
 /// Interface state persisted across restarts; patches replace the whole blob.
@@ -1122,6 +1169,7 @@ impl From<Settings> for SettingsDto {
             tray_display: s.tray_display.into(),
             week_start: s.week_start,
             focus_drift_after_secs: s.focus_drift_after_secs,
+            focus_timer: s.focus_timer.into(),
             ui: s.ui.into(),
         }
     }
@@ -1150,6 +1198,7 @@ pub struct SettingsPatchDto {
     pub tray_display: Option<TrayDisplayDto>,
     pub week_start: Option<u8>,
     pub focus_drift_after_secs: Option<u32>,
+    pub focus_timer: Option<FocusTimerSettingsDto>,
     pub ui: Option<UiSettingsDto>,
 }
 
@@ -1171,6 +1220,7 @@ impl From<SettingsPatchDto> for SettingsPatch {
             tray_display: p.tray_display.map(Into::into),
             week_start: p.week_start,
             focus_drift_after_secs: p.focus_drift_after_secs,
+            focus_timer: p.focus_timer.map(Into::into),
             ui: p.ui.map(Into::into),
         }
     }
@@ -1603,9 +1653,40 @@ impl From<FocusAllowedDto> for FocusAllowed {
     }
 }
 
-/// What the user starts a session with.
+/// What a block is for: a focus block watches for drift, a timer only counts down.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum FocusKindDto {
+    Focus,
+    Timer,
+    Break,
+}
+
+impl From<FocusKind> for FocusKindDto {
+    fn from(k: FocusKind) -> Self {
+        match k {
+            FocusKind::Focus => Self::Focus,
+            FocusKind::Timer => Self::Timer,
+            FocusKind::Break => Self::Break,
+        }
+    }
+}
+
+impl From<FocusKindDto> for FocusKind {
+    fn from(k: FocusKindDto) -> Self {
+        match k {
+            FocusKindDto::Focus => Self::Focus,
+            FocusKindDto::Timer => Self::Timer,
+            FocusKindDto::Break => Self::Break,
+        }
+    }
+}
+
+/// What the user starts a block with. The task name (`intent`) may be empty; only a focus
+/// block needs something allowed.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct FocusStartDto {
+    pub kind: FocusKindDto,
     pub intent: String,
     pub planned_minutes: u32,
     pub allowed: FocusAllowedDto,
@@ -1629,13 +1710,19 @@ impl From<FocusApp> for FocusAppDto {
     }
 }
 
-/// The running session.
+/// The running block.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct FocusActiveDto {
     pub id: i64,
+    pub kind: FocusKindDto,
     pub intent: String,
     pub started_at: i64,
+    /// Moves on resume by the paused time.
     pub planned_end: i64,
+    /// Set while paused: the time left is `planned_end - paused_at`.
+    pub paused_at: Option<i64>,
+    /// Planned length without the pauses, for the progress ring.
+    pub planned_ms: i64,
     pub drift_alerts: u32,
     pub allowed: FocusAllowedDto,
     /// The app in front; `null` while nothing is observed (tracking paused, idle...).
@@ -1648,9 +1735,12 @@ impl From<ActiveSession> for FocusActiveDto {
     fn from(a: ActiveSession) -> Self {
         Self {
             id: a.id,
+            kind: a.kind.into(),
             intent: a.intent,
             started_at: a.started_at.0,
             planned_end: a.planned_end.0,
+            paused_at: a.paused_at.map(|t| t.0),
+            planned_ms: a.planned_ms,
             drift_alerts: a.drift_alerts,
             allowed: a.allowed.into(),
             current: a.current.map(Into::into),
@@ -1688,6 +1778,7 @@ pub struct FocusDistractionDto {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct FocusSessionDto {
     pub id: i64,
+    pub kind: FocusKindDto,
     pub intent: String,
     pub started_at: i64,
     pub planned_end: i64,
@@ -1702,13 +1793,17 @@ pub struct FocusSessionDto {
     pub top_distractions: Vec<FocusDistractionDto>,
     /// The user acknowledged the end summary.
     pub seen: bool,
+    /// Time actually spent in the block (its length without the pauses).
+    pub worked_ms: i64,
 }
 
 impl From<StoredFocus> for FocusSessionDto {
     fn from(s: StoredFocus) -> Self {
         let percent_inside = s.summary.percent_inside();
+        let worked_ms = s.worked_ms();
         Self {
             id: s.id,
+            kind: s.kind.into(),
             intent: s.intent,
             started_at: s.started_at.0,
             planned_end: s.planned_end.0,
@@ -1730,6 +1825,92 @@ impl From<StoredFocus> for FocusSessionDto {
                 })
                 .collect(),
             seen: s.seen,
+            worked_ms,
+        }
+    }
+}
+
+/// A block the end card offers or reports.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct FocusStepDto {
+    pub kind: FocusKindDto,
+    pub intent: String,
+    pub planned_ms: i64,
+    pub long_break: bool,
+}
+
+impl From<Step> for FocusStepDto {
+    fn from(s: Step) -> Self {
+        Self {
+            kind: s.kind.into(),
+            intent: s.intent,
+            planned_ms: s.planned_ms,
+            long_break: s.long_break,
+        }
+    }
+}
+
+/// Shown when a block ran its course, until the user answers it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct FocusCardDto {
+    /// The block that ended.
+    pub finished: FocusStepDto,
+    pub ended_at: i64,
+    /// What comes next; `null` when the pomodoro cycle is off.
+    pub next: Option<FocusStepDto>,
+}
+
+impl From<EndCard> for FocusCardDto {
+    fn from(c: EndCard) -> Self {
+        Self {
+            finished: c.finished.into(),
+            ended_at: c.at.0,
+            next: c.next.map(Into::into),
+        }
+    }
+}
+
+/// The user's answer to the end card.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum FocusCardActionDto {
+    /// Start what the card offers.
+    StartNext,
+    Skip,
+    /// A few more minutes of the block that ended.
+    MoreTime {
+        minutes: u32,
+    },
+}
+
+impl From<FocusCardActionDto> for CardAction {
+    fn from(a: FocusCardActionDto) -> Self {
+        match a {
+            FocusCardActionDto::StartNext => Self::StartNext,
+            FocusCardActionDto::Skip => Self::Skip,
+            FocusCardActionDto::MoreTime { minutes } => Self::MoreTime {
+                ms: i64::from(minutes) * 60_000,
+            },
+        }
+    }
+}
+
+/// Where the pomodoro cycle stands (round dots).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct FocusCycleDto {
+    pub enabled: bool,
+    /// Work blocks completed in this cycle.
+    pub round: u32,
+    /// Work blocks before the long break.
+    pub every: u32,
+}
+
+impl From<CycleView> for FocusCycleDto {
+    fn from(c: CycleView) -> Self {
+        Self {
+            enabled: c.enabled,
+            round: c.round,
+            every: c.every,
         }
     }
 }
@@ -1740,7 +1921,11 @@ pub struct FocusStatusDto {
     pub active: Option<FocusActiveDto>,
     /// The latest finished session whose summary the user has not dismissed yet.
     pub unseen: Option<FocusSessionDto>,
-    /// Why a session cannot start right now (tracking is degraded); `null` when it can.
+    /// The end card of the block that just ran its course, until answered.
+    pub card: Option<FocusCardDto>,
+    pub cycle: FocusCycleDto,
+    /// Why a focus block cannot start right now (tracking is degraded); `null` when it can.
+    /// Timers and breaks can always start.
     pub unavailable: Option<DegradedReasonDto>,
 }
 
@@ -1749,6 +1934,8 @@ impl FocusStatusDto {
         Self {
             active: state.active.map(Into::into),
             unseen: state.unseen.map(Into::into),
+            card: state.card.map(Into::into),
+            cycle: state.cycle.into(),
             unavailable,
         }
     }

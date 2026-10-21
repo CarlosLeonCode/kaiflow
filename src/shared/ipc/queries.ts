@@ -7,6 +7,7 @@ import type {
   AiSettingsPatchDto,
   BackupStatusDto,
   DeleteOpDto,
+  FocusCardActionDto,
   FocusStartDto,
   FocusStatusDto,
   GoalDto,
@@ -168,6 +169,7 @@ export function settingsPatch(changes: Partial<SettingsPatchDto>): SettingsPatch
     tray_display: null,
     week_start: null,
     focus_drift_after_secs: null,
+    focus_timer: null,
     ui: null,
     ...changes,
   };
@@ -568,6 +570,20 @@ export function useStopFocusMutation() {
 
 export function useExtendFocusMutation() {
   return useFocusCommand((minutes: number) => unwrap(commands.focusExtend(minutes)));
+}
+
+/** Freezes the countdown; the time left is kept. */
+export function usePauseFocusMutation() {
+  return useFocusCommand(() => unwrap(commands.focusPause()));
+}
+
+export function useResumeFocusMutation() {
+  return useFocusCommand(() => unwrap(commands.focusResume()));
+}
+
+/** Answers the end card: start the next block, skip it, or a few more minutes. */
+export function useFocusCardActionMutation() {
+  return useFocusCommand((action: FocusCardActionDto) => unwrap(commands.focusCardAction(action)));
 }
 
 /** "Back to it": acknowledges the drift alert and holds the next one back for `minutes`. */

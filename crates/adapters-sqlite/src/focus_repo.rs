@@ -1,13 +1,15 @@
 use std::sync::Mutex;
 
-use application::ports::{FocusRepository, PortError, PortResult, StoredFocus};
+use application::ports::{
+    FocusRepository, NewFocus, PortError, PortResult, RunningFocus, StoredFocus,
+};
 use domain::focus_session::Distraction;
-use domain::{ActivityId, FocusAllowed, FocusEnd, FocusSummary, UtcMs};
+use domain::{ActivityId, FocusAllowed, FocusEnd, FocusKind, FocusSummary, UtcMs};
 use rusqlite::{Connection, Row, params};
 
 use crate::db::{lock, port_err};
 
-/// Focus sessions and their allowed sets (migration 0004).
+/// Focus sessions and their allowed sets (migrations 0004 and 0006).
 pub struct SqliteFocusRepository {
     conn: Mutex<Connection>,
 }
@@ -22,7 +24,7 @@ impl SqliteFocusRepository {
 }
 
 const COLUMNS: &str = "id, intent, started_at, planned_end, ended_at, end_reason, drift_alerts,
-     inside_ms, outside_ms, distractions, seen";
+     inside_ms, outside_ms, distractions, seen, kind, untitled, paused_at, paused_ms";
 
 /// Distractions are stored as a JSON array of `{app_id, app_name, ms}`.
 pub fn distractions_to_json(list: &[Distraction]) -> String {
@@ -59,11 +61,16 @@ fn session_from_row(r: &Row<'_>) -> rusqlite::Result<PortResult<StoredFocus>> {
     let ended_at: Option<i64> = r.get(4)?;
     let drift_alerts: i64 = r.get(6)?;
     let distractions: String = r.get(9)?;
+    let kind: String = r.get(11)?;
+    let untitled = r.get::<_, i64>(12)? != 0;
     let session = StoredFocus {
         id,
-        intent: r.get(1)?,
+        kind: FocusKind::parse(&kind).unwrap_or_default(),
+        intent: if untitled { String::new() } else { r.get(1)? },
         started_at: UtcMs(r.get(2)?),
         planned_end: UtcMs(r.get(3)?),
+        paused_at: r.get::<_, Option<i64>>(13)?.map(UtcMs),
+        paused_ms: r.get(14)?,
         ended_at: ended_at.map(UtcMs),
         end_reason: None,
         drift_alerts: u32::try_from(drift_alerts).unwrap_or(0),
@@ -160,46 +167,55 @@ fn query(
 }
 
 impl FocusRepository for SqliteFocusRepository {
-    fn insert(
-        &self,
-        intent: &str,
-        started_at: UtcMs,
-        planned_end: UtcMs,
-        allowed: &FocusAllowed,
-    ) -> PortResult<i64> {
+    fn insert(&self, new: &NewFocus<'_>) -> PortResult<i64> {
         let mut conn = lock(&self.conn, "focus")?;
         let tx = conn.transaction().map_err(port_err)?;
+        // The column must not be empty: a block without a task name stores its kind instead.
+        let untitled = new.intent.trim().is_empty();
+        let intent = if untitled {
+            new.kind.label()
+        } else {
+            new.intent
+        };
         tx.execute(
-            "INSERT INTO focus_sessions(intent, started_at, planned_end) VALUES (?1, ?2, ?3)",
-            params![intent, started_at.0, planned_end.0],
+            "INSERT INTO focus_sessions(intent, started_at, planned_end, kind, untitled)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                intent,
+                new.started_at.0,
+                new.planned_end.0,
+                new.kind.as_str(),
+                untitled
+            ],
         )
         .map_err(port_err)?;
         let id = tx.last_insert_rowid();
-        save_allowed(&tx, id, allowed)?;
+        save_allowed(&tx, id, new.allowed)?;
         tx.commit().map_err(port_err)?;
         Ok(id)
     }
 
-    fn update_running(
-        &self,
-        id: i64,
-        planned_end: UtcMs,
-        allowed: &FocusAllowed,
-        drift_alerts: u32,
-    ) -> PortResult<()> {
+    fn update_running(&self, id: i64, running: &RunningFocus<'_>) -> PortResult<()> {
         let mut conn = lock(&self.conn, "focus")?;
         let tx = conn.transaction().map_err(port_err)?;
         let changed = tx
             .execute(
-                "UPDATE focus_sessions SET planned_end = ?2, drift_alerts = ?3
+                "UPDATE focus_sessions
+                 SET planned_end = ?2, drift_alerts = ?3, paused_at = ?4, paused_ms = ?5
                  WHERE id = ?1 AND ended_at IS NULL",
-                params![id, planned_end.0, drift_alerts],
+                params![
+                    id,
+                    running.planned_end.0,
+                    running.drift_alerts,
+                    running.paused_at.map(|t| t.0),
+                    running.paused_ms.max(0)
+                ],
             )
             .map_err(port_err)?;
         if changed == 0 {
             return Err(PortError(format!("no running focus session {id}")));
         }
-        save_allowed(&tx, id, allowed)?;
+        save_allowed(&tx, id, running.allowed)?;
         tx.commit().map_err(port_err)
     }
 
@@ -215,7 +231,7 @@ impl FocusRepository for SqliteFocusRepository {
             .execute(
                 "UPDATE focus_sessions
                  SET ended_at = ?2, end_reason = ?3, inside_ms = ?4, outside_ms = ?5,
-                     distractions = ?6, seen = 0
+                     distractions = ?6, seen = 0, paused_at = NULL
                  WHERE id = ?1 AND ended_at IS NULL",
                 params![
                     id,
@@ -290,6 +306,31 @@ mod tests {
         }
     }
 
+    fn new<'a>(
+        intent: &'a str,
+        start: UtcMs,
+        end: UtcMs,
+        allowed: &'a FocusAllowed,
+    ) -> NewFocus<'a> {
+        NewFocus {
+            kind: FocusKind::Focus,
+            intent,
+            started_at: start,
+            planned_end: end,
+            allowed,
+        }
+    }
+
+    fn running<'a>(planned_end: UtcMs, allowed: &'a FocusAllowed, alerts: u32) -> RunningFocus<'a> {
+        RunningFocus {
+            planned_end,
+            paused_at: None,
+            paused_ms: 0,
+            allowed,
+            drift_alerts: alerts,
+        }
+    }
+
     fn summary() -> FocusSummary {
         FocusSummary {
             inside_ms: 2_000,
@@ -306,7 +347,7 @@ mod tests {
     fn a_running_session_round_trips_with_its_allowed_set() {
         let r = repo();
         let id = r
-            .insert("Write report", UtcMs(1_000), UtcMs(9_000), &allowed())
+            .insert(&new("Write report", UtcMs(1_000), UtcMs(9_000), &allowed()))
             .unwrap();
         let running = r.running().unwrap().unwrap();
         assert_eq!(running.id, id);
@@ -319,29 +360,70 @@ mod tests {
     }
 
     #[test]
+    fn a_timer_without_a_name_and_its_pauses_round_trip() {
+        let r = repo();
+        let none = FocusAllowed::default();
+        let id = r
+            .insert(&NewFocus {
+                kind: FocusKind::Timer,
+                intent: " ",
+                started_at: UtcMs(1_000),
+                planned_end: UtcMs(9_000),
+                allowed: &none,
+            })
+            .unwrap();
+        let s = r.running().unwrap().unwrap();
+        assert_eq!((s.kind, s.intent.as_str()), (FocusKind::Timer, ""));
+        assert_eq!((s.paused_at, s.paused_ms), (None, 0));
+        r.update_running(
+            id,
+            &RunningFocus {
+                planned_end: UtcMs(12_000),
+                paused_at: Some(UtcMs(5_000)),
+                paused_ms: 3_000,
+                allowed: &none,
+                drift_alerts: 0,
+            },
+        )
+        .unwrap();
+        let s = r.running().unwrap().unwrap();
+        assert_eq!((s.paused_at, s.paused_ms), (Some(UtcMs(5_000)), 3_000));
+        r.close(
+            id,
+            UtcMs(12_000),
+            FocusEnd::Completed,
+            &FocusSummary::default(),
+        )
+        .unwrap();
+        let closed = &r.recent(1).unwrap()[0];
+        assert_eq!(closed.paused_at, None);
+        assert_eq!(closed.worked_ms(), 8_000);
+    }
+
+    #[test]
     fn only_one_session_can_run() {
         let r = repo();
-        r.insert("a", UtcMs(1), UtcMs(9), &allowed()).unwrap();
-        assert!(r.insert("b", UtcMs(2), UtcMs(9), &allowed()).is_err());
+        r.insert(&new("a", UtcMs(1), UtcMs(9), &allowed())).unwrap();
+        assert!(r.insert(&new("b", UtcMs(2), UtcMs(9), &allowed())).is_err());
     }
 
     #[test]
     fn updating_changes_the_plan_the_allowed_set_and_the_alert_count() {
         let r = repo();
-        let id = r.insert("a", UtcMs(1), UtcMs(9), &allowed()).unwrap();
+        let id = r.insert(&new("a", UtcMs(1), UtcMs(9), &allowed())).unwrap();
         let mut more = allowed();
         more.apps.push("slack".into());
-        r.update_running(id, UtcMs(20), &more, 3).unwrap();
+        r.update_running(id, &running(UtcMs(20), &more, 3)).unwrap();
         let s = r.running().unwrap().unwrap();
         assert_eq!((s.planned_end, s.drift_alerts), (UtcMs(20), 3));
         assert_eq!(s.allowed.apps, ["excel", "slack", "word"]);
-        assert!(r.update_running(99, UtcMs(20), &more, 3).is_err());
+        assert!(r.update_running(99, &running(UtcMs(20), &more, 3)).is_err());
     }
 
     #[test]
     fn closing_stores_the_summary_and_waits_for_the_user() {
         let r = repo();
-        let id = r.insert("a", UtcMs(1), UtcMs(9), &allowed()).unwrap();
+        let id = r.insert(&new("a", UtcMs(1), UtcMs(9), &allowed())).unwrap();
         r.close(id, UtcMs(9), FocusEnd::Completed, &summary())
             .unwrap();
         assert!(r.running().unwrap().is_none());
@@ -358,7 +440,8 @@ mod tests {
             "a session closes once"
         );
         // The slot is free again.
-        r.insert("b", UtcMs(20), UtcMs(30), &allowed()).unwrap();
+        r.insert(&new("b", UtcMs(20), UtcMs(30), &allowed()))
+            .unwrap();
     }
 
     #[test]
@@ -366,7 +449,7 @@ mod tests {
         let r = repo();
         for start in [10, 30, 20] {
             let id = r
-                .insert("s", UtcMs(start), UtcMs(start + 5), &allowed())
+                .insert(&new("s", UtcMs(start), UtcMs(start + 5), &allowed()))
                 .unwrap();
             r.close(id, UtcMs(start + 5), FocusEnd::Cancelled, &summary())
                 .unwrap();
@@ -383,7 +466,7 @@ mod tests {
     #[test]
     fn deleting_an_activity_drops_it_from_the_allowed_sets() {
         let r = repo();
-        let id = r.insert("a", UtcMs(1), UtcMs(9), &allowed()).unwrap();
+        let id = r.insert(&new("a", UtcMs(1), UtcMs(9), &allowed())).unwrap();
         {
             let conn = lock(&r.conn, "test").unwrap();
             conn.execute("DELETE FROM activities WHERE id = 2", [])
