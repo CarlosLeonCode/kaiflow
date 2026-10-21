@@ -1,4 +1,4 @@
-import { SectionIntroContainer } from "@/features/shell/containers/SectionIntroContainer";
+import { useSectionIntro } from "@/features/shell/hooks/useSectionIntro";
 import { useMemo, useState } from "react";
 
 import { useNow } from "@/features/tracking/hooks/useNow";
@@ -44,6 +44,7 @@ interface Props {
  * (the matching delete command consumes the token).
  */
 export function PrivacyContainer({ onOpenSettings }: Props) {
+  const intro = useSectionIntro("privacy");
   const now = useNow(60_000);
   const today = addLocalDays(now, 0);
   const range = useMemo(
@@ -114,7 +115,7 @@ export function PrivacyContainer({ onOpenSettings }: Props) {
 
   return (
     <PrivacyView
-      intro={<SectionIntroContainer section="privacy" />}
+      intro={intro}
       privacy={privacy.data}
       retentionDays={settings.data?.retention_days ?? null}
       apps={apps}

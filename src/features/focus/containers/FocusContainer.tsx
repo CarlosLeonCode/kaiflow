@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 
 import { toSubmitResult, type SubmitResult } from "@/features/activities/lib/submit";
-import { SectionIntroContainer } from "@/features/shell/containers/SectionIntroContainer";
+import { useSectionIntro } from "@/features/shell/hooks/useSectionIntro";
 import { useNow } from "@/features/tracking/hooks/useNow";
 import {
   errorMessage,
@@ -24,6 +24,7 @@ import { FocusSessionContainer } from "./FocusSessionContainer";
 
 /** Wires the Focus section: the running session, the last summary, the history and the start dialog. */
 export function FocusContainer() {
+  const intro = useSectionIntro("focus");
   const now = useNow(60_000);
   const today = addLocalDays(now, 0);
   const range = useMemo(() => ({ from: addLocalDays(today, -RECENT_APP_DAYS), to: addLocalDays(today, 1) }), [today]);
@@ -52,7 +53,7 @@ export function FocusContainer() {
   const failure = status.error ?? history.error;
   return (
     <FocusView
-      intro={<SectionIntroContainer section="focus" />}
+      intro={intro}
       loading={status.isPending || history.isPending}
       error={failure ? errorMessage(failure) : null}
       unavailable={status.data?.unavailable ?? null}

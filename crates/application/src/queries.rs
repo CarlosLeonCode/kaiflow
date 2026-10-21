@@ -2,13 +2,13 @@
 //! timeline and title detail. Ranges are UTC `[from, to)` computed by the frontend (local
 //! day boundaries, DST included); activities are resolved at query time (R9.2).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::sync::Arc;
 
 use domain::{
-    Activity, ActivityId, EndReason, Segment, SegmentId, SegmentSource, UNASSIGNED, UtcMs,
-    classify, clip_to_range, split_at_boundaries,
+    Activity, ActivityId, ActivityRule, EndReason, Segment, SegmentId, SegmentSource, UNASSIGNED,
+    UtcMs, classify, clip_to_range, split_at_boundaries,
 };
 
 use crate::ports::{ActivityRepository, PortError, ReportRepository};
@@ -107,6 +107,17 @@ pub struct TitleTotal {
     pub window_title: Option<String>,
     pub total_ms: i64,
     pub spans: usize,
+}
+
+/// What a not-yet-saved rule would match in a range (the live preview of the rule form).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct RulePreview {
+    /// Time the rule matches, manual assignments excluded (they always win).
+    pub total_ms: i64,
+    /// Distinct app + window title pairs among the matched time.
+    pub windows: u32,
+    /// Part of `total_ms` that currently has no activity (Unassigned).
+    pub unassigned_ms: i64,
 }
 
 pub struct Queries {
@@ -301,6 +312,35 @@ impl Queries {
                 .then_with(|| a.window_title.cmp(&b.window_title))
         });
         Ok(out)
+    }
+
+    /// What `rule` would match in `range`, ignoring the rules already saved. Manually assigned
+    /// time is left out because an assignment always beats a rule.
+    pub fn rule_preview(
+        &self,
+        range: Range,
+        rule: &ActivityRule,
+        now: UtcMs,
+    ) -> Result<RulePreview, QueryError> {
+        let (resolved, _) = self.load(range, now)?;
+        let mut preview = RulePreview::default();
+        let mut windows: HashSet<(Option<&str>, Option<&str>)> = HashSet::new();
+        for r in resolved
+            .iter()
+            .filter(|r| r.segment.activity_id.is_none() && rule.matches(&r.segment))
+        {
+            let ms = r.duration_ms();
+            preview.total_ms += ms;
+            if r.activity == UNASSIGNED {
+                preview.unassigned_ms += ms;
+            }
+            windows.insert((
+                r.segment.app_id.as_deref(),
+                r.segment.window_title.as_deref(),
+            ));
+        }
+        preview.windows = u32::try_from(windows.len()).unwrap_or(u32::MAX);
+        Ok(preview)
     }
 
     /// Loads, clips and classifies the segments of a range, ordered by start then id.
@@ -543,6 +583,76 @@ mod tests {
         assert_eq!(items[1].end, UtcMs(25 * MIN));
         assert_eq!(items[1].end_reason, None);
         assert!(!items[1].open);
+    }
+
+    #[test]
+    fn rule_preview_counts_matching_time_windows_and_unassigned_part() {
+        let (q, store, cats) = setup();
+        cats.save_rule(&app_rule(1, 2, "code")).unwrap();
+        store.seed_segment(seg(
+            0,
+            Some(10 * MIN),
+            Some("chrome"),
+            Some("YouTube - cats"),
+            None,
+        ));
+        store.seed_segment(seg(
+            10 * MIN,
+            Some(15 * MIN),
+            Some("chrome"),
+            Some("youtube music"),
+            None,
+        ));
+        store.seed_segment(seg(
+            15 * MIN,
+            Some(20 * MIN),
+            Some("chrome"),
+            Some("YouTube - cats"),
+            None,
+        ));
+        store.seed_segment(seg(
+            20 * MIN,
+            Some(30 * MIN),
+            Some("code"),
+            Some("YouTube notes"),
+            None,
+        ));
+        // Manually assigned time never counts: an assignment beats any rule.
+        store.seed_segment(seg(
+            30 * MIN,
+            Some(40 * MIN),
+            Some("chrome"),
+            Some("YouTube"),
+            Some(3),
+        ));
+        store.seed_segment(seg(
+            40 * MIN,
+            Some(50 * MIN),
+            Some("mail"),
+            Some("Inbox"),
+            None,
+        ));
+
+        let rule = ActivityRule::title_pattern(0, ActivityId(3), "(?i)youtube", None, 0).unwrap();
+        let p = q.rule_preview(range(0, 60 * MIN), &rule, UtcMs(0)).unwrap();
+        assert_eq!(p.total_ms, 30 * MIN);
+        assert_eq!(p.windows, 3);
+        // The `code` window is already filed under Work by its app rule.
+        assert_eq!(p.unassigned_ms, 20 * MIN);
+
+        let by_app = app_rule(0, 3, "mail");
+        let p = q
+            .rule_preview(range(0, 60 * MIN), &by_app, UtcMs(0))
+            .unwrap();
+        assert_eq!(
+            (p.total_ms, p.windows, p.unassigned_ms),
+            (10 * MIN, 1, 10 * MIN)
+        );
+
+        assert_eq!(
+            q.rule_preview(range(MIN, MIN), &by_app, UtcMs(0)),
+            Err(QueryError::InvalidRange)
+        );
     }
 
     #[test]

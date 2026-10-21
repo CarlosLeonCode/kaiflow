@@ -2,10 +2,17 @@ import { useId, useState, type FormEvent } from "react";
 
 import type { ActivityDto } from "@/shared/ipc";
 import { Button } from "@/shared/ui/button";
+import { HelpTip } from "@/shared/ui/help-tip";
 import { Input } from "@/shared/ui/input";
 import { Segmented } from "@/shared/ui/segmented";
 
-import { DEFAULT_PRODUCTIVITY, PRODUCTIVITY_OPTIONS, type ActivityFormValue } from "../lib/productivity";
+import {
+  DEFAULT_PRODUCTIVITY,
+  PRODUCTIVITY_MEANING,
+  PRODUCTIVITY_OPTIONS,
+  PRODUCTIVITY_USE,
+  type ActivityFormValue,
+} from "../lib/productivity";
 import { MAX_NAME_LENGTH, nameProblem, nameProblemMessage } from "../lib/rules";
 import type { Submit } from "../lib/submit";
 import { ColorPicker } from "./ColorPicker";
@@ -86,8 +93,21 @@ export function ActivityForm({ editing, existing, initialColor, dark, onSubmit, 
         <ColorPicker value={color} onChange={setColor} dark={dark} idPrefix={id} />
       </div>
       <div>
-        <span id={`${id}-productivity`} className="mb-1 block text-xs font-medium text-muted-foreground">
-          Counts as
+        <span className="mb-1 flex items-center gap-1">
+          <span id={`${id}-productivity`} className="text-xs font-medium text-muted-foreground">
+            Counts as
+          </span>
+          <HelpTip label="productive, neutral and distracting">
+            <dl className="space-y-1">
+              {PRODUCTIVITY_OPTIONS.map((option) => (
+                <div key={option.value}>
+                  <dt className="inline font-medium">{option.label}: </dt>
+                  <dd className="inline">{PRODUCTIVITY_MEANING[option.value]}</dd>
+                </div>
+              ))}
+            </dl>
+            <p className="mt-1.5 text-muted-foreground">{PRODUCTIVITY_USE}</p>
+          </HelpTip>
         </span>
         <Segmented
           aria-label="Productivity"
@@ -96,7 +116,7 @@ export function ActivityForm({ editing, existing, initialColor, dark, onSubmit, 
           onChange={setProductivity}
         />
         <p className="mt-1 text-xs text-muted-foreground">
-          Used for the focus ratio in your reports. Leave it on Neutral if you are unsure.
+          {PRODUCTIVITY_MEANING[productivity]} Leave it on Neutral if you are unsure.
         </p>
       </div>
       <div className="flex justify-end gap-2">

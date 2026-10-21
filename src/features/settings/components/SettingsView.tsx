@@ -5,7 +5,7 @@ import type { DegradedReasonDto, SettingsDto, SettingsPatchDto } from "@/shared/
 import { parseTheme, type ThemeSetting } from "@/shared/lib/theme";
 import { Alert, AlertDescription } from "@/shared/ui/alert";
 import { Panel, Row } from "@/shared/ui/field";
-import { Page } from "@/shared/ui/page";
+import { Page, type IntroSlot } from "@/shared/ui/page";
 import { Segmented, type SegmentedOption } from "@/shared/ui/segmented";
 import { Select } from "@/shared/ui/select";
 import { Skeleton } from "@/shared/ui/skeleton";
@@ -31,8 +31,8 @@ const THEMES: readonly SegmentedOption<ThemeSetting>[] = [
 ];
 
 interface Props {
-  /** Dismissible section introduction, rendered by `Page`. */
-  intro?: ReactNode;
+  /** Section intro and its header help button, rendered by `Page`. */
+  intro?: IntroSlot;
   /** `undefined` while loading. */
   settings: SettingsDto | undefined;
   degraded: boolean;

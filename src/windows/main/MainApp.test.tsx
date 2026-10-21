@@ -61,7 +61,7 @@ describe("MainApp shell", () => {
     await user.click(screen.getByRole("button", { name: /Settings/ }));
 
     expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Settings/ })).toHaveAttribute("aria-current", "page");
+    expect(within(screen.getByRole("navigation")).getByRole("button", { name: /Settings/ })).toHaveAttribute("aria-current", "page");
   });
 
   it("switches sections with ⌘1..⌘8 and reserves ⌘K", async () => {
@@ -132,7 +132,31 @@ describe("MainApp shell", () => {
     await user.click(await screen.findByRole("button", { name: "Change in Settings" }));
 
     expect(await screen.findByRole("heading", { level: 1, name: "Settings" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Settings/ })).toHaveAttribute("aria-current", "page");
+    expect(within(screen.getByRole("navigation")).getByRole("button", { name: /Settings/ })).toHaveAttribute("aria-current", "page");
+  });
+
+  it("an empty day while tracking runs leads to Activities", async () => {
+    const user = userEvent.setup();
+    backend();
+    renderWithProviders(<MainApp />);
+
+    await user.click(await screen.findByRole("button", { name: "Set up activities" }));
+    expect(await screen.findByRole("heading", { level: 1, name: "Activities" })).toBeInTheDocument();
+    expect(within(screen.getByRole("navigation")).getByRole("button", { name: /Activities/ })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+
+  it("every section has a help button in its header", async () => {
+    const user = userEvent.setup();
+    backend();
+    renderWithProviders(<MainApp />);
+    const nav = screen.getByRole("navigation");
+    for (const name of ["Today", "Overview", "Goals", "Focus", "Review", "Activities", "Privacy", "Settings"]) {
+      await user.click(within(nav).getByRole("button", { name: new RegExp(`^${name}`) }));
+      expect(await screen.findByRole("button", { name: `Help for ${name}` })).toBeInTheDocument();
+    }
   });
 
   it("shows the tracking status at the bottom of the sidebar", async () => {

@@ -2,6 +2,15 @@ import type { ReactNode } from "react";
 
 import { cn } from "@/shared/lib/utils";
 
+/**
+ * A section's explanation: the dismissible intro shown above the content and the "?" button in
+ * the header that brings it back (see `useSectionIntro`).
+ */
+export interface IntroSlot {
+  body: ReactNode;
+  help: ReactNode;
+}
+
 /** A dashboard section: sticky title row (also draggable) above a scrolling body. */
 export function Page({
   title,
@@ -14,8 +23,8 @@ export function Page({
   title: string;
   subtitle?: string;
   actions?: ReactNode;
-  /** Dismissible explanation rendered above the content (see `SectionIntro`). */
-  intro?: ReactNode;
+  /** Dismissible explanation above the content plus its help button in the header. */
+  intro?: IntroSlot;
   children: ReactNode;
   className?: string;
 }) {
@@ -35,10 +44,15 @@ export function Page({
             </p>
           )}
         </div>
-        {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+        {(actions || intro?.help) && (
+          <div className="flex shrink-0 items-center gap-2">
+            {actions}
+            {intro?.help}
+          </div>
+        )}
       </header>
       <div className={cn("min-h-0 flex-1 overflow-y-auto px-6 py-5", className)}>
-        {intro}
+        {intro?.body}
         {children}
       </div>
     </div>

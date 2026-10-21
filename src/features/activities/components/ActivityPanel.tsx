@@ -7,6 +7,8 @@ import { activityLabel, UNASSIGNED_ID } from "@/shared/lib/labels";
 import { Button } from "@/shared/ui/button";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { EmptyState } from "@/shared/ui/EmptyState";
+import { HelpTip } from "@/shared/ui/help-tip";
+import { formatDuration } from "@/shared/lib/time";
 
 import { suggestColor } from "../lib/palette";
 import { productivityLabel, type ActivityFormValue } from "../lib/productivity";
@@ -21,12 +23,27 @@ interface Props {
   onCreate: Submit<ActivityFormValue>;
   onUpdate: Submit<ActivityDto>;
   onDelete: Submit<number>;
+  /** Unassigned time over the last `recentDays` days; `null` while unknown. */
+  unassignedMs?: number | null;
+  recentDays?: number;
+  /** Shown when there are suggestions for Unassigned apps: takes the user to them. */
+  onShowSuggestions?: () => void;
 }
 
 type Mode = { kind: "idle" } | { kind: "create" } | { kind: "edit"; id: number };
 
 /** Activity list with inline create/edit and a confirmed delete (R9.1). */
-export function ActivityPanel({ activities, ruleCounts, dark, onCreate, onUpdate, onDelete }: Props) {
+export function ActivityPanel({
+  activities,
+  ruleCounts,
+  dark,
+  onCreate,
+  onUpdate,
+  onDelete,
+  unassignedMs = null,
+  recentDays = 30,
+  onShowSuggestions,
+}: Props) {
   const [mode, setMode] = useState<Mode>({ kind: "idle" });
   const [pendingDelete, setPendingDelete] = useState<ActivityDto | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -54,7 +71,7 @@ export function ActivityPanel({ activities, ruleCounts, dark, onCreate, onUpdate
       <div className="flex items-end justify-between px-1">
         <div>
           <h2 className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">Activities</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">Group apps and window titles to see where your time goes.</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">Labels for what you were doing, like Deep work or Client A.</p>
         </div>
         <Button size="sm" onClick={() => setMode({ kind: "create" })} disabled={mode.kind === "create"}>
           <Plus aria-hidden="true" /> New activity
@@ -82,7 +99,8 @@ export function ActivityPanel({ activities, ruleCounts, dark, onCreate, onUpdate
             title="No activities yet"
             action={{ label: "Create your first activity", onClick: () => setMode({ kind: "create" }) }}
           >
-            Activities group your time by project, client or task. Everything is Unassigned until you add one.
+            Create an activity for each kind of work you want to see, then add a rule so time is sorted into it. Until
+            then, all your time is Unassigned.
           </EmptyState>
         )}
         <ul aria-label="Activity list" className="divide-y divide-border">
@@ -116,14 +134,39 @@ export function ActivityPanel({ activities, ruleCounts, dark, onCreate, onUpdate
                   style={{ backgroundColor: tuneActivityColor(activity.color, dark) }}
                 />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium" title={label}>
-                    {label}
+                  <span className="flex items-center gap-1">
+                    <span className="truncate font-medium" title={label}>
+                      {label}
+                    </span>
+                    {system && (
+                      <HelpTip label="Unassigned">
+                        <p>
+                          Unassigned is not an activity you create. It holds the time that no rule matches yet, so
+                          nothing is lost.
+                        </p>
+                        <p className="mt-1.5">
+                          Add a rule, or accept a suggestion, and that time moves to the right activity, past time
+                          included.
+                        </p>
+                      </HelpTip>
+                    )}
                   </span>
                   <span className="block text-xs text-muted-foreground">
                     {system
-                      ? "Default for anything without a rule"
+                      ? unassignedMs !== null && unassignedMs > 0
+                        ? `Time no rule matches yet: ${formatDuration(unassignedMs)} in the last ${recentDays} days`
+                        : "Time no rule matches yet"
                       : `${count === 0 ? "No rules" : `${count} ${count === 1 ? "rule" : "rules"}`} · ${productivityLabel(activity.productivity)}`}
                   </span>
+                  {system && onShowSuggestions && (
+                    <button
+                      type="button"
+                      onClick={onShowSuggestions}
+                      className="mt-0.5 text-xs font-medium text-primary underline-offset-2 hover:underline"
+                    >
+                      See suggestions
+                    </button>
+                  )}
                 </span>
                 {!system && (
                   <span className="flex gap-0.5 opacity-60 transition-opacity focus-within:opacity-100 group-hover:opacity-100">

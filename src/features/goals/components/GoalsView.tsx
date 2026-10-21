@@ -1,5 +1,5 @@
 import { Archive, ArchiveRestore, CircleAlert, Pencil, Plus, Trash2 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 
 import type { ActivityDto, GoalDto, GoalStatusDto } from "@/shared/ipc";
 import type { AppOption } from "@/shared/lib/apps";
@@ -8,7 +8,7 @@ import { Button } from "@/shared/ui/button";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { Dialog } from "@/shared/ui/dialog";
 import { EmptyState } from "@/shared/ui/EmptyState";
-import { Page } from "@/shared/ui/page";
+import { Page, type IntroSlot } from "@/shared/ui/page";
 import { Skeleton } from "@/shared/ui/skeleton";
 import type { Submit } from "@/features/activities/lib/submit";
 
@@ -18,8 +18,8 @@ import { GoalForm } from "./GoalForm";
 import { StreakLine } from "./GoalSummary";
 
 interface Props {
-  /** Dismissible section introduction, rendered by `Page`. */
-  intro?: ReactNode;
+  /** Section intro and its header help button, rendered by `Page`. */
+  intro?: IntroSlot;
   loading: boolean;
   error: string | null;
   /** Progress of the goals that are not archived. */

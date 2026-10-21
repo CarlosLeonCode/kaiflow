@@ -165,7 +165,9 @@ export function mockBackend(handlers: Handlers): { calls: Call[] } {
               ? () => []
               : cmd === "focus_status"
                 ? () => idleFocus()
-                : undefined);
+                : cmd === "rules_preview"
+                  ? () => ({ total_ms: 0, windows: 0, unassigned_ms: 0 })
+                  : undefined);
       if (!handler) throw new Error(`unmocked command: ${cmd}`);
       return handler(payload);
     },

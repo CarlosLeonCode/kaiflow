@@ -5,7 +5,7 @@ import type { RangeDto, TimelineItemDto, TrackingStateDto } from "@/shared/ipc";
 import { formatClock, formatDuration } from "@/shared/lib/time";
 import { Alert, AlertDescription } from "@/shared/ui/alert";
 import { EmptyState } from "@/shared/ui/EmptyState";
-import { Page } from "@/shared/ui/page";
+import { Page, type IntroSlot } from "@/shared/ui/page";
 import { Skeleton } from "@/shared/ui/skeleton";
 
 import { stateLabel } from "@/features/tracking/lib/derive";
@@ -16,8 +16,8 @@ import { ActivityList } from "./ActivityList";
 import { DayTimeline } from "./DayTimeline";
 
 interface Props {
-  /** Dismissible section introduction, rendered by `Page`. */
-  intro?: ReactNode;
+  /** Section intro and its header help button, rendered by `Page`. */
+  intro?: IntroSlot;
   /** The running focus session (or the summary of the last one), above everything else. */
   focus?: ReactNode;
   /** The goals strip, shown above the cards. */
@@ -26,6 +26,8 @@ interface Props {
   hasGoals?: boolean;
   /** Next step when nothing is tracked and tracking is not running (start or resume). */
   emptyAction?: { label: string; onClick: () => void };
+  /** Next step when tracking runs but nothing is recorded yet: set up activities meanwhile. */
+  onOpenActivities?: () => void;
   range: RangeDto;
   now: number;
   state: TrackingStateDto | undefined;
@@ -66,6 +68,7 @@ export function TodayView({
   goals,
   hasGoals = false,
   emptyAction,
+  onOpenActivities,
   range,
   now,
   state,
@@ -117,9 +120,16 @@ export function TodayView({
         <>
           <div className="empty:hidden mb-4">{focus}</div>
           {hasGoals && <div className="mb-4">{goals}</div>}
-          <EmptyState title="Nothing tracked yet today" action={state === "running" ? undefined : emptyAction}>
+          <EmptyState
+            title="Nothing tracked yet today"
+            action={
+              state === "running"
+                ? onOpenActivities && { label: "Set up activities", onClick: onOpenActivities }
+                : emptyAction
+            }
+          >
             {state === "running"
-              ? "Tracking is on. Switch between a few apps and your day will start to fill in here."
+              ? "Tracking is on: keep working and your day fills in here. Meanwhile, set up activities so your time is sorted for you."
               : "Tracking is not running. Start it and your day will appear here."}
           </EmptyState>
         </>

@@ -8,7 +8,9 @@ import { Select } from "@/shared/ui/select";
 
 import { canMove, moveRule, nextPriority, tierOf, type RuleKind } from "../lib/rules";
 import type { Submit } from "../lib/submit";
+import { containsText } from "../lib/titleMatch";
 import { RuleForm } from "./RuleForm";
+import type { RulePreviewState } from "./RulePreview";
 
 interface Props {
   rules: readonly RuleDto[];
@@ -19,13 +21,20 @@ interface Props {
   onDelete: Submit<number>;
   /** Failures of in-list actions (reorder, change activity, delete) have no form to live in. */
   onFailure: (message: string) => void;
+  onDraftChange?: (spec: RuleSpecDto | null) => void;
+  preview?: RulePreviewState;
+  previewDays?: number;
 }
 
-/** What a rule matches, as text: the app name, or `/pattern/` optionally limited to one app. */
+/**
+ * What a rule matches, as text: the app name, `Title contains "text"` for a plain-text rule or
+ * `/pattern/` for a regular expression, optionally limited to one app.
+ */
 export function describeSpec(spec: RuleSpecDto, apps: readonly AppOption[]): string {
-  return spec.kind === "app"
-    ? appName(apps, spec.app_id)
-    : `/${spec.pattern}/${spec.app_id ? ` in ${appName(apps, spec.app_id)}` : ""}`;
+  if (spec.kind === "app") return appName(apps, spec.app_id);
+  const text = containsText(spec.pattern);
+  const what = text === null ? `/${spec.pattern}/` : `Title contains \u201c${text}\u201d`;
+  return `${what}${spec.app_id ? ` in ${appName(apps, spec.app_id)}` : ""}`;
 }
 
 const GROUPS: readonly { kind: RuleKind; title: string; hint: string }[] = [
@@ -34,7 +43,17 @@ const GROUPS: readonly { kind: RuleKind; title: string; hint: string }[] = [
 ];
 
 /** Rules form plus the ordered rule lists. Within a group the rule higher up wins. */
-export function RulesPanel({ rules, activities, apps, onSave, onDelete, onFailure }: Props) {
+export function RulesPanel({
+  rules,
+  activities,
+  apps,
+  onSave,
+  onDelete,
+  onFailure,
+  onDraftChange,
+  preview,
+  previewDays,
+}: Props) {
   async function save(changed: readonly RuleInputDto[]) {
     const result = await onSave(changed);
     if (result) onFailure(result.message);
@@ -55,7 +74,8 @@ export function RulesPanel({ rules, activities, apps, onSave, onDelete, onFailur
       <div className="px-1">
         <h2 className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">Rules</h2>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          Rules apply to new and past activity. Nothing is rewritten, so you can change them any time.
+          A rule says which time belongs to an activity. Rules also sort time you already tracked, and you can change
+          them any time.
         </p>
       </div>
 
@@ -63,6 +83,9 @@ export function RulesPanel({ rules, activities, apps, onSave, onDelete, onFailur
         <RuleForm
           activities={activities}
           apps={apps}
+          onDraftChange={onDraftChange}
+          preview={preview}
+          previewDays={previewDays}
           onSubmit={({ spec, activityId }) =>
             onSave([{ id: 0, activity_id: activityId, spec, priority: nextPriority(rules, spec.kind) }])
           }
@@ -70,7 +93,7 @@ export function RulesPanel({ rules, activities, apps, onSave, onDelete, onFailur
 
         {rules.length === 0 ? (
           <p className="px-3 py-6 text-center text-xs text-muted-foreground">
-            No rules yet. Add one above and matching time is grouped automatically.
+            No rules yet. Add one above: matching time, past and new, moves out of Unassigned.
           </p>
         ) : (
           GROUPS.map((group) => {
@@ -111,7 +134,7 @@ export function RulesPanel({ rules, activities, apps, onSave, onDelete, onFailur
                         </span>
                         <span
                           data-selectable
-                          className={`min-w-0 flex-1 truncate px-1 ${rule.spec.kind === "title_pattern" ? "font-mono text-xs" : ""}`}
+                          className={`min-w-0 flex-1 truncate px-1 ${rule.spec.kind === "title_pattern" && containsText(rule.spec.pattern) === null ? "font-mono text-xs" : ""}`}
                           title={label}
                         >
                           {label}

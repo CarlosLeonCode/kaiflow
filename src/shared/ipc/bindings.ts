@@ -25,6 +25,8 @@ export const commands = {
 	rulesList: () => typedError<RuleDto[], AppError>(__TAURI_INVOKE("rules_list")),
 	/**  Validates the title pattern first (R9.4): a bad regex is `AppError::InvalidPattern`. */
 	rulesUpsert: (rule: RuleInputDto) => typedError<number, AppError>(__TAURI_INVOKE("rules_upsert", { rule })),
+	/**  How much tracked time a rule would cover in `range`, before it is saved. Read-only. */
+	rulesPreview: (spec: RuleSpecDto, range: RangeDto) => typedError<RulePreviewDto, AppError>(__TAURI_INVOKE("rules_preview", { spec, range })),
 	rulesDelete: (id: number) => typedError<null, AppError>(__TAURI_INVOKE("rules_delete", { id })),
 	/**  The preset catalog; read-only, nothing is created by listing it. */
 	presetsList: () => typedError<PresetDto[], AppError>(__TAURI_INVOKE("presets_list")),
@@ -740,6 +742,15 @@ export type RuleInputDto = {
 	activity_id: number,
 	spec: RuleSpecDto,
 	priority: number,
+};
+
+/**  What a rule being written would match, so the form can say how much time it covers. */
+export type RulePreviewDto = {
+	total_ms: number,
+	/**  Distinct app + window title pairs among the matched time. */
+	windows: number,
+	/**  Part of `total_ms` that has no activity yet (Unassigned). */
+	unassigned_ms: number,
 };
 
 /**  What a rule matches; used both to read and to write rules. */

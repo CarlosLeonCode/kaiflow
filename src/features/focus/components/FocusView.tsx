@@ -6,14 +6,14 @@ import { formatTimeOfDay } from "@/shared/lib/time";
 import { Alert, AlertDescription, AlertTitle } from "@/shared/ui/alert";
 import { Button } from "@/shared/ui/button";
 import { EmptyState } from "@/shared/ui/EmptyState";
-import { Page } from "@/shared/ui/page";
+import { Page, type IntroSlot } from "@/shared/ui/page";
 import { Skeleton } from "@/shared/ui/skeleton";
 import { DEGRADED_COPY } from "@/features/tracking/components/StatusBanners";
 
 import { alertsText, endReasonLabel, plannedText } from "../lib/focus";
 
 interface Props {
-  intro?: ReactNode;
+  intro?: IntroSlot;
   loading: boolean;
   error: string | null;
   /** Why a session cannot start (tracking is degraded); `null` when it can. */

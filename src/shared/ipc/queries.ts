@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 
 import { commands } from "./bindings";
 import type {
@@ -14,6 +14,7 @@ import type {
   ProductivityDto,
   RangeDto,
   RuleInputDto,
+  RuleSpecDto,
   SettingsDto,
   SettingsPatchDto,
   TrackingStatusDto,
@@ -71,18 +72,34 @@ export function useSettingsQuery() {
   });
 }
 
-/** Section intros the user dismissed; the list lives in the `ui` settings blob. */
+/**
+ * Section intros (and other one-time hints) the user dismissed; the list lives in the `ui`
+ * settings blob. Changes are applied to the cache first, so a dismissed intro disappears and a
+ * reopened one appears at once, and are computed from the latest cached list so two quick
+ * changes never overwrite each other.
+ */
 export function useDismissedIntros() {
+  const client = useQueryClient();
   const settings = useSettingsQuery();
   const update = useUpdateSettingsMutation();
   const dismissed = settings.data?.ui.dismissed_intros ?? [];
+
+  const change = (next: (current: readonly string[]) => string[] | null) => {
+    const cached = client.getQueryData<SettingsDto>(queryKeys.settings);
+    if (!cached) return;
+    const list = next(cached.ui.dismissed_intros);
+    if (!list) return;
+    client.setQueryData<SettingsDto>(queryKeys.settings, { ...cached, ui: { ...cached.ui, dismissed_intros: list } });
+    update.mutate({ ui: { ...cached.ui, dismissed_intros: list } });
+  };
+
   return {
     ready: settings.data !== undefined,
     isDismissed: (id: string) => dismissed.includes(id),
-    dismiss: (id: string) => {
-      if (dismissed.includes(id)) return;
-      update.mutate({ ui: { dismissed_intros: [...dismissed, id] } });
-    },
+    dismiss: (id: string) => change((current) => (current.includes(id) ? null : [...current, id])),
+    /** Shows a dismissed intro again (the header's help button). */
+    restore: (id: string) =>
+      change((current) => (current.includes(id) ? current.filter((item) => item !== id) : null)),
   };
 }
 
@@ -239,6 +256,20 @@ export function useDeleteActivityMutation() {
   return useMutation({
     mutationFn: (id: number) => unwrap(commands.activitiesDelete(id)),
     onSuccess: () => invalidateClassification(client),
+  });
+}
+
+/**
+ * How much tracked time a rule would cover in `range` before it is saved. Disabled while there
+ * is no rule to check (`spec` is `null`); the previous answer stays shown while the next loads.
+ */
+export function useRulePreviewQuery(spec: RuleSpecDto | null, range: RangeDto) {
+  return useQuery({
+    queryKey: spec ? queryKeys.rulePreview(spec, range) : ["report", "rule-preview", "none"],
+    queryFn: () => unwrap(commands.rulesPreview(spec as RuleSpecDto, range)),
+    enabled: spec !== null,
+    placeholderData: keepPreviousData,
+    retry: false,
   });
 }
 

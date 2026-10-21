@@ -38,6 +38,7 @@ pub fn builder() -> Builder<Wry> {
             commands::activities_delete,
             commands::rules_list,
             commands::rules_upsert,
+            commands::rules_preview,
             commands::rules_delete,
             commands::presets_list,
             commands::presets_apply,

@@ -33,8 +33,26 @@ const CHROME: SuggestionDto = {
 function backend(options: { activities?: ActivityDto[]; suggestions?: SuggestionDto[]; dismissed?: string[] } = {}) {
   let stored = settings({ ui: { dismissed_intros: options.dismissed ?? [] } });
   let suggestions = options.suggestions ?? [];
+  let activities = options.activities ?? [SYSTEM];
   return mockBackend({
-    activities_list: () => options.activities ?? [SYSTEM],
+    activities_list: () => activities,
+    activities_create: (args) => {
+      const created: ActivityDto = {
+        id: 10 + activities.length,
+        name: args.name as string,
+        color: args.color as string,
+        sort_order: activities.length,
+        productivity: args.productivity as ActivityDto["productivity"],
+        preset_key: null,
+      };
+      activities = [...activities, created];
+      return created;
+    },
+    activities_update: (args) => {
+      const next = args.activity as ActivityDto;
+      activities = activities.map((a) => (a.id === next.id ? next : a));
+      return null;
+    },
     rules_list: () => [],
     get_report: () => report(),
     presets_list: () => [GENERAL, DESIGN],
@@ -56,24 +74,33 @@ function backend(options: { activities?: ActivityDto[]; suggestions?: Suggestion
   });
 }
 
-describe("first-run preset choice", () => {
-  it("offers every pack and Start empty as equals, with nothing selected or created", async () => {
+async function findGuide() {
+  return screen.findByRole("region", { name: "Set up activities in three steps" });
+}
+
+describe("guided setup", () => {
+  it("opens by itself on a fresh setup with every pack and Start empty as equals", async () => {
     const { calls } = backend();
     renderWithProviders(<ActivitiesContainer />);
 
-    const options = await screen.findByRole("list", { name: "Ways to start" });
-    const cards = within(options).getAllByRole("listitem");
-    expect(cards).toHaveLength(3);
-    expect(within(options).getByRole("button", { name: "Preview the Design pack" })).toBeInTheDocument();
+    const guide = await findGuide();
+    expect(within(guide).getByRole("heading", { name: "Step 1 of 3: Create or pick activities" })).toBeInTheDocument();
+    const steps = within(guide).getByRole("list", { name: "Setup steps" });
+    expect(within(steps).getByRole("button", { name: "1. Create or pick activities" })).toHaveAttribute("aria-current", "step");
+
+    const options = within(guide).getByRole("list", { name: "Ways to start" });
+    expect(within(options).getAllByRole("listitem")).toHaveLength(3);
     const empty = within(options).getByRole("button", { name: "Start empty" });
     // Same variant (class list) as the pack buttons: no visual hierarchy between the options.
     expect(empty.className).toBe(within(options).getByRole("button", { name: "Preview the General pack" }).className);
     expect(within(options).queryByRole("radio")).not.toBeInTheDocument();
+    // Opening by itself does not steal keyboard focus.
+    expect(guide).not.toContainElement(document.activeElement as HTMLElement);
     expect(calls.map((c) => c.cmd)).not.toContain("presets_apply");
     expect(calls.map((c) => c.cmd)).not.toContain("activities_create");
   });
 
-  it("shows what a pack contains and applies it only on confirmation", async () => {
+  it("shows what a pack contains, applies it only on confirmation and moves on to rules", async () => {
     const user = userEvent.setup();
     const { calls } = backend();
     renderWithProviders(<ActivitiesContainer />);
@@ -87,9 +114,11 @@ describe("first-run preset choice", () => {
     await user.click(screen.getByRole("button", { name: "Add Design activities" }));
     await waitFor(() => expect(calls.find((c) => c.cmd === "presets_apply")?.args).toEqual({ key: "design" }));
     expect(await screen.findByText("Design: added 2 activities and 1 rule for apps you already used.")).toBeInTheDocument();
+    const step = await screen.findByRole("heading", { name: "Step 2 of 3: Add rules" });
+    expect(step).toHaveFocus();
   });
 
-  it("goes back from a preview without applying anything", async () => {
+  it("goes back from a pack preview without applying anything", async () => {
     const user = userEvent.setup();
     const { calls } = backend();
     renderWithProviders(<ActivitiesContainer />);
@@ -100,32 +129,85 @@ describe("first-run preset choice", () => {
     expect(calls.map((c) => c.cmd)).not.toContain("presets_apply");
   });
 
-  it("Start empty creates nothing, hides the choice and remembers it", async () => {
+  it("Start empty creates nothing by itself and lets the user name a first activity", async () => {
     const user = userEvent.setup();
     const { calls } = backend();
     renderWithProviders(<ActivitiesContainer />);
 
     await user.click(await screen.findByRole("button", { name: "Start empty" }));
-    await waitFor(() => expect(screen.queryByRole("list", { name: "Ways to start" })).not.toBeInTheDocument());
-    const saved = calls.find((c) => c.cmd === "settings_update")?.args.patch as SettingsPatchDto;
-    expect(saved.ui?.dismissed_intros).toContain("preset-choice");
     expect(calls.map((c) => c.cmd)).not.toContain("presets_apply");
     expect(calls.map((c) => c.cmd)).not.toContain("activities_create");
-    expect(screen.getByRole("button", { name: "Create your first activity" })).toBeInTheDocument();
+
+    const guide = await findGuide();
+    await user.type(within(guide).getByRole("textbox", { name: "Name" }), "Deep work");
+    await user.click(within(guide).getByRole("button", { name: "Add activity" }));
+    await waitFor(() => expect(calls.find((c) => c.cmd === "activities_create")?.args).toMatchObject({ name: "Deep work" }));
+    expect(await within(guide).findByRole("heading", { name: "Step 2 of 3: Add rules" })).toBeInTheDocument();
   });
 
-  it("does not show the choice again once it was made", async () => {
-    backend({ dismissed: ["preset-choice"] });
+  it("explains both kinds of rules and how each activity counts, and saves the choice", async () => {
+    const user = userEvent.setup();
+    const { calls } = backend({ activities: [SYSTEM, WORK], dismissed: [] });
     renderWithProviders(<ActivitiesContainer />);
-    await screen.findByRole("button", { name: "Create your first activity" });
-    expect(screen.queryByRole("list", { name: "Ways to start" })).not.toBeInTheDocument();
+
+    await user.click(await screen.findByRole("button", { name: "How this works" }));
+    const guide = await findGuide();
+    await user.click(within(guide).getByRole("button", { name: "Next: Add rules" }));
+    expect(guide).toHaveTextContent("By app:");
+    expect(guide).toHaveTextContent("By window title:");
+    expect(within(guide).getByRole("button", { name: "Add a rule" })).toBeInTheDocument();
+
+    await user.click(within(guide).getByRole("button", { name: "Next: Mark how each activity counts" }));
+    expect(guide).toHaveTextContent("focus percentage in Overview and Review");
+    expect(guide).toHaveTextContent("Goals and Focus sessions");
+    await user.click(within(guide).getByRole("radio", { name: "Distracting" }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.cmd === "activities_update")?.args.activity).toMatchObject({
+        id: 2,
+        productivity: "distracting",
+      }),
+    );
+
+    await user.click(within(guide).getByRole("button", { name: "Finish" }));
+    await waitFor(() => expect(screen.queryByRole("region", { name: "Set up activities in three steps" })).not.toBeInTheDocument());
   });
 
-  it("is not offered when activities already exist", async () => {
+  it("closing it is remembered, and How this works reopens it with focus", async () => {
+    const user = userEvent.setup();
+    const { calls } = backend();
+    renderWithProviders(<ActivitiesContainer />);
+
+    await findGuide();
+    await user.click(screen.getByRole("button", { name: "Close the setup guide" }));
+    await waitFor(() => expect(screen.queryByRole("region", { name: "Set up activities in three steps" })).not.toBeInTheDocument());
+    await waitFor(() => {
+      const saved = calls.find((c) => c.cmd === "settings_update")?.args.patch as SettingsPatchDto | undefined;
+      expect(saved?.ui?.dismissed_intros).toContain("activities-guide");
+    });
+    // The rest of the page still offers the first step.
+    expect(screen.getByRole("button", { name: "Create your first activity" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "How this works" }));
+    const guide = await findGuide();
+    expect(within(guide).getByRole("heading", { level: 2, name: "Set up activities in three steps" })).toHaveFocus();
+    expect(within(guide).getByRole("heading", { name: "Step 1 of 3: Create or pick activities" })).toBeInTheDocument();
+  });
+
+  it("does not open by itself once closed, or after the older first-run choice", async () => {
+    for (const dismissed of [["activities-guide"], ["preset-choice"]]) {
+      backend({ dismissed });
+      const { unmount } = renderWithProviders(<ActivitiesContainer />);
+      await screen.findByRole("button", { name: "Create your first activity" });
+      expect(screen.queryByRole("region", { name: "Set up activities in three steps" })).not.toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it("does not open by itself when activities already exist", async () => {
     backend({ activities: [SYSTEM, WORK] });
     renderWithProviders(<ActivitiesContainer />);
     await screen.findByRole("list", { name: "Activity list" });
-    expect(screen.queryByRole("list", { name: "Ways to start" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Set up activities in three steps" })).not.toBeInTheDocument();
   });
 });
 
@@ -167,5 +249,31 @@ describe("suggestions", () => {
     renderWithProviders(<ActivitiesContainer />);
     await screen.findByRole("list", { name: "Activity list" });
     expect(screen.queryByRole("region", { name: "Suggestions" })).not.toBeInTheDocument();
+  });
+});
+
+describe("Unassigned", () => {
+  it("explains itself and leads to the suggestions", async () => {
+    const user = userEvent.setup();
+    backend({ activities: [SYSTEM, WORK], suggestions: [CHROME] });
+    renderWithProviders(<ActivitiesContainer />);
+
+    const list = await screen.findByRole("list", { name: "Activity list" });
+    const row = within(list).getAllByRole("listitem")[0]!;
+    expect(row).toHaveTextContent("Time no rule matches yet");
+
+    await user.click(within(row).getByRole("button", { name: "About Unassigned" }));
+    expect(await screen.findByRole("dialog", { name: "Unassigned" })).toHaveTextContent("no rule matches yet");
+    await user.keyboard("{Escape}");
+
+    await user.click(within(row).getByRole("button", { name: "See suggestions" }));
+    expect(screen.getByRole("region", { name: "Suggestions" })).toHaveFocus();
+  });
+
+  it("offers no suggestions button when there are none", async () => {
+    backend({ activities: [SYSTEM, WORK] });
+    renderWithProviders(<ActivitiesContainer />);
+    const list = await screen.findByRole("list", { name: "Activity list" });
+    expect(within(list).queryByRole("button", { name: "See suggestions" })).not.toBeInTheDocument();
   });
 });

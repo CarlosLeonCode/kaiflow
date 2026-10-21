@@ -10,7 +10,7 @@ import type { DashboardDto } from "@/shared/ipc";
 import { Alert, AlertDescription } from "@/shared/ui/alert";
 import { Button } from "@/shared/ui/button";
 import { EmptyState } from "@/shared/ui/EmptyState";
-import { Page } from "@/shared/ui/page";
+import { Page, type IntroSlot } from "@/shared/ui/page";
 import { Segmented, type SegmentedOption } from "@/shared/ui/segmented";
 import { Skeleton } from "@/shared/ui/skeleton";
 
@@ -30,8 +30,8 @@ const PERIODS: readonly SegmentedOption<Period>[] = [
 ];
 
 interface Props {
-  /** Dismissible section introduction, rendered by `Page`. */
-  intro?: ReactNode;
+  /** Section intro and its header help button, rendered by `Page`. */
+  intro?: IntroSlot;
   period: Period;
   onPeriodChange: (period: Period) => void;
   label: string;
@@ -40,6 +40,8 @@ interface Props {
   onPrevious: () => void;
   onNext: () => void;
   onToday: () => void;
+  /** Next step of an empty current period: set up activities while time is tracked. */
+  onOpenActivities?: () => void;
   loading: boolean;
   error: string | null;
   dark: boolean;
@@ -157,9 +159,15 @@ export function OverviewView(props: Props) {
             <EmptyState
               className="mt-10"
               title={`Nothing tracked this ${noun}`}
-              action={props.isCurrent ? undefined : { label: `Jump to this ${noun}`, onClick: props.onToday }}
+              action={
+                props.isCurrent
+                  ? props.onOpenActivities && { label: "Set up activities", onClick: props.onOpenActivities }
+                  : { label: `Jump to this ${noun}`, onClick: props.onToday }
+              }
             >
-              Try another period, or let tracking run for a while: your time shows up here as it happens.
+              {props.isCurrent
+                ? "Your time shows up here as it is tracked. Meanwhile, set up activities so it is sorted for you."
+                : `Nothing was recorded in this ${noun}. Go back to the current one to see your latest time.`}
             </EmptyState>
           </>
         ) : (

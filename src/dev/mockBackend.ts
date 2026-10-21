@@ -26,6 +26,8 @@ import type {
   ReportDto,
   RuleDto,
   RuleInputDto,
+  RulePreviewDto,
+  RuleSpecDto,
   SettingsDto,
   SettingsPatchDto,
   SuggestionDto,
@@ -99,6 +101,13 @@ export function classify(segment: MockSegment, rules: readonly RuleDto[]): numbe
     if (rule.spec.kind === "app" && rule.spec.app_id === segment.app_id) return rule.activity_id;
   }
   return SYSTEM_ACTIVITY;
+}
+
+/** Whether one rule spec alone matches a segment (like `ActivityRule::matches`). */
+export function specMatches(spec: RuleSpecDto, segment: MockSegment): boolean {
+  if (spec.kind === "app") return segment.app_id === spec.app_id;
+  if (spec.app_id !== null && spec.app_id !== segment.app_id) return false;
+  return segment.window_title !== null && compilePattern(spec.pattern).test(segment.window_title);
 }
 
 /** The Rust regex crate accepts `(?i)`; JavaScript spells it as a flag. */
@@ -569,6 +578,21 @@ export function installMockBackend(options: MockOptions = {}): void {
       const id = data.nextIds.rule++;
       data.rules.push({ ...rule, id });
       return id;
+    },
+    rules_preview: (args): RulePreviewDto => {
+      const spec = args.spec as RuleSpecDto;
+      validateRule({ id: 0, activity_id: SYSTEM_ACTIVITY, spec, priority: 0 });
+      const windows = new Set<string>();
+      let total = 0;
+      let unassigned = 0;
+      for (const { segment, start, end } of clip(args.range as RangeDto)) {
+        // Manual assignments always win over rules, so they are never covered.
+        if (segment.activity_id !== null || !specMatches(spec, segment)) continue;
+        total += end - start;
+        if (classify(segment, data.rules) === SYSTEM_ACTIVITY) unassigned += end - start;
+        windows.add(`${segment.app_id ?? ""}\u0000${segment.window_title ?? ""}`);
+      }
+      return { total_ms: total, windows: windows.size, unassigned_ms: unassigned };
     },
     rules_delete: (args) => {
       data.rules = data.rules.filter((r) => r.id !== args.id);

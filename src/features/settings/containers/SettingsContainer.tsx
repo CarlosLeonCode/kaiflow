@@ -1,4 +1,4 @@
-import { SectionIntroContainer } from "@/features/shell/containers/SectionIntroContainer";
+import { useSectionIntro } from "@/features/shell/hooks/useSectionIntro";
 import { IpcError, useOpenAccessibilitySettingsMutation, useSettingsQuery, useStatusQuery, useUpdateSettingsMutation, errorMessage } from "@/shared/ipc";
 
 import { DataPanelContainer } from "@/features/data/containers/DataPanelContainer";
@@ -13,6 +13,7 @@ function shortcutMessage(shortcut: string, reason: string): string {
 
 /** Wires Settings to the backend. A taken shortcut becomes a field error, not a toast. */
 export function SettingsContainer() {
+  const intro = useSectionIntro("settings");
   const settings = useSettingsQuery();
   const status = useStatusQuery();
   const update = useUpdateSettingsMutation();
@@ -33,7 +34,7 @@ export function SettingsContainer() {
 
   return (
     <SettingsView
-      intro={<SectionIntroContainer section="settings" />}
+      intro={intro}
       settings={settings.data}
       degraded={status.data?.degraded ?? false}
       degradedReason={status.data?.degraded_reason ?? null}

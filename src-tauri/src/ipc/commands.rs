@@ -18,8 +18,8 @@ use super::dto::{
     FocusSessionDto, FocusStartDto, FocusStatusDto, GoalDto, GoalStatusDto, IdleGapDto,
     IdleResolutionDto, PermissionStateDto, PresetDto, PrivacyModeDto, PrivacyRulesDto,
     ProductivityDto, RangeDto, ReportDto, RestorePreviewDto, RestoreResultDto, RetentionImpactDto,
-    RuleDto, RuleInputDto, SettingsDto, SettingsPatchDto, SuggestionDto, TimelineItemDto,
-    TrackingStatusDto, UpdateInfoDto,
+    RuleDto, RuleInputDto, RulePreviewDto, RuleSpecDto, SettingsDto, SettingsPatchDto,
+    SuggestionDto, TimelineItemDto, TrackingStatusDto, UpdateInfoDto,
 };
 use super::events::{DataChanged, DataKindDto, FocusChanged};
 use crate::composition::AppState;
@@ -185,6 +185,17 @@ pub async fn rules_list(state: Shared<'_>) -> Result<Vec<RuleDto>, AppError> {
 #[specta::specta]
 pub async fn rules_upsert(state: Shared<'_>, rule: RuleInputDto) -> Result<i64, AppError> {
     run(state, move |s| s.rules_upsert(rule)).await
+}
+
+/// How much tracked time a rule would cover in `range`, before it is saved. Read-only.
+#[tauri::command]
+#[specta::specta]
+pub async fn rules_preview(
+    state: Shared<'_>,
+    spec: RuleSpecDto,
+    range: RangeDto,
+) -> Result<RulePreviewDto, AppError> {
+    run(state, move |s| s.rules_preview(spec, range)).await
 }
 
 #[tauri::command]

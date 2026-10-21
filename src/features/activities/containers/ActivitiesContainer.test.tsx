@@ -46,7 +46,7 @@ function backend(initial: { activities?: ActivityDto[]; rules?: RuleDto[] } = {}
     },
     rules_upsert: (args) => {
       const input = args.rule as RuleInputDto;
-      if (input.spec.kind === "title_pattern" && input.spec.pattern.includes("(")) {
+      if (input.spec.kind === "title_pattern" && input.spec.pattern.includes("(") && !input.spec.pattern.startsWith("(?i)")) {
         throw { kind: "invalid_pattern", pattern: input.spec.pattern, reason: "unclosed group" };
       }
       const id = input.id > 0 ? input.id : nextRuleId++;
@@ -56,6 +56,14 @@ function backend(initial: { activities?: ActivityDto[]; rules?: RuleDto[] } = {}
     rules_delete: (args) => {
       rules = rules.filter((r) => r.id !== args.id);
       return null;
+    },
+    // 2h 15m over 3 windows, 1h of it Unassigned; a pattern with "(" does not compile.
+    rules_preview: (args) => {
+      const spec = args.spec as RuleInputDto["spec"];
+      if (spec.kind === "title_pattern" && spec.pattern.includes("(") && !spec.pattern.startsWith("(?i)")) {
+        throw { kind: "invalid_pattern", pattern: spec.pattern, reason: "unclosed group" };
+      }
+      return { total_ms: 8_100_000, windows: 3, unassigned_ms: 3_600_000 };
     },
   });
   return mock;
@@ -74,7 +82,8 @@ describe("ActivitiesContainer", () => {
     const items = within(list).getAllByRole("listitem");
     expect(items).toHaveLength(2);
     expect(within(items[0]!).getByText("Unassigned")).toBeInTheDocument();
-    expect(within(items[0]!).queryByRole("button")).not.toBeInTheDocument();
+    // Only the explanation: the system activity cannot be edited or deleted.
+    expect(within(items[0]!).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["About Unassigned"]);
     expect(within(items[1]!).getByText("1 rule · Productive")).toBeInTheDocument();
     expect(within(items[1]!).getByRole("button", { name: "Delete Work" })).toBeInTheDocument();
   });
@@ -273,6 +282,7 @@ describe("ActivitiesContainer", () => {
 
     const form = await screen.findByRole("form", { name: "Add rule" });
     await user.click(within(form).getByRole("radio", { name: "Window title" }));
+    await user.click(within(form).getByRole("radio", { name: "Pattern (advanced)" }));
     const pattern = within(form).getByRole("textbox", { name: "Title pattern" });
     await user.type(pattern, "Figma(");
     await user.selectOptions(within(form).getByRole("combobox", { name: "Activity" }), "Work");
@@ -281,7 +291,7 @@ describe("ActivitiesContainer", () => {
     const alert = await within(form).findByRole("alert");
     expect(alert).toHaveTextContent("unclosed group");
     expect(pattern).toHaveAttribute("aria-invalid", "true");
-    expect(pattern.getAttribute("aria-describedby")).toBe(alert.id);
+    expect(pattern.getAttribute("aria-describedby")?.split(" ")).toContain(alert.id);
     // Nothing was stored: the rule list stays empty.
     expect(screen.getByText(/No rules yet/)).toBeInTheDocument();
 
@@ -297,6 +307,84 @@ describe("ActivitiesContainer", () => {
       priority: 1,
     }));
     expect(await screen.findByRole("list", { name: "Window titles rules" })).toHaveTextContent("/Figma|Sketch/ in Xcode");
+  });
+
+  it("adds a plain-text title rule that matches in any case and shows it in words", async () => {
+    const user = userEvent.setup();
+    const { calls } = backend();
+    renderWithProviders(<ActivitiesContainer />);
+
+    const form = await screen.findByRole("form", { name: "Add rule" });
+    await user.click(within(form).getByRole("radio", { name: "Window title" }));
+    expect(within(form).getByRole("radio", { name: "Contains text" })).toBeChecked();
+    await user.type(within(form).getByRole("textbox", { name: "Title contains" }), "Budget (v1.2)");
+    await user.selectOptions(within(form).getByRole("combobox", { name: "Activity" }), "Work");
+    await user.click(within(form).getByRole("button", { name: "Add rule" }));
+
+    await waitFor(() =>
+      expect(upserts(calls).at(-1)).toMatchObject({
+        spec: { kind: "title_pattern", pattern: "(?i)Budget \\(v1\\.2\\)", app_id: null },
+      }),
+    );
+    expect(await screen.findByRole("list", { name: "Window titles rules" })).toHaveTextContent(
+      "Title contains \u201cBudget (v1.2)\u201d",
+    );
+  });
+
+  it("explains title matching and productivity in help tips", async () => {
+    const user = userEvent.setup();
+    backend();
+    renderWithProviders(<ActivitiesContainer />);
+
+    const form = await screen.findByRole("form", { name: "Add rule" });
+    await user.click(within(form).getByRole("radio", { name: "Window title" }));
+    await user.click(within(form).getByRole("button", { name: "About matching window titles" }));
+    expect(await screen.findByRole("dialog", { name: "matching window titles" })).toHaveTextContent("regular expression");
+    await user.keyboard("{Escape}");
+
+    await user.click(screen.getByRole("button", { name: "New activity" }));
+    await user.click(screen.getByRole("button", { name: "About productive, neutral and distracting" }));
+    const tip = await screen.findByRole("dialog", { name: "productive, neutral and distracting" });
+    expect(tip).toHaveTextContent("Distracting:");
+    expect(tip).toHaveTextContent("focus percentage in Overview and Review");
+  });
+
+  it("previews how much recent time a rule would cover before it is saved", async () => {
+    const user = userEvent.setup();
+    const { calls } = backend();
+    renderWithProviders(<ActivitiesContainer />);
+
+    const form = await screen.findByRole("form", { name: "Add rule" });
+    const preview = within(form).getByTestId("rule-preview");
+    expect(preview).toHaveTextContent("Pick an app or type some text");
+
+    const app = within(form).getByRole("combobox", { name: "App" });
+    await waitFor(() => expect(within(app).getAllByRole("option").length).toBeGreaterThan(1));
+    await user.selectOptions(app, "Slack (com.tinyspeck.slackmacgap)");
+    await waitFor(() =>
+      expect(preview).toHaveTextContent(
+        "This rule would cover 2h 15m from the last 7 days across 3 windows. 1h 00m of it is Unassigned now.",
+      ),
+    );
+    const call = calls.find((c) => c.cmd === "rules_preview")!;
+    expect(call.args.spec).toEqual({ kind: "app", app_id: SLACK.app_id });
+    const range = call.args.range as { from: number; to: number };
+    // Seven local days, today included (DST can make one of them 23 or 25 hours long).
+    expect(Math.round((range.to - range.from) / 86_400_000)).toBe(7);
+    // Nothing is saved by previewing.
+    expect(calls.some((c) => c.cmd === "rules_upsert")).toBe(false);
+  });
+
+  it("says when a pattern is not complete yet instead of previewing it", async () => {
+    const user = userEvent.setup();
+    backend();
+    renderWithProviders(<ActivitiesContainer />);
+
+    const form = await screen.findByRole("form", { name: "Add rule" });
+    await user.click(within(form).getByRole("radio", { name: "Window title" }));
+    await user.click(within(form).getByRole("radio", { name: "Pattern (advanced)" }));
+    await user.type(within(form).getByRole("textbox", { name: "Title pattern" }), "Figma(");
+    await waitFor(() => expect(within(form).getByTestId("rule-preview")).toHaveTextContent("not complete yet"));
   });
 
   it("reorders rules within a group by renumbering priorities", async () => {

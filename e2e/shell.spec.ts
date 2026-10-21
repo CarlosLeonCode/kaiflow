@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { expect, openWindow, test } from "./fixtures";
+import { expect, expectNoA11yViolations, openWindow, test } from "./fixtures";
 
 const nav = (page: Page) => page.getByRole("navigation", { name: "Sections" });
 
@@ -20,16 +20,49 @@ async function highlightNow(page: Page): Promise<{ current: string[]; animating:
 test.describe("main window shell", () => {
   test("a dismissed section intro stays dismissed and does not affect other sections", async ({ page }) => {
     await openWindow(page, "main");
-    const todayIntro = page.getByRole("complementary", { name: "About Your day at a glance" });
+    const todayIntro = page.getByRole("complementary", { name: "About Your day so far" });
     await expect(todayIntro).toBeVisible();
     await todayIntro.getByRole("button", { name: /^Dismiss introduction/ }).click();
     await expect(todayIntro).toHaveCount(0);
 
     await nav(page).getByRole("button", { name: /^Activities/ }).click();
-    await expect(page.getByRole("complementary", { name: "About Organize time into activities" })).toBeVisible();
+    await expect(page.getByRole("complementary", { name: "About What activities are for" })).toBeVisible();
     await nav(page).getByRole("button", { name: /^Today/ }).click();
     await expect(page.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
     await expect(todayIntro).toHaveCount(0);
+  });
+
+  test("the help button reopens a dismissed intro in every section", async ({ page }) => {
+    await openWindow(page, "main");
+    for (const name of ["Today", "Overview", "Goals", "Focus", "Review", "Activities", "Privacy", "Settings"]) {
+      await nav(page).getByRole("button", { name: new RegExp(`^${name}`) }).click();
+      const main = page.getByRole("main");
+      const intro = main.getByRole("complementary", { name: /^About / });
+      await expect(intro).toBeVisible();
+      await expect(intro).toContainText("What this is");
+      await expect(intro).toContainText("What you can do here");
+      await expect(intro).toContainText("Example");
+
+      await intro.getByRole("button", { name: /^Dismiss introduction/ }).click();
+      await expect(intro).toHaveCount(0);
+      const help = main.getByRole("button", { name: `Help for ${name}` });
+      await expect(help).toBeFocused();
+      await expect(help).toHaveAttribute("aria-expanded", "false");
+
+      await page.keyboard.press("Enter");
+      await expect(intro).toBeFocused();
+      await expect(help).toHaveAttribute("aria-expanded", "true");
+    }
+  });
+
+  test("intros and help buttons have no accessibility violations in dark mode", async ({ page }) => {
+    await page.emulateMedia({ colorScheme: "dark" });
+    await openWindow(page, "main");
+    for (const name of ["Today", "Activities", "Settings"]) {
+      await nav(page).getByRole("button", { name: new RegExp(`^${name}`) }).click();
+      await expect(page.getByRole("main").getByRole("complementary", { name: /^About / })).toBeVisible();
+      await expectNoA11yViolations(page);
+    }
   });
 
   test("the sidebar highlight always matches the rendered section", async ({ page }) => {

@@ -7,7 +7,7 @@ import type { WeeklyReviewDto } from "@/shared/ipc";
 import { formatDuration } from "@/shared/lib/time";
 import { Alert, AlertDescription } from "@/shared/ui/alert";
 import { EmptyState } from "@/shared/ui/EmptyState";
-import { Page } from "@/shared/ui/page";
+import { Page, type IntroSlot } from "@/shared/ui/page";
 import { Skeleton } from "@/shared/ui/skeleton";
 
 import { BreakdownList } from "@/features/overview/components/BreakdownList";
@@ -18,13 +18,15 @@ import { focusWeek, focusWeekLine, goalWeekLine, isEmptyWeek, RESULT_LABEL, dayN
 import { WeekNav } from "./WeekNav";
 
 interface Props {
-  intro?: ReactNode;
+  intro?: IntroSlot;
   weeksAgo: number;
   canGoPrevious: boolean;
   canGoNext: boolean;
   onPrevious: () => void;
   onNext: () => void;
   onThisWeek: () => void;
+  /** Next step of an empty current week: set up activities while time is tracked. */
+  onOpenActivities?: () => void;
   loading: boolean;
   error: string | null;
   dark: boolean;
@@ -89,9 +91,15 @@ export function ReviewView(props: Props) {
               <EmptyState
                 className="mt-6"
                 title={props.weeksAgo === 0 ? "Nothing tracked this week yet" : "Nothing tracked this week"}
-                action={props.weeksAgo === 0 ? undefined : { label: "Jump to this week", onClick: props.onThisWeek }}
+                action={
+                  props.weeksAgo === 0
+                    ? props.onOpenActivities && { label: "Set up activities", onClick: props.onOpenActivities }
+                    : { label: "Jump to this week", onClick: props.onThisWeek }
+                }
               >
-                Your review fills in as time is tracked. You can still write a note about this week below.
+                {props.weeksAgo === 0
+                  ? "Your review fills in as time is tracked. Meanwhile, set up activities, or write a note about this week below."
+                  : "Nothing was recorded that week. Jump to this week, or write a note about that week below."}
               </EmptyState>
             ) : (
               <>

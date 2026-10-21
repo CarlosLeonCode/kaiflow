@@ -18,15 +18,21 @@ import { useStatusQuery } from "@/shared/ipc";
 function SectionView({ section, onNavigate }: { section: SectionId; onNavigate: (next: SectionId) => void }) {
   switch (section) {
     case "today":
-      return <TodayContainer onOpenGoals={() => onNavigate("goals")} />;
+      return <TodayContainer onOpenGoals={() => onNavigate("goals")} onOpenActivities={() => onNavigate("activities")} />;
     case "overview":
-      return <OverviewContainer />;
+      return <OverviewContainer onOpenActivities={() => onNavigate("activities")} />;
     case "goals":
       return <GoalsContainer />;
     case "focus":
       return <FocusContainer />;
     case "review":
-      return <ReviewContainer onOpenGoals={() => onNavigate("goals")} onOpenSettings={() => onNavigate("settings")} />;
+      return (
+        <ReviewContainer
+          onOpenGoals={() => onNavigate("goals")}
+          onOpenSettings={() => onNavigate("settings")}
+          onOpenActivities={() => onNavigate("activities")}
+        />
+      );
     case "activities":
       return <ActivitiesContainer />;
     case "privacy":

@@ -90,7 +90,8 @@ impl ActivityRule {
         })
     }
 
-    fn matches(&self, segment: &Segment) -> bool {
+    /// Whether this rule alone matches the segment (manual assignments are not considered).
+    pub fn matches(&self, segment: &Segment) -> bool {
         match &self.kind {
             RuleKind::App(bundle) => segment.app_id.as_ref() == Some(bundle),
             RuleKind::TitlePattern { regex, app_id } => {

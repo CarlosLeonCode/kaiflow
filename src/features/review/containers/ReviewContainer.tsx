@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { SectionIntroContainer } from "@/features/shell/containers/SectionIntroContainer";
+import { useSectionIntro } from "@/features/shell/hooks/useSectionIntro";
 import { DEFAULT_WEEK_START } from "@/features/overview/lib/periods";
 import { errorMessage, useSetReviewNoteMutation, useSettingsQuery, useWeeklyReviewQuery } from "@/shared/ipc";
 import { useIsDark } from "@/shared/lib/theme";
@@ -13,10 +13,13 @@ import { AiPanelContainer } from "./AiPanelContainer";
 interface Props {
   onOpenGoals: () => void;
   onOpenSettings: () => void;
+  /** Takes the user to Activities (the next step of an empty week). */
+  onOpenActivities?: () => void;
 }
 
 /** Wires the Review section: the week built locally, the personal note and the optional AI panel. */
-export function ReviewContainer({ onOpenGoals, onOpenSettings }: Props) {
+export function ReviewContainer({ onOpenGoals, onOpenSettings, onOpenActivities }: Props) {
+  const intro = useSectionIntro("review");
   const [weeksAgo, setWeeksAgo] = useState(0);
   const dark = useIsDark();
   const settings = useSettingsQuery();
@@ -26,13 +29,14 @@ export function ReviewContainer({ onOpenGoals, onOpenSettings }: Props) {
 
   return (
     <ReviewView
-      intro={<SectionIntroContainer section="review" />}
+      intro={intro}
       weeksAgo={weeksAgo}
       canGoPrevious={weeksAgo < MAX_WEEKS_AGO}
       canGoNext={weeksAgo > 0}
       onPrevious={() => setWeeksAgo((n) => Math.min(MAX_WEEKS_AGO, n + 1))}
       onNext={() => setWeeksAgo((n) => Math.max(0, n - 1))}
       onThisWeek={() => setWeeksAgo(0)}
+      onOpenActivities={onOpenActivities}
       loading={review.isPending}
       error={review.isError ? errorMessage(review.error) : null}
       dark={dark}

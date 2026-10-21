@@ -24,6 +24,7 @@
     "allow-activities-delete",
     "allow-rules-list",
     "allow-rules-upsert",
+    "allow-rules-preview",
     "allow-rules-delete",
     "allow-presets-list",
     "allow-presets-apply",

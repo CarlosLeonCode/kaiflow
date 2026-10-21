@@ -19,8 +19,8 @@ use crate::ipc::dto::{
     FocusSessionDto, FocusStartDto, FocusStatusDto, GoalDto, GoalStatusDto, IdleGapDto,
     IdleResolutionDto, PermissionStateDto, PresetDto, PrivacyModeDto, PrivacyRulesDto,
     ProductivityDto, RangeDto, ReportDto, RestorePreviewDto, RestoreResultDto, RetentionImpactDto,
-    RuleDto, RuleInputDto, SettingsDto, SettingsPatchDto, ShortcutStatusDto, SuggestionDto,
-    TimelineItemDto, TrackingStateDto, TrackingStatusDto,
+    RuleDto, RuleInputDto, RulePreviewDto, RuleSpecDto, SettingsDto, SettingsPatchDto,
+    ShortcutStatusDto, SuggestionDto, TimelineItemDto, TrackingStateDto, TrackingStatusDto,
 };
 
 impl AppState {
@@ -372,6 +372,26 @@ impl AppState {
         Ok(self.commands.save_rule(&rule.into())?)
     }
 
+    /// What a rule would match in `range` before it is saved (validated like a save, so a
+    /// bad pattern is `AppError::InvalidPattern`). Nothing is persisted.
+    pub fn rules_preview(
+        &self,
+        spec: RuleSpecDto,
+        range: RangeDto,
+    ) -> Result<RulePreviewDto, AppError> {
+        let input = RuleInputDto {
+            id: 0,
+            activity_id: domain::UNASSIGNED.0,
+            spec,
+            priority: 0,
+        };
+        let rule = application::commands::RuleInput::from(input).to_rule()?;
+        Ok(self
+            .queries
+            .rule_preview(range.into(), &rule, self.now())?
+            .into())
+    }
+
     pub fn rules_delete(&self, id: i64) -> Result<(), AppError> {
         Ok(self.commands.delete_rule(id)?)
     }
@@ -704,6 +724,55 @@ mod tests {
                 },
                 priority: 0,
             })
+            .unwrap_err();
+        assert!(matches!(err, AppError::InvalidPattern { .. }), "{err:?}");
+        assert!(rig.state.rules_list().unwrap().is_empty());
+        rig.state.shutdown();
+    }
+
+    #[test]
+    fn rule_preview_reports_matching_time_without_saving() {
+        let rig = rig();
+        rig.window.set(Some(safari()));
+        rig.state.start().unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        rig.state.stop().unwrap();
+        let range = around_now(&rig.state);
+
+        let by_title = rig
+            .state
+            .rules_preview(
+                RuleSpecDto::TitlePattern {
+                    pattern: "(?i)docs".into(),
+                    app_id: None,
+                },
+                range,
+            )
+            .unwrap();
+        assert!(by_title.total_ms > 0, "{by_title:?}");
+        assert_eq!(by_title.windows, 1);
+        assert_eq!(by_title.unassigned_ms, by_title.total_ms);
+
+        let other = rig
+            .state
+            .rules_preview(
+                RuleSpecDto::App {
+                    app_id: "com.other".into(),
+                },
+                range,
+            )
+            .unwrap();
+        assert_eq!((other.total_ms, other.windows), (0, 0));
+
+        let err = rig
+            .state
+            .rules_preview(
+                RuleSpecDto::TitlePattern {
+                    pattern: "(".into(),
+                    app_id: None,
+                },
+                range,
+            )
             .unwrap_err();
         assert!(matches!(err, AppError::InvalidPattern { .. }), "{err:?}");
         assert!(rig.state.rules_list().unwrap().is_empty());

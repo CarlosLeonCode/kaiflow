@@ -1,6 +1,9 @@
 import type { ApplyPresetResultDto, PresetActivityDto } from "@/shared/ipc";
 
-/** Id under which "start empty" is remembered, next to the dismissed section intros. */
+/**
+ * Id under which the older first-run choice ("start empty") was remembered. Still honored, so
+ * the guided setup does not reappear for someone who already made that choice.
+ */
 export const PRESET_CHOICE_ID = "preset-choice";
 
 function capitalize(word: string): string {

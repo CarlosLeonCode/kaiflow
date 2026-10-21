@@ -5,6 +5,9 @@ import { Button } from "@/shared/ui/button";
 
 import type { Submit } from "../lib/submit";
 
+/** Id of the suggestions section, so the Unassigned row and the guide can take the user there. */
+export const SUGGESTIONS_ID = "activity-suggestions";
+
 interface Props {
   suggestions: readonly SuggestionDto[];
   onAccept: Submit<string>;
@@ -25,12 +28,12 @@ export function SuggestionsPanel({ suggestions, onAccept, onDismiss, onFailure }
   }
 
   return (
-    <section aria-label="Suggestions" className="mb-6 space-y-2">
+    <section id={SUGGESTIONS_ID} tabIndex={-1} aria-label="Suggestions" className="mb-6 space-y-2">
       <div className="px-1">
         <h2 className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">Suggestions</h2>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          These apps are not in any activity yet. Accept a suggestion to add a rule for the app, or dismiss it and it
-          will not come back.
+          These apps are still Unassigned. Accept a suggestion to add a rule for the app (its past time moves too), or
+          dismiss it and it will not come back.
         </p>
       </div>
       <ul aria-label="Suggestion list" className="divide-y divide-border rounded-lg border border-border bg-background">

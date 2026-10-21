@@ -1,4 +1,4 @@
-import type { RangeDto } from "./bindings";
+import type { RangeDto, RuleSpecDto } from "./bindings";
 
 /** Every TanStack Query key in one place so events can invalidate them precisely. */
 export const queryKeys = {
@@ -42,6 +42,17 @@ export const queryKeys = {
       range.to,
       buckets.map((b) => `${b.from}-${b.to}`).join(","),
       previous ? `${previous.from}-${previous.to}` : "none",
+    ] as const,
+  /** What a rule being written would match; under `report`, so data changes refresh it too. */
+  rulePreview: (spec: RuleSpecDto, range: RangeDto) =>
+    [
+      "report",
+      "rule-preview",
+      spec.kind,
+      spec.kind === "app" ? spec.app_id : spec.pattern,
+      spec.app_id ?? "",
+      range.from,
+      range.to,
     ] as const,
   /** Prefix of every timeline query. */
   timelines: ["timeline"] as const,

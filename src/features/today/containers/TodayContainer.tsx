@@ -1,7 +1,7 @@
 import { FocusSessionContainer } from "@/features/focus/containers/FocusSessionContainer";
 import { GoalsStrip } from "@/features/goals/components/GoalsStrip";
 import { withLiveTime } from "@/features/goals/lib/goals";
-import { SectionIntroContainer } from "@/features/shell/containers/SectionIntroContainer";
+import { useSectionIntro } from "@/features/shell/hooks/useSectionIntro";
 import { useMemo } from "react";
 
 import { useNow } from "@/features/tracking/hooks/useNow";
@@ -24,10 +24,13 @@ import { awayMs, buildAppRows, buildActivityRows, titleBreakdown } from "../lib/
 interface Props {
   /** Takes the user to the Goals section (the strip's "Create a goal" and "All goals"). */
   onOpenGoals: () => void;
+  /** Takes the user to Activities (the next step of an empty day). */
+  onOpenActivities?: () => void;
 }
 
 /** Wires Today to the backend: report + timeline of the local day, live while recording. */
-export function TodayContainer({ onOpenGoals }: Props) {
+export function TodayContainer({ onOpenGoals, onOpenActivities }: Props) {
+  const intro = useSectionIntro("today");
   const now = useNow();
   const dayStart = localDayRange(now).from;
   const range = useMemo(() => localDayRange(dayStart), [dayStart]);
@@ -67,7 +70,7 @@ export function TodayContainer({ onOpenGoals }: Props) {
 
   return (
     <TodayView
-      intro={<SectionIntroContainer section="today" />}
+      intro={intro}
       focus={<FocusSessionContainer />}
       goals={
         <GoalsStrip
@@ -82,6 +85,7 @@ export function TodayContainer({ onOpenGoals }: Props) {
       now={now}
       state={state}
       emptyAction={emptyAction}
+      onOpenActivities={onOpenActivities}
       dark={dark}
       loading={report.isPending || timeline.isPending}
       error={failure ? errorMessage(failure) : null}

@@ -21,6 +21,7 @@ const COMMANDS: &[&str] = &[
     "activities_delete",
     "rules_list",
     "rules_upsert",
+    "rules_preview",
     "rules_delete",
     "presets_list",
     "presets_apply",

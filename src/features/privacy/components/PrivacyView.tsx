@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import { CircleAlert, X } from "lucide-react";
 
 import type { DeleteOpDto, PrivacyRulesDto, RetentionImpactDto } from "@/shared/ipc";
@@ -7,7 +6,7 @@ import { Alert, AlertDescription } from "@/shared/ui/alert";
 import { Button } from "@/shared/ui/button";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { Panel, Row } from "@/shared/ui/field";
-import { Page } from "@/shared/ui/page";
+import { Page, type IntroSlot } from "@/shared/ui/page";
 import { Select } from "@/shared/ui/select";
 import { Skeleton } from "@/shared/ui/skeleton";
 
@@ -18,8 +17,8 @@ import { AppRulesPanel } from "./AppRulesPanel";
 import { DeleteDataPanel } from "./DeleteDataPanel";
 
 interface Props {
-  /** Dismissible section introduction, rendered by `Page`. */
-  intro?: ReactNode;
+  /** Section intro and its header help button, rendered by `Page`. */
+  intro?: IntroSlot;
   /** `undefined` while loading. */
   privacy: PrivacyRulesDto | undefined;
   retentionDays: number | null;

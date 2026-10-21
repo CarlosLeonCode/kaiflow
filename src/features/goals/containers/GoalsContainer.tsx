@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 
 import { toSubmitResult, type SubmitResult } from "@/features/activities/lib/submit";
-import { SectionIntroContainer } from "@/features/shell/containers/SectionIntroContainer";
+import { useSectionIntro } from "@/features/shell/hooks/useSectionIntro";
 import { useNow } from "@/features/tracking/hooks/useNow";
 import {
   errorMessage,
@@ -31,6 +31,7 @@ async function attempt(action: () => Promise<unknown>): Promise<SubmitResult> {
 
 /** Wires Goals to the backend: the goals, their progress, the activities and the recent apps. */
 export function GoalsContainer() {
+  const intro = useSectionIntro("goals");
   const now = useNow(60_000);
   const today = addLocalDays(now, 0);
   const range = useMemo(() => ({ from: addLocalDays(today, -RECENT_APP_DAYS), to: addLocalDays(today, 1) }), [today]);
@@ -60,7 +61,7 @@ export function GoalsContainer() {
 
   return (
     <GoalsView
-      intro={<SectionIntroContainer section="goals" />}
+      intro={intro}
       loading={goals.isPending || statuses.isPending || activities.isPending}
       error={failure ? errorMessage(failure) : null}
       statuses={statuses.data ?? []}

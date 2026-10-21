@@ -11,14 +11,14 @@ interface Props {
   packs: readonly PresetDto[];
   /** Applies the pack with this key; resolves with an error to show, or `null`. */
   onApply: Submit<string>;
-  /** "Start empty": nothing is created, the choice is only remembered. */
+  /** "Start empty": nothing is created; the guided setup offers to name a first activity. */
   onStartEmpty: () => void;
 }
 
 /**
- * First-run choice for an empty Activities section. Every option is a card of the same size
- * and weight, none is preselected, and nothing is created until the user confirms a pack
- * after seeing what it contains.
+ * Step 1 of the guided setup: optional ready-made sets of activities next to "Start empty".
+ * Every option is a card of the same size and weight, none is preselected, and nothing is
+ * created until the user confirms a pack after seeing what it contains.
  */
 export function PresetChooser({ packs, onApply, onStartEmpty }: Props) {
   const [selected, setSelected] = useState<PresetDto | null>(null);
@@ -34,8 +34,8 @@ export function PresetChooser({ packs, onApply, onStartEmpty }: Props) {
 
   if (selected) {
     return (
-      <section aria-label={`${selected.name} pack`} className="mb-6 rounded-lg border border-border bg-background p-4">
-        <h2 className="text-sm font-semibold">{selected.name} pack</h2>
+      <section aria-label={`${selected.name} pack`} className="rounded-lg border border-border bg-background p-4">
+        <h4 className="text-sm font-semibold">{selected.name} pack</h4>
         <p className="mt-0.5 text-xs text-muted-foreground">
           This adds the activities below. Rules are created only for apps already in your history, and you can
           edit or delete everything afterwards.
@@ -78,16 +78,15 @@ export function PresetChooser({ packs, onApply, onStartEmpty }: Props) {
   }
 
   return (
-    <section aria-label="Get started" className="mb-6">
-      <h2 className="text-sm font-semibold">How would you like to start?</h2>
-      <p className="mt-0.5 text-xs text-muted-foreground">
-        Pick a ready-made set of activities to preview, or start empty and build your own. Nothing is added until
+    <div>
+      <p className="text-xs text-muted-foreground">
+        Optional: preview a suggested set of activities, or start empty and name your own. Nothing is added until
         you confirm.
       </p>
       <ul aria-label="Ways to start" className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {packs.map((pack) => (
           <li key={pack.key} className="flex flex-col rounded-lg border border-border bg-background p-3">
-            <h3 className="font-medium">{pack.name}</h3>
+            <h4 className="font-medium">{pack.name}</h4>
             <p className="mt-0.5 flex-1 text-xs text-muted-foreground">{pack.description}</p>
             <Button className="mt-3 self-start" aria-label={`Preview the ${pack.name} pack`} onClick={() => setSelected(pack)}>
               Preview
@@ -95,15 +94,15 @@ export function PresetChooser({ packs, onApply, onStartEmpty }: Props) {
           </li>
         ))}
         <li className="flex flex-col rounded-lg border border-border bg-background p-3">
-          <h3 className="font-medium">Start empty</h3>
+          <h4 className="font-medium">Start empty</h4>
           <p className="mt-0.5 flex-1 text-xs text-muted-foreground">
-            Create your own activities and rules. Nothing is added for you.
+            Name your own activities and add rules yourself. Nothing is added for you.
           </p>
           <Button className="mt-3 self-start" onClick={onStartEmpty}>
             Start empty
           </Button>
         </li>
       </ul>
-    </section>
+    </div>
   );
 }

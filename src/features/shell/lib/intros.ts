@@ -1,42 +1,62 @@
+import type { IntroContent } from "@/shared/ui/SectionIntro";
+
 import type { SectionId } from "./sections";
 
-export interface IntroCopy {
-  title: string;
-  body: string;
-}
-
-/** Role-agnostic explanations, one per dashboard section. Dismissals persist by section id. */
-export const INTROS: Record<SectionId, IntroCopy> = {
+/**
+ * Role-agnostic explanations, one per dashboard section, all with the same three short lines:
+ * what this is, what you can do here and a concrete example. Dismissals persist by section id.
+ */
+export const INTROS: Record<SectionId, IntroContent> = {
   today: {
-    title: "Your day at a glance",
-    body: "A timeline of what you used today, with totals by activity and by app. Tracking runs in the background; pause or resume it from the menu bar.",
+    title: "Your day so far",
+    what: "A timeline of the apps and windows you used today, and for how long.",
+    can: "Check today's total, see time per activity and per app, and pause tracking from the menu bar.",
+    example: "See that the morning went to email and the afternoon to the quarterly report.",
   },
   overview: {
-    title: "See the bigger picture",
-    body: "Pick a day, a week, a month or the last 90 days to see where your time went: totals by activity and app, a trend against the period before, the hours you are busiest and how much of your time was productive. Time that crosses midnight is shared between both days.",
+    title: "The bigger picture",
+    what: "Your tracked time over a day, a week, a month or the last 90 days.",
+    can: "Switch periods, compare with the period before, and see your busiest hours and focus percentage.",
+    example: "Compare this week's time on client work with last week's.",
   },
   goals: {
-    title: "Aim for what matters",
-    body: "A goal is a target for your time: at least some hours of an activity, or at most some minutes in an app. Pick a period and the days that count, and you will see your progress and a streak of periods in a row. Rest days never break a streak. Goals only keep you informed: nothing is ever blocked.",
+    title: "Targets for your time",
+    what: "Targets that are checked for you as you work. Nothing is ever blocked.",
+    can: "Set a minimum for an activity or a limit for an app, per day or week, and build a streak.",
+    example: "At least 3 hours of Deep work on weekdays, or at most 30 minutes of social media a day.",
   },
   focus: {
-    title: "Work in focused blocks",
-    body: "Start a session with what you want to get done, how long it should last and which activities or apps belong to it. If you spend a while somewhere else, you get a gentle nudge: no sound, nothing is blocked. When the time is up you see how much of it stayed on target.",
+    title: "Focused blocks of time",
+    what: "A timed block for one task, with a quiet nudge if you drift somewhere else.",
+    can: "Start a session, choose which activities or apps count as on target, and see how it went.",
+    example: "45 minutes to finish the budget review, with only the spreadsheet and the docs on target.",
   },
   review: {
-    title: "Look back on your week",
-    body: "Every week gets a summary built on this computer: where your time went, when you were busiest, how your goals went and your focus sessions, plus a place for your own notes. Optionally, you can ask an AI model for a written analysis. That is off until you switch a provider on in Settings, and you always see exactly what would be sent before anything leaves your computer. Window titles are never included unless you choose so.",
+    title: "Your week in review",
+    what: "A calm summary of your week, built on this computer.",
+    can: "See where time went and how goals and focus sessions did, and keep a note. AI analysis is optional and off by default.",
+    example: "Notice that meetings took half of Tuesday and plan a quieter one next week.",
   },
   activities: {
-    title: "Organize time into activities",
-    body: "An activity is a label for what you were doing: a project, a client or a kind of task. Rules say which apps and window titles belong to each one, so your time is sorted for you, past time included. Anything without a rule stays Unassigned.",
+    title: "What activities are for",
+    what: "Apps tell you where you were. Activities tell you what you were doing, like Deep work or Client A.",
+    can: "Add rules that sort your time by app or by words in the window title. Past time is sorted too.",
+    example: "The same browser can be research in one tab and a distraction in another:",
+    diagram: [
+      { from: "Chrome + “YouTube” in the title", to: "Distraction" },
+      { from: "VS Code, Excel or Figma", to: "Deep work" },
+    ],
   },
   privacy: {
     title: "You decide what is stored",
-    body: "Choose whether window titles are saved, keep specific apps out of your records and delete tracked data. Everything stays on this computer.",
+    what: "Control over what gets recorded. Everything stays on this computer.",
+    can: "Stop saving window titles, keep specific apps out of your records, and delete tracked data.",
+    example: "Keep your banking app out of your records, or hide the titles of your messaging app.",
   },
   settings: {
-    title: "Tune the app",
-    body: "Idle detection, appearance, the first day of your week, startup behavior and the global shortcut live here, along with your data (a daily backup of your tracked time and a way to restore it from a file) and the optional AI analysis, which stays off until you switch a provider on.",
+    title: "How the app behaves",
+    what: "Preferences for tracking, appearance, backups and the optional AI analysis.",
+    can: "Adjust idle detection, the theme, the first day of your week, startup, the shortcut and backups.",
+    example: "Count 10 minutes away from the keyboard as a break instead of 5.",
   },
 };

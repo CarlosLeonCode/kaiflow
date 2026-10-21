@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 
-import { SectionIntroContainer } from "@/features/shell/containers/SectionIntroContainer";
+import { useSectionIntro } from "@/features/shell/hooks/useSectionIntro";
 import { useNow } from "@/features/tracking/hooks/useNow";
 import {
   errorMessage,
@@ -40,7 +40,13 @@ import {
  * ranges, the buckets to stack and the previous period; the backend folds everything in one
  * pass (design section 8).
  */
-export function OverviewContainer() {
+interface Props {
+  /** Takes the user to Activities (the next step of an empty period). */
+  onOpenActivities?: () => void;
+}
+
+export function OverviewContainer({ onOpenActivities }: Props = {}) {
+  const intro = useSectionIntro("overview");
   const now = useNow(60_000);
   const dark = useIsDark();
   const [period, setPeriod] = useState<Period>("week");
@@ -76,7 +82,7 @@ export function OverviewContainer() {
 
   return (
     <OverviewView
-      intro={<SectionIntroContainer section="overview" />}
+      intro={intro}
       period={period}
       onPeriodChange={(next) => {
         setPeriod(next);
@@ -87,6 +93,7 @@ export function OverviewContainer() {
       isCurrent={current}
       onPrevious={() => move(-1)}
       onNext={() => move(1)}
+      onOpenActivities={onOpenActivities}
       onToday={() => {
         setAnchor(Date.now());
         clearExport();

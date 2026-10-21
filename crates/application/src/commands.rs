@@ -75,6 +75,32 @@ pub struct RuleInput {
     pub priority: i32,
 }
 
+impl RuleInput {
+    /// Validates the input (empty app id, regex) and builds the domain rule; nothing is saved.
+    pub fn to_rule(&self) -> Result<ActivityRule, CommandError> {
+        Ok(match &self.kind {
+            RuleSpec::App(bundle) => {
+                if bundle.trim().is_empty() {
+                    return Err(CommandError::Invalid("app id must not be empty".into()));
+                }
+                ActivityRule {
+                    id: self.id,
+                    activity_id: self.activity_id,
+                    kind: RuleKind::App(bundle.trim().to_owned()),
+                    priority: self.priority,
+                }
+            }
+            RuleSpec::TitlePattern { pattern, app_id } => ActivityRule::title_pattern(
+                self.id,
+                self.activity_id,
+                pattern,
+                app_id.clone(),
+                self.priority,
+            )?,
+        })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RuleSpec {
     App(String),
@@ -295,26 +321,7 @@ impl Commands {
 
     /// Validates (regex included) before anything is persisted; returns the rule id.
     pub fn save_rule(&self, input: &RuleInput) -> Result<i64, CommandError> {
-        let rule = match &input.kind {
-            RuleSpec::App(bundle) => {
-                if bundle.trim().is_empty() {
-                    return Err(CommandError::Invalid("app id must not be empty".into()));
-                }
-                ActivityRule {
-                    id: input.id,
-                    activity_id: input.activity_id,
-                    kind: RuleKind::App(bundle.trim().to_owned()),
-                    priority: input.priority,
-                }
-            }
-            RuleSpec::TitlePattern { pattern, app_id } => ActivityRule::title_pattern(
-                input.id,
-                input.activity_id,
-                pattern,
-                app_id.clone(),
-                input.priority,
-            )?,
-        };
+        let rule = input.to_rule()?;
         Ok(self.activities.save_rule(&rule)?)
     }
 

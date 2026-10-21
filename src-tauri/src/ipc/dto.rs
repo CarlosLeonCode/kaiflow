@@ -13,7 +13,7 @@ use application::goals::GoalStatus;
 use application::ports::{DegradedReason, PrivacyMode, StoredFocus, TrackingKind, TrackingStatus};
 use application::presets::{ApplyOutcome, SuggestionView};
 use application::queries::{
-    ActivityTotal, AppTotal, BucketTotal, Range, Report, TimelineItem, TitleTotal,
+    ActivityTotal, AppTotal, BucketTotal, Range, Report, RulePreview, TimelineItem, TitleTotal,
 };
 use application::settings_blobs::UiSettings;
 use domain::{
@@ -941,6 +941,26 @@ impl From<ActivityRule> for RuleDto {
             activity_id: r.activity_id.0,
             spec,
             priority: r.priority,
+        }
+    }
+}
+
+/// What a rule being written would match, so the form can say how much time it covers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct RulePreviewDto {
+    pub total_ms: i64,
+    /// Distinct app + window title pairs among the matched time.
+    pub windows: u32,
+    /// Part of `total_ms` that has no activity yet (Unassigned).
+    pub unassigned_ms: i64,
+}
+
+impl From<RulePreview> for RulePreviewDto {
+    fn from(p: RulePreview) -> Self {
+        Self {
+            total_ms: p.total_ms,
+            windows: p.windows,
+            unassigned_ms: p.unassigned_ms,
         }
     }
 }
