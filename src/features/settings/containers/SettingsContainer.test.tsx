@@ -70,6 +70,23 @@ describe("SettingsContainer", () => {
     await waitFor(() => expect(lastUpdate(calls)).toMatchObject({ idle_threshold_secs: 600 }));
   });
 
+  it("saves the auto-discard limit and the prompt timeout", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockBackend({
+      get_status: () => status(),
+      settings_update: (args) => mergePatch(args.patch),
+    });
+    renderWithProviders(<SettingsContainer />);
+
+    const limit = await screen.findByRole("combobox", { name: "Skip the prompt for short breaks" });
+    expect(limit).toHaveValue("120");
+    await user.selectOptions(limit, "Always ask");
+    await waitFor(() => expect(lastUpdate(calls)).toMatchObject({ idle_auto_discard_below_secs: 0 }));
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "Answer the prompt within" }), "5 min");
+    await waitFor(() => expect(lastUpdate(calls)).toMatchObject({ idle_prompt_timeout_secs: 300 }));
+  });
+
   it("toggles autostart and title storage", async () => {
     const user = userEvent.setup();
     const { calls } = mockBackend({

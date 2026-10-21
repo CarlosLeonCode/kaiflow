@@ -176,6 +176,10 @@ impl AppState {
             self.engine.request(Command::ReloadPrivacy)?;
         }
         self.idle_threshold.set(settings.idle_threshold_secs);
+        self.idle_policy.set(
+            settings.idle_prompt_timeout_secs,
+            settings.idle_auto_discard_below_secs,
+        );
 
         let mut first_error = None;
         if let Some(applier) = self.applier() {
@@ -519,6 +523,15 @@ mod tests {
             })
             .unwrap();
         assert_eq!(rig.state.idle_threshold.get(), 120);
+        rig.state
+            .settings_update(SettingsPatchDto {
+                idle_prompt_timeout_secs: Some(45),
+                idle_auto_discard_below_secs: Some(0),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(rig.state.idle_policy.prompt_timeout_secs(), 45);
+        assert_eq!(rig.state.idle_policy.auto_discard_below_secs(), 0);
         assert_eq!(
             *applier.calls.lock().unwrap(),
             vec!["autostart:true".to_string(), "shortcut:⌃⌥⌘P".to_string()]

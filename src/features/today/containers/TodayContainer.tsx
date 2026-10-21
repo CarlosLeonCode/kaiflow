@@ -60,6 +60,7 @@ export function TodayContainer() {
       activities={activities}
       totalMs={totalMs}
       awayMs={awayMs(items, range, now)}
+      autoDiscardedGaps={report.data?.auto_discarded_gaps ?? 0}
     />
   );
 }

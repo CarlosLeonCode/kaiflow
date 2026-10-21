@@ -375,7 +375,7 @@ fn push_gap(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::idle_gap::{GapStatus, IDLE_PROMPT_TIMEOUT_MS};
+    use crate::idle_gap::{DEFAULT_IDLE_PROMPT_TIMEOUT_MS, GapStatus};
 
     fn f(app: &str) -> FocusSnapshot {
         FocusSnapshot {
@@ -496,7 +496,10 @@ mod tests {
         };
         assert_eq!((gap.started_at, gap.ended_at), (t(100), t(700)));
         assert_eq!(gap.status, GapStatus::Pending);
-        assert_eq!(gap.expires_at, t(700).plus_ms(IDLE_PROMPT_TIMEOUT_MS));
+        assert_eq!(
+            gap.expires_at,
+            t(700).plus_ms(DEFAULT_IDLE_PROMPT_TIMEOUT_MS)
+        );
         assert_eq!(gap.prev_focus, Some(f("a")));
         assert_eq!(fx[1], open("a", 700));
     }
@@ -597,7 +600,10 @@ mod tests {
             panic!("expected gap, got {fx:?}")
         };
         assert_eq!((gap.started_at, gap.ended_at), (t(100), t(420)));
-        assert_eq!(gap.expires_at, t(5_000).plus_ms(IDLE_PROMPT_TIMEOUT_MS));
+        assert_eq!(
+            gap.expires_at,
+            t(5_000).plus_ms(DEFAULT_IDLE_PROMPT_TIMEOUT_MS)
+        );
         assert_eq!(fx[1], open("a", 5_000));
     }
 

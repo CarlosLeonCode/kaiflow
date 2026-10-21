@@ -91,6 +91,21 @@ impl ReportRepository for SqliteReportRepository {
             rows.map(|row| row.map_err(port_err)?).collect()
         })
     }
+
+    fn auto_discarded_gaps(&self, from: UtcMs, to: UtcMs) -> PortResult<u32> {
+        // Gaps the user discards get `resolved_at`; automatic discards are inserted already
+        // resolved and never get one.
+        self.with_conn(|conn| {
+            conn.query_row(
+                "SELECT COUNT(*) FROM idle_gaps
+                 WHERE status = 'discard' AND resolved_at IS NULL
+                   AND started_at >= ?1 AND started_at < ?2",
+                [from.0, to.0],
+                |r| r.get(0),
+            )
+            .map_err(port_err)
+        })
+    }
 }
 
 #[cfg(test)]
@@ -166,6 +181,30 @@ mod tests {
         assert_eq!(all[0].end_reason, Some(EndReason::Idle));
         assert_eq!(all[1].ended_at, None);
         assert_eq!(all[1].window_title.as_deref(), Some("t"));
+    }
+
+    #[test]
+    fn counts_only_automatically_discarded_gaps_in_range() {
+        use domain::{GapStatus, IdleGap, IdleResolution};
+        let (_dir, mut w, r) = fixture();
+        let auto = |start: i64| {
+            let mut g = IdleGap::pending(UtcMs(start), UtcMs(start + 60_000), None, UtcMs(start));
+            g.status = GapStatus::Resolved(IdleResolution::Discard);
+            g
+        };
+        w.insert_gap(&auto(1_000)).unwrap();
+        w.insert_gap(&auto(2_000)).unwrap();
+        w.insert_gap(&auto(900_000)).unwrap();
+        // A discard decided by the user carries `resolved_at` and is not counted.
+        let asked = IdleGap::pending(UtcMs(3_000), UtcMs(900_000), None, UtcMs(900_000));
+        let id = w.insert_gap(&asked).unwrap();
+        w.update_gap_status(
+            id,
+            GapStatus::Resolved(IdleResolution::Discard),
+            UtcMs(901_000),
+        )
+        .unwrap();
+        assert_eq!(r.auto_discarded_gaps(UtcMs(0), UtcMs(10_000)).unwrap(), 2);
     }
 
     #[test]

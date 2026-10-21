@@ -256,6 +256,7 @@ pub struct ReportDto {
     pub by_activity: Vec<ActivityTotalDto>,
     pub by_bucket: Vec<BucketTotalDto>,
     pub total_ms: i64,
+    pub auto_discarded_gaps: u32,
 }
 
 impl From<Report> for ReportDto {
@@ -265,6 +266,7 @@ impl From<Report> for ReportDto {
             by_activity: r.by_activity.into_iter().map(Into::into).collect(),
             by_bucket: r.by_bucket.into_iter().map(Into::into).collect(),
             total_ms: r.total_ms,
+            auto_discarded_gaps: r.auto_discarded_gaps,
         }
     }
 }
@@ -553,6 +555,7 @@ pub struct SettingsDto {
     pub store_titles: bool,
     pub idle_threshold_secs: u32,
     pub idle_prompt_timeout_secs: u32,
+    pub idle_auto_discard_below_secs: u32,
     /// `None` keeps data indefinitely.
     pub retention_days: Option<u32>,
     pub theme: String,
@@ -592,6 +595,7 @@ impl From<Settings> for SettingsDto {
             store_titles: s.store_titles,
             idle_threshold_secs: s.idle_threshold_secs,
             idle_prompt_timeout_secs: s.idle_prompt_timeout_secs,
+            idle_auto_discard_below_secs: s.idle_auto_discard_below_secs,
             retention_days: s.retention_days,
             theme: s.theme,
             autostart: s.autostart,
@@ -617,6 +621,7 @@ pub struct SettingsPatchDto {
     pub store_titles: Option<bool>,
     pub idle_threshold_secs: Option<u32>,
     pub idle_prompt_timeout_secs: Option<u32>,
+    pub idle_auto_discard_below_secs: Option<u32>,
     pub retention: Option<RetentionPatchDto>,
     pub theme: Option<String>,
     pub autostart: Option<bool>,
@@ -632,6 +637,7 @@ impl From<SettingsPatchDto> for SettingsPatch {
             store_titles: p.store_titles,
             idle_threshold_secs: p.idle_threshold_secs,
             idle_prompt_timeout_secs: p.idle_prompt_timeout_secs,
+            idle_auto_discard_below_secs: p.idle_auto_discard_below_secs,
             retention_days: p.retention.map(|r| match r {
                 RetentionPatchDto::Forever => None,
                 RetentionPatchDto::Days { days } => Some(days),

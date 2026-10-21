@@ -32,6 +32,8 @@ interface Props {
   /** Focused time (live), excludes idle and discarded time (R7.2). */
   totalMs: number;
   awayMs: number;
+  /** Short breaks the app discarded without asking today. */
+  autoDiscardedGaps?: number;
 }
 
 function dateLabel(range: RangeDto): string {
@@ -66,6 +68,7 @@ export function TodayView({
   activities,
   totalMs,
   awayMs,
+  autoDiscardedGaps = 0,
 }: Props) {
   const empty = !loading && !error && items.length === 0 && totalMs === 0;
   const window = timelineWindow(items, range, now);
@@ -140,6 +143,14 @@ export function TodayView({
                 </dl>
               </div>
             </div>
+            {autoDiscardedGaps > 0 && (
+              <p data-testid="auto-discarded-hint" className="mt-3 text-xs text-muted-foreground">
+                {autoDiscardedGaps === 1
+                  ? "1 short break discarded today"
+                  : `${autoDiscardedGaps} short breaks discarded today`}
+                . Change this in Settings, Idle.
+              </p>
+            )}
           </Card>
 
           <Card title="Timeline">

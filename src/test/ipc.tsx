@@ -29,7 +29,7 @@ export function status(overrides: Partial<TrackingStatusDto> = {}): TrackingStat
 }
 
 export function report(overrides: Partial<ReportDto> = {}): ReportDto {
-  return { by_app: [], by_activity: [], by_bucket: [], total_ms: 0, ...overrides };
+  return { by_app: [], by_activity: [], by_bucket: [], total_ms: 0, auto_discarded_gaps: 0, ...overrides };
 }
 
 export function settings(overrides: Partial<SettingsDto> = {}): SettingsDto {
@@ -37,6 +37,7 @@ export function settings(overrides: Partial<SettingsDto> = {}): SettingsDto {
     store_titles: true,
     idle_threshold_secs: 300,
     idle_prompt_timeout_secs: 600,
+    idle_auto_discard_below_secs: 120,
     retention_days: null,
     theme: "system",
     autostart: false,

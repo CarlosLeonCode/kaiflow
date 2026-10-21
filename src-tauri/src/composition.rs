@@ -15,6 +15,7 @@ use adapters_sqlite::{
 };
 use application::commands::Commands;
 use application::engine::{Command, Engine, EngineHandle, Ports};
+use application::idle_policy::IdlePolicy;
 use application::ports::{
     ActiveWindowProvider, ActivityRepository, Clock, EventSink, Notifier, PermissionProvider,
     PortResult, PowerEventsProvider, PrivacyMode, PrivacyRepository,
@@ -122,6 +123,8 @@ pub struct AppState {
     pub shortcut: SharedShortcut,
     pub clock: SystemClock,
     pub idle_threshold: IdleThreshold,
+    /// Live idle-prompt policy (also read by the engine's effects executor).
+    pub idle_policy: IdlePolicy,
     /// Installed by the shell after composition (it needs the `AppHandle`).
     applier: OnceLock<Arc<dyn SettingsApplier>>,
     background: Mutex<Option<Background>>,
@@ -164,6 +167,13 @@ pub fn compose(
         retention,
     ));
 
+    let idle_policy = IdlePolicy::default();
+    if let Ok(settings) = commands.get_settings() {
+        idle_policy.set(
+            settings.idle_prompt_timeout_secs,
+            settings.idle_auto_discard_below_secs,
+        );
+    }
     let (engine, handle) = Engine::new(Ports {
         clock: Box::new(SystemClock),
         window: providers.window,
@@ -171,6 +181,7 @@ pub fn compose(
         privacy: Box::new(SharedPrivacy(privacy)),
         sink,
         notifier: providers.notifier,
+        idle_policy: idle_policy.clone(),
     });
     providers.power.subscribe(handle.signals());
     if let Ok(settings) = commands.get_settings() {
@@ -187,6 +198,7 @@ pub fn compose(
         shortcut,
         clock: SystemClock,
         idle_threshold: providers.idle_threshold,
+        idle_policy,
         applier: OnceLock::new(),
         background: Mutex::new(None),
         sampler: Mutex::new(providers.sampler),

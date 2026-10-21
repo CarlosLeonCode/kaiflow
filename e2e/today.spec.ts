@@ -17,6 +17,12 @@ test.describe("Today", () => {
     await expect(byActivity).toContainText("Unassigned");
   });
 
+  test("mentions the short breaks discarded without asking", async ({ page }) => {
+    await openSection(page, "Today");
+
+    await expect(page.getByTestId("auto-discarded-hint")).toContainText("2 short breaks discarded today");
+  });
+
   test("expands an app to its window titles", async ({ page }) => {
     await openSection(page, "Today");
 

@@ -136,6 +136,7 @@ export function settingsPatch(changes: Partial<SettingsPatchDto>): SettingsPatch
     store_titles: null,
     idle_threshold_secs: null,
     idle_prompt_timeout_secs: null,
+    idle_auto_discard_below_secs: null,
     retention: null,
     theme: null,
     autostart: null,

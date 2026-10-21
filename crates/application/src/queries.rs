@@ -78,6 +78,8 @@ pub struct Report {
     pub by_activity: Vec<ActivityTotal>,
     pub by_bucket: Vec<BucketTotal>,
     pub total_ms: i64,
+    /// Short idle gaps the app discarded on its own in the range (no prompt shown).
+    pub auto_discarded_gaps: u32,
 }
 
 /// One clipped span of the timeline with its activity resolved.
@@ -230,6 +232,10 @@ impl Queries {
                 })
                 .collect(),
             total_ms,
+            auto_discarded_gaps: self
+                .reports
+                .auto_discarded_gaps(range.from, range.to)
+                .map_err(QueryError::from)?,
         })
     }
 

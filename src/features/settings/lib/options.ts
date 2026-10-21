@@ -40,3 +40,26 @@ export function idleThresholdOptions(current: number): ThresholdOption[] {
     .sort((a, b) => a - b)
     .map((value) => ({ secs: value, label: formatThreshold(value) }));
 }
+
+const AUTO_DISCARD_SECS = [30, 60, 120, 180, 300] as const;
+const PROMPT_TIMEOUT_MINUTES = [1, 2, 5, 10, 15, 30, 60] as const;
+
+function withCurrent(presets: readonly number[], current: number): number[] {
+  return [...new Set<number>([...presets, current])].sort((a, b) => a - b);
+}
+
+/** "Always ask" (0) plus presets; the stored value is always selectable. */
+export function autoDiscardOptions(current: number): ThresholdOption[] {
+  return withCurrent([0, ...AUTO_DISCARD_SECS], current).map((secs) => ({
+    secs,
+    label: secs === 0 ? "Always ask" : `Shorter than ${formatThreshold(secs)}`,
+  }));
+}
+
+/** How long the away prompt waits for an answer before the time is discarded. */
+export function promptTimeoutOptions(current: number): ThresholdOption[] {
+  return withCurrent(
+    PROMPT_TIMEOUT_MINUTES.map((m) => m * 60),
+    current,
+  ).map((secs) => ({ secs, label: formatThreshold(secs) }));
+}

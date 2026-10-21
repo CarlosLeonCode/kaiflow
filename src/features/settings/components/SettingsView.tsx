@@ -13,7 +13,13 @@ import { Switch } from "@/shared/ui/switch";
 
 import { DegradedBanner } from "@/features/tracking/components/StatusBanners";
 
-import { TRAY_DISPLAY_OPTIONS, idleThresholdOptions, parseTrayDisplay } from "../lib/options";
+import {
+  TRAY_DISPLAY_OPTIONS,
+  autoDiscardOptions,
+  idleThresholdOptions,
+  parseTrayDisplay,
+  promptTimeoutOptions,
+} from "../lib/options";
 import { ShortcutField } from "./ShortcutField";
 
 const THEMES: readonly SegmentedOption<ThemeSetting>[] = [
@@ -99,7 +105,7 @@ export function SettingsView({
             </Row>
           </Panel>
 
-          <Panel title="Tracking">
+          <Panel title="Idle">
             <Row
               label="Idle after"
               description="No keyboard or mouse input for this long counts as away."
@@ -118,6 +124,45 @@ export function SettingsView({
                 ))}
               </Select>
             </Row>
+            <Row
+              label="Skip the prompt for short breaks"
+              description="Breaks shorter than this are discarded without asking. Changes apply right away."
+              controlId="setting-auto-discard"
+            >
+              <Select
+                id="setting-auto-discard"
+                aria-describedby="setting-auto-discard-hint"
+                value={settings.idle_auto_discard_below_secs}
+                onChange={(event) => onChange({ idle_auto_discard_below_secs: Number(event.target.value) })}
+              >
+                {autoDiscardOptions(settings.idle_auto_discard_below_secs).map((option) => (
+                  <option key={option.secs} value={option.secs}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </Row>
+            <Row
+              label="Answer the prompt within"
+              description="If you do not answer in time, the away time is discarded."
+              controlId="setting-prompt-timeout"
+            >
+              <Select
+                id="setting-prompt-timeout"
+                aria-describedby="setting-prompt-timeout-hint"
+                value={settings.idle_prompt_timeout_secs}
+                onChange={(event) => onChange({ idle_prompt_timeout_secs: Number(event.target.value) })}
+              >
+                {promptTimeoutOptions(settings.idle_prompt_timeout_secs).map((option) => (
+                  <option key={option.secs} value={option.secs}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </Row>
+          </Panel>
+
+          <Panel title="Tracking">
             <Row
               label="Open at login"
               description="Start tracking when you log in to this Mac."

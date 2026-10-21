@@ -11,6 +11,7 @@ use domain::{
     UNASSIGNED, UtcMs,
 };
 
+use crate::idle_policy::{DEFAULT_AUTO_DISCARD_BELOW_SECS, DEFAULT_PROMPT_TIMEOUT_SECS};
 use crate::ports::{
     ActivityRepository, PortError, PrivacyMode, PrivacyRepository, RetentionRepository,
     SettingsRepository,
@@ -140,6 +141,8 @@ pub struct Settings {
     pub store_titles: bool,
     pub idle_threshold_secs: u32,
     pub idle_prompt_timeout_secs: u32,
+    /// Gaps shorter than this are discarded without asking (0 = always ask).
+    pub idle_auto_discard_below_secs: u32,
     /// `None` keeps data indefinitely (S5).
     pub retention_days: Option<u32>,
     /// `light`, `dark` or `system`.
@@ -157,7 +160,8 @@ impl Default for Settings {
         Self {
             store_titles: true,
             idle_threshold_secs: 300,
-            idle_prompt_timeout_secs: 600,
+            idle_prompt_timeout_secs: DEFAULT_PROMPT_TIMEOUT_SECS,
+            idle_auto_discard_below_secs: DEFAULT_AUTO_DISCARD_BELOW_SECS,
             retention_days: None,
             theme: "system".into(),
             autostart: false,
@@ -175,6 +179,7 @@ pub struct SettingsPatch {
     pub store_titles: Option<bool>,
     pub idle_threshold_secs: Option<u32>,
     pub idle_prompt_timeout_secs: Option<u32>,
+    pub idle_auto_discard_below_secs: Option<u32>,
     /// `Some(None)` switches retention off.
     pub retention_days: Option<Option<u32>>,
     pub theme: Option<String>,
@@ -306,6 +311,11 @@ impl Commands {
                 parse_u32,
                 d.idle_prompt_timeout_secs,
             )?,
+            idle_auto_discard_below_secs: self.read(
+                KEY_IDLE_AUTO_DISCARD,
+                parse_u32,
+                d.idle_auto_discard_below_secs,
+            )?,
             retention_days: self.read(KEY_RETENTION, parse_opt_u32, d.retention_days)?,
             theme: self.read(KEY_THEME, parse_string, d.theme)?,
             autostart: self.read(KEY_AUTOSTART, parse_bool, d.autostart)?,
@@ -328,6 +338,9 @@ impl Commands {
         }
         if let Some(v) = patch.idle_prompt_timeout_secs {
             set(KEY_IDLE_TIMEOUT, v.to_string())?;
+        }
+        if let Some(v) = patch.idle_auto_discard_below_secs {
+            set(KEY_IDLE_AUTO_DISCARD, v.to_string())?;
         }
         if let Some(v) = patch.retention_days {
             set(
@@ -484,6 +497,9 @@ fn validate_patch(p: &SettingsPatch) -> Result<(), CommandError> {
     {
         return bad("idle prompt timeout must be between 1 and 86400 seconds");
     }
+    if p.idle_auto_discard_below_secs.is_some_and(|v| v > 86_400) {
+        return bad("auto-discard limit must be between 0 and 86400 seconds");
+    }
     if p.retention_days == Some(Some(0)) {
         return bad("retention must be at least 1 day (or off)");
     }
@@ -507,6 +523,7 @@ fn validate_patch(p: &SettingsPatch) -> Result<(), CommandError> {
 const KEY_STORE_TITLES: &str = "store_titles";
 const KEY_IDLE_THRESHOLD: &str = "idle_threshold_secs";
 const KEY_IDLE_TIMEOUT: &str = "idle_prompt_timeout_secs";
+const KEY_IDLE_AUTO_DISCARD: &str = "idle_auto_discard_below_secs";
 const KEY_RETENTION: &str = "retention_days";
 const KEY_THEME: &str = "theme";
 const KEY_AUTOSTART: &str = "autostart";
@@ -840,6 +857,45 @@ mod tests {
             .unwrap();
         assert_eq!(out.retention_days, None);
         assert_eq!(out.idle_threshold_secs, 600);
+    }
+
+    #[test]
+    fn idle_policy_settings_default_persist_and_validate() {
+        let f = fixture();
+        let d = f.cmd.get_settings().unwrap();
+        assert_eq!(
+            (d.idle_prompt_timeout_secs, d.idle_auto_discard_below_secs),
+            (600, 120)
+        );
+        let out = f
+            .cmd
+            .update_settings(&SettingsPatch {
+                idle_prompt_timeout_secs: Some(300),
+                idle_auto_discard_below_secs: Some(0),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(
+            (
+                out.idle_prompt_timeout_secs,
+                out.idle_auto_discard_below_secs
+            ),
+            (300, 0)
+        );
+        assert_eq!(
+            f.settings
+                .get("idle_auto_discard_below_secs")
+                .unwrap()
+                .as_deref(),
+            Some("0")
+        );
+        assert!(matches!(
+            f.cmd.update_settings(&SettingsPatch {
+                idle_auto_discard_below_secs: Some(86_401),
+                ..Default::default()
+            }),
+            Err(CommandError::Invalid(_))
+        ));
     }
 
     #[test]

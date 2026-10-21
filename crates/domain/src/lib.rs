@@ -14,7 +14,7 @@ pub use activity::{
 };
 pub use focus::FocusSnapshot;
 pub use idle_gap::{
-    AssignedSpan, GapError, GapId, GapStatus, IDLE_PROMPT_TIMEOUT_MS, IdleGap, clamp_since,
+    AssignedSpan, DEFAULT_IDLE_PROMPT_TIMEOUT_MS, GapError, GapId, GapStatus, IdleGap, clamp_since,
 };
 pub use machine::{Effect, Event, PermissionState, TrackingMachine};
 pub use privacy::{PrivacyPolicy, apply_privacy};

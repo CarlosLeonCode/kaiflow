@@ -9,6 +9,17 @@ test.describe("Settings", () => {
     await expect(page.locator("html")).toHaveClass(/dark/);
   });
 
+  test("lets you change the idle behavior", async ({ page }) => {
+    await openSection(page, "Settings");
+
+    const limit = page.getByRole("combobox", { name: "Skip the prompt for short breaks" });
+    await expect(limit).toHaveValue("120");
+    await limit.selectOption({ label: "Always ask" });
+    await expect(limit).toHaveValue("0");
+    await page.getByRole("combobox", { name: "Answer the prompt within" }).selectOption({ label: "5 min" });
+    await expect(page.getByRole("combobox", { name: "Answer the prompt within" })).toHaveValue("300");
+  });
+
   test("checks for updates by hand and installs the one it finds", async ({ page }) => {
     await openWindow(page, "main", "?update=manual");
     await page.getByRole("navigation").getByRole("button", { name: /^Settings/ }).click();

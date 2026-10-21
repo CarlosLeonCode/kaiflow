@@ -3,8 +3,12 @@
 //! The machine holds no segment ids and no gap state beyond what it emits, so this
 //! executor owns the in-memory list of pending gaps and the expiry rules (R1.6, R3.4).
 
-use domain::{Effect, GapId, GapStatus, IdleGap, IdleResolution, PermissionState, UtcMs};
+use domain::{
+    DEFAULT_IDLE_PROMPT_TIMEOUT_MS, Effect, GapId, GapStatus, IdleGap, IdleResolution,
+    PermissionState, UtcMs,
+};
 
+use crate::idle_policy::IdlePolicy;
 use crate::ports::{
     DataKind, DomainEvent, EventSink, Notifier, PortError, SessionRepository, TrackingStatus,
 };
@@ -24,6 +28,8 @@ pub struct EffectsExecutor {
     notifier: Box<dyn Notifier>,
     pending: Vec<IdleGap>,
     revocation_notified: bool,
+    /// Read on every gap so settings changes apply without a restart.
+    policy: IdlePolicy,
 }
 
 impl EffectsExecutor {
@@ -31,6 +37,7 @@ impl EffectsExecutor {
         sessions: Box<dyn SessionRepository>,
         sink: Box<dyn EventSink>,
         notifier: Box<dyn Notifier>,
+        policy: IdlePolicy,
     ) -> Self {
         Self {
             sessions,
@@ -38,6 +45,7 @@ impl EffectsExecutor {
             notifier,
             pending: Vec::new(),
             revocation_notified: false,
+            policy,
         }
     }
 
@@ -177,6 +185,20 @@ impl EffectsExecutor {
         for old in std::mem::take(&mut self.pending) {
             self.expire(old, now);
         }
+        if self.policy.auto_discards(gap.ended_at.0 - gap.started_at.0) {
+            // Short break: store it as discarded, with no prompt, event or notification
+            // beyond the data change for views that count them.
+            gap.status = GapStatus::Resolved(IdleResolution::Discard);
+            match self.sessions.insert_gap(&gap) {
+                Ok(_) => self.sink.emit(DomainEvent::DataChanged(DataKind::Gaps)),
+                Err(e) => self.report(e),
+            }
+            return;
+        }
+        // The domain stamps the default window; apply the configured one.
+        gap.expires_at = gap
+            .expires_at
+            .plus_ms(self.policy.prompt_timeout_ms() - DEFAULT_IDLE_PROMPT_TIMEOUT_MS);
         match self.sessions.insert_gap(&gap) {
             Ok(id) => {
                 gap.id = Some(id);
@@ -222,7 +244,7 @@ impl EffectsExecutor {
 mod tests {
     use std::sync::atomic::Ordering;
 
-    use domain::{EndReason, FocusSnapshot, IDLE_PROMPT_TIMEOUT_MS, SegmentSource};
+    use domain::{DEFAULT_IDLE_PROMPT_TIMEOUT_MS, EndReason, FocusSnapshot, SegmentSource};
 
     use super::*;
     use crate::fakes::{FakeStore, RecordingNotifier, RecordingSink};
@@ -233,9 +255,15 @@ mod tests {
         store: FakeStore,
         sink: RecordingSink,
         notifier: RecordingNotifier,
+        policy: IdlePolicy,
     }
 
     fn rig() -> Rig {
+        // Auto-discard off: the legacy tests use one second gaps and expect a prompt.
+        rig_with_policy(IdlePolicy::new(600, 0))
+    }
+
+    fn rig_with_policy(policy: IdlePolicy) -> Rig {
         let (store, sink, notifier) = (
             FakeStore::default(),
             RecordingSink::default(),
@@ -245,12 +273,14 @@ mod tests {
             Box::new(store.clone()),
             Box::new(sink.clone()),
             Box::new(notifier.clone()),
+            policy.clone(),
         );
         Rig {
             exec,
             store,
             sink,
             notifier,
+            policy,
         }
     }
 
@@ -387,11 +417,64 @@ mod tests {
             &status(),
             UtcMs(1_000),
         );
-        r.exec.expire_due(UtcMs(1_000 + IDLE_PROMPT_TIMEOUT_MS - 1));
+        r.exec
+            .expire_due(UtcMs(1_000 + DEFAULT_IDLE_PROMPT_TIMEOUT_MS - 1));
         assert_eq!(r.exec.pending_gaps().len(), 1);
-        r.exec.expire_due(UtcMs(1_000 + IDLE_PROMPT_TIMEOUT_MS));
+        r.exec
+            .expire_due(UtcMs(1_000 + DEFAULT_IDLE_PROMPT_TIMEOUT_MS));
         assert!(r.exec.pending_gaps().is_empty());
         assert_eq!(r.store.gaps()[0].status, GapStatus::Expired);
+    }
+
+    #[test]
+    fn short_gap_is_stored_discarded_without_prompt_or_notification() {
+        let mut r = rig_with_policy(IdlePolicy::new(600, 120));
+        r.exec.execute(
+            vec![Effect::CreateGap(gap(0, 60_000))],
+            &status(),
+            UtcMs(60_000),
+        );
+        assert!(r.exec.pending_gaps().is_empty());
+        assert_eq!(
+            r.store.gaps()[0].status,
+            GapStatus::Resolved(IdleResolution::Discard)
+        );
+        assert_eq!(r.notifier.idle_returns.load(Ordering::SeqCst), 0);
+        let events = r.sink.events();
+        assert!(
+            !events
+                .iter()
+                .any(|e| matches!(e, DomainEvent::IdleGapPending(_)))
+        );
+    }
+
+    #[test]
+    fn long_gap_still_prompts_with_the_policy() {
+        let mut r = rig_with_policy(IdlePolicy::new(600, 120));
+        r.exec.execute(
+            vec![Effect::CreateGap(gap(0, 600_000))],
+            &status(),
+            UtcMs(600_000),
+        );
+        assert_eq!(r.exec.pending_gaps().len(), 1);
+        assert_eq!(r.notifier.idle_returns.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn changed_timeout_and_threshold_apply_to_the_next_gap_without_restart() {
+        let mut r = rig_with_policy(IdlePolicy::new(600, 120));
+        r.policy.set(30, 0);
+        r.exec.execute(
+            vec![Effect::CreateGap(gap(0, 1_000))],
+            &status(),
+            UtcMs(1_000),
+        );
+        // 1 s gap prompts now (auto-discard off) and expires after 30 s.
+        assert_eq!(r.exec.pending_gaps().len(), 1);
+        r.exec.expire_due(UtcMs(1_000 + 29_999));
+        assert_eq!(r.exec.pending_gaps().len(), 1);
+        r.exec.expire_due(UtcMs(1_000 + 30_000));
+        assert!(r.exec.pending_gaps().is_empty());
     }
 
     #[test]
@@ -438,7 +521,7 @@ mod tests {
             &status(),
             UtcMs(1_000),
         );
-        let late = UtcMs(1_000 + IDLE_PROMPT_TIMEOUT_MS);
+        let late = UtcMs(1_000 + DEFAULT_IDLE_PROMPT_TIMEOUT_MS);
         assert_eq!(
             r.exec
                 .resolve_gap(GapId(1), IdleResolution::AssignPrevious, late),

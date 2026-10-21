@@ -214,6 +214,7 @@ export type ReportDto = {
 	by_activity: ActivityTotalDto[],
 	by_bucket: BucketTotalDto[],
 	total_ms: number,
+	auto_discarded_gaps: number,
 };
 
 /**  How a patch changes retention; a tagged enum avoids the `Option<Option<_>>` ambiguity. */
@@ -243,6 +244,7 @@ export type SettingsDto = {
 	store_titles: boolean,
 	idle_threshold_secs: number,
 	idle_prompt_timeout_secs: number,
+	idle_auto_discard_below_secs: number,
 	/**  `None` keeps data indefinitely. */
 	retention_days: number | null,
 	theme: string,
@@ -258,6 +260,7 @@ export type SettingsPatchDto = {
 	store_titles: boolean | null,
 	idle_threshold_secs: number | null,
 	idle_prompt_timeout_secs: number | null,
+	idle_auto_discard_below_secs: number | null,
 	retention: RetentionPatchDto | null,
 	theme: string | null,
 	autostart: boolean | null,

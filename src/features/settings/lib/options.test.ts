@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { TRAY_DISPLAY_OPTIONS, formatThreshold, idleThresholdOptions, parseTrayDisplay } from "./options";
+import {
+  TRAY_DISPLAY_OPTIONS,
+  autoDiscardOptions,
+  formatThreshold,
+  idleThresholdOptions,
+  parseTrayDisplay,
+  promptTimeoutOptions,
+} from "./options";
 
 describe("idle threshold options", () => {
   it("offers the presets in ascending order", () => {
@@ -30,5 +37,20 @@ describe("menu bar display options", () => {
   it("falls back to today's total for unknown values", () => {
     expect(parseTrayDisplay("current_app")).toBe("current_app");
     expect(parseTrayDisplay("neon")).toBe("today_total");
+  });
+});
+
+describe("idle policy options", () => {
+  it("offers Always ask first and keeps a stored value selectable", () => {
+    const options = autoDiscardOptions(120);
+    expect(options[0]).toEqual({ secs: 0, label: "Always ask" });
+    expect(options.find((o) => o.secs === 120)?.label).toBe("Shorter than 2 min");
+    expect(autoDiscardOptions(45).some((o) => o.secs === 45)).toBe(true);
+  });
+
+  it("lists prompt timeouts in ascending order with the stored one", () => {
+    const secs = promptTimeoutOptions(90).map((o) => o.secs);
+    expect(secs).toContain(90);
+    expect(secs).toEqual([...secs].sort((a, b) => a - b));
   });
 });

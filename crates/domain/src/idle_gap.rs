@@ -3,7 +3,7 @@ use crate::segment::{ActivityId, IdleResolution};
 use crate::time::UtcMs;
 
 /// Default time the user has to answer the idle prompt (`idle_prompt_timeout_secs=600`).
-pub const IDLE_PROMPT_TIMEOUT_MS: i64 = 600_000;
+pub const DEFAULT_IDLE_PROMPT_TIMEOUT_MS: i64 = 600_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct GapId(pub i64);
@@ -58,7 +58,7 @@ impl IdleGap {
             ended_at,
             prev_focus,
             status: GapStatus::Pending,
-            expires_at: shown_at.plus_ms(IDLE_PROMPT_TIMEOUT_MS),
+            expires_at: shown_at.plus_ms(DEFAULT_IDLE_PROMPT_TIMEOUT_MS),
         }
     }
 

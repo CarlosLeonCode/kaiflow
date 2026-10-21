@@ -27,6 +27,8 @@ export interface MockData {
   activities: ActivityDto[];
   rules: RuleDto[];
   gaps: IdleGapDto[];
+  /** Start times of short gaps the backend discarded on its own (no prompt). */
+  autoDiscarded: number[];
   excluded: string[];
   redacted: string[];
   nextIds: { segment: number; activity: number; rule: number; gap: number };
@@ -174,6 +176,7 @@ export function buildSeed(now: number): MockData {
     activities: seedActivities(),
     rules: seedRules(),
     gaps,
+    autoDiscarded: [now - 3 * 3_600_000, now - 2 * 3_600_000],
     excluded: [],
     redacted: [],
     nextIds: { segment: nextSegment, activity: 6, rule: 6, gap: nextGap },

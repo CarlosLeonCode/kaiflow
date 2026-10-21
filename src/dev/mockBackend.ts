@@ -77,6 +77,7 @@ export function installMockBackend(options: MockOptions = {}): void {
     store_titles: true,
     idle_threshold_secs: 300,
     idle_prompt_timeout_secs: 600,
+    idle_auto_discard_below_secs: 120,
     retention_days: null,
     theme: "system",
     autostart: false,
@@ -179,6 +180,7 @@ export function installMockBackend(options: MockOptions = {}): void {
         total_ms: clip(bucket).reduce((sum, part) => sum + (Math.min(part.end, bucket.to) - Math.max(part.start, bucket.from)), 0),
       })),
       total_ms: total,
+      auto_discarded_gaps: data.autoDiscarded.filter((at) => at >= range.from && at < range.to).length,
     };
   };
 

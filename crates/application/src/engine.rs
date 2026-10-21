@@ -10,6 +10,7 @@ use domain::{
 };
 
 use crate::effects_executor::{EffectsExecutor, ResolveError};
+use crate::idle_policy::IdlePolicy;
 use crate::ports::{
     ActiveWindowProvider, Clock, EventSink, Notifier, PrivacyRepository, SessionRepository,
     SystemSignal, TrackingKind, TrackingStatus,
@@ -22,6 +23,8 @@ pub struct Ports {
     pub privacy: Box<dyn PrivacyRepository>,
     pub sink: Box<dyn EventSink>,
     pub notifier: Box<dyn Notifier>,
+    /// Live idle-prompt policy; settings updates change it while the engine runs.
+    pub idle_policy: IdlePolicy,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -111,7 +114,12 @@ impl Engine {
         let (ticks_tx, ticks) = unbounded();
         let engine = Self {
             machine: TrackingMachine::new(),
-            executor: EffectsExecutor::new(ports.sessions, ports.sink, ports.notifier),
+            executor: EffectsExecutor::new(
+                ports.sessions,
+                ports.sink,
+                ports.notifier,
+                ports.idle_policy,
+            ),
             clock: ports.clock,
             window: ports.window,
             privacy: ports.privacy,
@@ -270,8 +278,8 @@ pub fn status_of(machine: &TrackingMachine) -> TrackingStatus {
 #[cfg(test)]
 mod tests {
     use domain::{
-        EndReason, FocusSnapshot, GapStatus, IDLE_PROMPT_TIMEOUT_MS, PermissionState, Segment,
-        SegmentId, SegmentSource,
+        DEFAULT_IDLE_PROMPT_TIMEOUT_MS, EndReason, FocusSnapshot, GapStatus, PermissionState,
+        Segment, SegmentId, SegmentSource,
     };
 
     use super::*;
@@ -302,6 +310,7 @@ mod tests {
             privacy: Box::new(privacy.clone()),
             sink: Box::new(sink.clone()),
             notifier: Box::new(notifier.clone()),
+            idle_policy: IdlePolicy::new(600, 0),
         });
         Rig {
             engine,
@@ -441,7 +450,7 @@ mod tests {
                 .any(|e| matches!(e, DomainEvent::IdleGapPending(_)))
         );
 
-        r.clock.advance(IDLE_PROMPT_TIMEOUT_MS - 1);
+        r.clock.advance(DEFAULT_IDLE_PROMPT_TIMEOUT_MS - 1);
         r.engine.on_tick();
         assert_eq!(r.engine.executor.pending_gaps().len(), 1);
         r.clock.advance(1);

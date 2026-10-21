@@ -141,6 +141,10 @@ pub trait SessionRepository: Send {
 pub trait ReportRepository: Send + Sync {
     /// Segments overlapping `[from, to)`, unclipped; clipping lives in the domain (R8.3).
     fn segments_in_range(&self, from: UtcMs, to: UtcMs) -> PortResult<Vec<Segment>>;
+    /// Idle gaps that started in `[from, to)` and were discarded automatically (no prompt).
+    fn auto_discarded_gaps(&self, _from: UtcMs, _to: UtcMs) -> PortResult<u32> {
+        Ok(0)
+    }
 }
 
 pub trait SettingsRepository: Send + Sync {
