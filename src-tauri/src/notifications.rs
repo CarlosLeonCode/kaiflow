@@ -6,7 +6,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use application::ports::Notifier;
-use domain::IdleGap;
+use domain::{GoalEventKind, IdleGap};
 use tauri::{AppHandle, Wry};
 use tauri_plugin_notification::{NotificationExt, PermissionState};
 
@@ -75,6 +75,25 @@ impl<T: Toaster> Notifier for SystemNotifier<T> {
             );
         }
     }
+
+    fn goal_crossed(&self, label: &str, kind: GoalEventKind) {
+        let (title, body) = goal_message(label, kind);
+        self.notify(&title, &body);
+    }
+}
+
+/// Title and body of a goal alert. Never mentions window titles; a limit alert only informs.
+pub fn goal_message(label: &str, kind: GoalEventKind) -> (String, String) {
+    match kind {
+        GoalEventKind::Reached => (
+            "Goal reached".to_owned(),
+            format!("You reached your goal: {label}."),
+        ),
+        GoalEventKind::Exceeded => (
+            "Limit passed".to_owned(),
+            format!("You went over your limit: {label}."),
+        ),
+    }
 }
 
 /// Forwards idle-return notifications but drops the "Accessibility was turned off" one. Used
@@ -89,6 +108,10 @@ impl Notifier for WithoutRevocationNotice {
     }
 
     fn permission_revoked(&self) {}
+
+    fn goal_crossed(&self, label: &str, kind: GoalEventKind) {
+        self.0.goal_crossed(label, kind);
+    }
 }
 
 /// Body of the idle-return notification. Never includes window titles.
@@ -268,6 +291,30 @@ mod tests {
         assert!(toaster.shown.lock().unwrap().is_empty());
         notifier.idle_return(&gap(6));
         assert_eq!(toaster.shown.lock().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn goal_alerts_are_shown_when_allowed_and_swallowed_when_denied() {
+        let granted = FakeToaster::new(Authorization::Granted, false);
+        let notifier = SystemNotifier::new(granted.clone());
+        notifier.goal_crossed("Deep work", GoalEventKind::Reached);
+        notifier.goal_crossed("Email", GoalEventKind::Exceeded);
+        let shown = granted.shown.lock().unwrap();
+        assert_eq!(shown[0].0, "Goal reached");
+        assert!(shown[0].1.contains("Deep work"));
+        assert_eq!(shown[1].0, "Limit passed");
+        assert!(!shown[1].1.to_lowercase().contains("block"));
+
+        // Denied: no toast and no error; the in-app badge is the fallback.
+        let denied = FakeToaster::new(Authorization::Denied, false);
+        SystemNotifier::new(denied.clone()).goal_crossed("Email", GoalEventKind::Exceeded);
+        assert!(denied.shown.lock().unwrap().is_empty());
+
+        // The session wrapper forwards goal alerts untouched.
+        let wrapped = FakeToaster::new(Authorization::Granted, false);
+        WithoutRevocationNotice(Box::new(SystemNotifier::new(wrapped.clone())))
+            .goal_crossed("Email", GoalEventKind::Exceeded);
+        assert_eq!(wrapped.shown.lock().unwrap().len(), 1);
     }
 
     #[test]

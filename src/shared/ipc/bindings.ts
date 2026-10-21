@@ -112,6 +112,11 @@ export const commands = {
 	restoreApply: (token: string) => typedError<RestoreResultDto, AppError>(__TAURI_INVOKE("restore_apply", { token })),
 	/**  Dry run of "delete data older than N days", for the confirmation text. */
 	retentionImpact: (days: number) => typedError<RetentionImpactDto, AppError>(__TAURI_INVOKE("retention_impact", { days })),
+	goalsList: () => typedError<GoalDto[], AppError>(__TAURI_INVOKE("goals_list")),
+	goalsUpsert: (goal: GoalDto) => typedError<GoalDto, AppError>(__TAURI_INVOKE("goals_upsert", { goal })),
+	goalsDelete: (id: number) => typedError<null, AppError>(__TAURI_INVOKE("goals_delete", { id })),
+	goalsStatus: () => typedError<GoalStatusDto[], AppError>(__TAURI_INVOKE("goals_status")),
+	goalEventsMarkSeen: (goalId: number) => typedError<null, AppError>(__TAURI_INVOKE("goal_events_mark_seen", { goalId })),
 	/**
 	 *  Asks the update server for a newer signed release. Returns it (and announces it with
 	 *  `update-available`), or `null` when the app is current or updates are not configured.
@@ -131,6 +136,7 @@ export const events = {
 	backupFinished: makeEvent<BackupFinished>("backup-finished"),
 	currentSegmentChanged: makeEvent<CurrentSegmentChanged>("current-segment-changed"),
 	dataChanged: makeEvent<DataChanged>("data-changed"),
+	goalCrossed: makeEvent<GoalCrossed>("goal-crossed"),
 	idleGapPending: makeEvent<IdleGapPending>("idle-gap-pending"),
 	idleGapResolved: makeEvent<IdleGapResolved>("idle-gap-resolved"),
 	permissionChanged: makeEvent<PermissionChanged>("permission-changed"),
@@ -250,13 +256,15 @@ export type DashboardDto = {
 	productivity: ProductivityTotalsDto,
 	focus_ratio: FocusRatioDto,
 	auto_discarded_gaps: number,
+	/**  Progress and streak of every active goal (the same figures as `goals_status`). */
+	goals: GoalStatusDto[],
 };
 
 export type DataChanged = {
 	kind: DataKindDto,
 };
 
-export type DataKindDto = "segments" | "gaps";
+export type DataKindDto = "segments" | "gaps" | "goals";
 
 /**
  *  Why tracking runs degraded, so the UI can explain it (and only offer System Settings
@@ -288,6 +296,56 @@ export type FocusRatioDto = { kind: "no_signal" } | { kind: "ratio"; ratio: numb
 
 export type GapStatusDto = { kind: "pending" } | { kind: "resolved"; resolution: IdleResolutionDto } | { kind: "expired" };
 
+/**
+ *  A goal crossed its threshold for the first time in its period: a minimum was reached or
+ *  a maximum exceeded. The windows refresh their goal views (the badge shows the crossing
+ *  even when system notifications are denied).
+ */
+export type GoalCrossed = {
+	goal_id: number,
+	label: string,
+	kind: GoalEventKindDto,
+};
+
+/**  A goal as the UI edits it. `id <= 0` creates one. */
+export type GoalDto = {
+	id: number,
+	label: string,
+	scope: GoalScopeDto,
+	period: PeriodDto,
+	kind: GoalKindDto,
+	target_ms: number,
+	/**  Bit 0 = Monday .. bit 6 = Sunday; only daily goals use it. */
+	active_days: number,
+	archived: boolean,
+};
+
+export type GoalEventKindDto = "reached" | "exceeded";
+
+export type GoalKindDto = "minimum" | "maximum";
+
+/**  What a goal measures: one activity, one app or all tracked time. */
+export type GoalScopeDto = { kind: "activity"; activity_id: number } | { kind: "app"; app_id: string } | { kind: "total" };
+
+export type GoalStateDto = "pending" | "reached" | "exceeded";
+
+/**  Progress of one goal in its current period. */
+export type GoalStatusDto = {
+	goal: GoalDto,
+	/**  The current period as a UTC range `[from, to)`. */
+	period: RangeDto,
+	actual_ms: number,
+	target_ms: number,
+	/**  `actual / target` in whole percent; may pass 100. */
+	percent: number,
+	state: GoalStateDto,
+	/**  `false` on a rest day of a daily goal. */
+	active: boolean,
+	streak: StreakDto,
+	/**  A threshold crossed in this period that the user has not acknowledged yet. */
+	unseen: GoalEventKindDto | null,
+};
+
 export type IdleGapDto = {
 	id: number,
 	started_at: number,
@@ -305,6 +363,8 @@ export type IdleGapResolved = {
 
 /**  Same enum as the domain and the database (design section 3). */
 export type IdleResolutionDto = { kind: "discard" } | { kind: "assign_previous" } | { kind: "assign_activity"; activity_id: number };
+
+export type PeriodDto = "daily" | "weekly" | "monthly";
 
 export type PermissionChanged = {
 	state: PermissionStateDto,
@@ -426,6 +486,8 @@ export type SettingsDto = {
 	shortcut: string,
 	onboarding_completed: boolean,
 	tray_display: TrayDisplayDto,
+	/**  First day of the week: 0 = Monday .. 6 = Sunday. */
+	week_start: number,
 	ui: UiSettingsDto,
 };
 
@@ -441,6 +503,7 @@ export type SettingsPatchDto = {
 	shortcut: string | null,
 	onboarding_completed: boolean | null,
 	tray_display: TrayDisplayDto | null,
+	week_start: number | null,
 	ui: UiSettingsDto | null,
 };
 
@@ -459,6 +522,13 @@ export type StackedBucketDto = {
 /**  A persistence call failed; the engine keeps running (the frontend may show a notice). */
 export type StorageFailed = {
 	message: string,
+};
+
+export type StreakDto = {
+	current: number,
+	best: number,
+	/**  The open period is not met (yet) and would end the streak if it closed as it is. */
+	at_risk: boolean,
 };
 
 /**  An app that could be filed under a preset activity. Never applied automatically. */
@@ -509,7 +579,7 @@ export type TrackingStatusDto = {
 };
 
 /**  What the menu-bar / tray text next to the icon shows. */
-export type TrayDisplayDto = "off" | "today_total" | "current_app" | "today_and_current";
+export type TrayDisplayDto = "off" | "today_total" | "current_app" | "today_and_current" | "goal_progress";
 
 /**  Change against the previous period; `no_comparison` when that period has no time. */
 export type TrendDto = { kind: "no_comparison" } | { kind: "change"; delta_ms: number; pct: number };

@@ -22,6 +22,10 @@ pub const MIGRATIONS: &[Migration] = &[
         version: 2,
         sql: include_str!("../migrations/0002_activities.sql"),
     },
+    Migration {
+        version: 3,
+        sql: include_str!("../migrations/0003_goals.sql"),
+    },
 ];
 
 pub fn current_version(conn: &Connection) -> Result<u32, DbError> {
@@ -85,7 +89,7 @@ mod tests {
     fn fresh_database_gets_full_schema_and_system_activity() {
         let mut conn = Connection::open_in_memory().unwrap();
         migrate(&mut conn, MIGRATIONS, None).unwrap();
-        assert_eq!(current_version(&conn).unwrap(), 2);
+        assert_eq!(current_version(&conn).unwrap(), 3);
         for t in [
             "activities",
             "segments",
@@ -93,6 +97,8 @@ mod tests {
             "activity_rules",
             "privacy_rules",
             "settings",
+            "goals",
+            "goal_events",
         ] {
             assert!(table_exists(&conn, t), "missing table {t}");
         }
@@ -138,13 +144,13 @@ mod tests {
         );
     }
 
-    const V3_OK: Migration = Migration {
-        version: 3,
+    const V4_OK: Migration = Migration {
+        version: 4,
         sql: "CREATE TABLE extra(x INTEGER);",
     };
     // The first statement succeeds, the second fails: the whole migration must roll back.
-    const V4_BROKEN: Migration = Migration {
-        version: 4,
+    const V5_BROKEN: Migration = Migration {
+        version: 5,
         sql: "CREATE TABLE half_done(x INTEGER); INSERT INTO no_such_table VALUES (1);",
     };
 
@@ -163,16 +169,16 @@ mod tests {
 
         migrate(
             &mut conn,
-            &[MIGRATIONS[0], MIGRATIONS[1], V3_OK],
+            &[MIGRATIONS[0], MIGRATIONS[1], MIGRATIONS[2], V4_OK],
             Some(&path),
         )
         .unwrap();
 
-        let backup = backup_path(&path, 2);
+        let backup = backup_path(&path, 3);
         assert!(backup.exists());
-        assert_eq!(current_version(&conn).unwrap(), 3);
+        assert_eq!(current_version(&conn).unwrap(), 4);
         let copy = Connection::open(&backup).unwrap();
-        assert_eq!(current_version(&copy).unwrap(), 2);
+        assert_eq!(current_version(&copy).unwrap(), 3);
         assert!(!table_exists(&copy, "extra"));
         let kept: String = copy
             .query_row("SELECT value FROM settings WHERE key='k'", [], |r| r.get(0))
@@ -189,14 +195,20 @@ mod tests {
         conn.execute("INSERT INTO settings(key, value) VALUES ('k', '1')", [])
             .unwrap();
 
-        let all = [MIGRATIONS[0], MIGRATIONS[1], V3_OK, V4_BROKEN];
+        let all = [
+            MIGRATIONS[0],
+            MIGRATIONS[1],
+            MIGRATIONS[2],
+            V4_OK,
+            V5_BROKEN,
+        ];
         assert!(migrate(&mut conn, &all, Some(&path)).is_err());
 
-        // v3 committed on its own; v4 rolled back completely.
-        assert_eq!(current_version(&conn).unwrap(), 3);
+        // v4 committed on its own; v5 rolled back completely.
+        assert_eq!(current_version(&conn).unwrap(), 4);
         assert!(table_exists(&conn, "extra"));
         assert!(!table_exists(&conn, "half_done"));
-        assert!(backup_path(&path, 2).exists());
+        assert!(backup_path(&path, 3).exists());
         let kept: String = conn
             .query_row("SELECT value FROM settings WHERE key='k'", [], |r| r.get(0))
             .unwrap();
@@ -205,6 +217,6 @@ mod tests {
 
         // Reopening through the public entry point surfaces the failure and keeps the file usable.
         let reopened = Connection::open(&path).unwrap();
-        assert_eq!(current_version(&reopened).unwrap(), 3);
+        assert_eq!(current_version(&reopened).unwrap(), 4);
     }
 }

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { TimelineItemDto } from "@/shared/ipc";
 import { HOUR, MINUTE } from "@/shared/lib/time";
-import { mockBackend, renderWithProviders, report, status } from "@/test/ipc";
+import { goalStatus, mockBackend, renderWithProviders, report, status } from "@/test/ipc";
 
 import { TodayContainer } from "./TodayContainer";
 
@@ -59,7 +59,7 @@ describe("TodayContainer", () => {
         }),
       get_timeline: () => [item(at(9), at(11)), item(at(11), at(12), { app_id: "com.apple.Safari", app_name: "Safari", activity_id: 1, activity_name: "Unassigned", activity_color: "#9ca3af" })],
     });
-    renderWithProviders(<TodayContainer />);
+    renderWithProviders(<TodayContainer onOpenGoals={() => {}} />);
 
     await waitFor(() => expect(screen.getByTestId("today-total")).toHaveTextContent("3:00:00"));
     const apps = screen.getByRole("list", { name: "Time by app" });
@@ -77,7 +77,7 @@ describe("TodayContainer", () => {
       get_report: () => report({ total_ms: 2 * HOUR, by_app: [], by_activity: [] }),
       get_timeline: () => [item(at(9), at(10)), item(at(10), at(11), { app_name: "Safari", app_id: "com.apple.Safari" })],
     });
-    const { container } = renderWithProviders(<TodayContainer />);
+    const { container } = renderWithProviders(<TodayContainer onOpenGoals={() => {}} />);
 
     const timeline = await screen.findByRole("img", { name: /Timeline of today: 2 blocks/ });
     expect(timeline.tagName.toLowerCase()).toBe("svg");
@@ -102,7 +102,7 @@ describe("TodayContainer", () => {
         item(at(9, 40), at(10), { app_id: "com.apple.Safari", app_name: "Safari", window_title: null }),
       ],
     });
-    const { container } = renderWithProviders(<TodayContainer />);
+    const { container } = renderWithProviders(<TodayContainer onOpenGoals={() => {}} />);
 
     const toggle = await screen.findByRole("button", { name: /Safari/ });
     expect(toggle).toHaveAttribute("aria-expanded", "false");
@@ -129,7 +129,7 @@ describe("TodayContainer", () => {
         item(at(10, 30), at(11, 30)),
       ],
     });
-    renderWithProviders(<TodayContainer />);
+    renderWithProviders(<TodayContainer onOpenGoals={() => {}} />);
 
     const summary = await screen.findByRole("region", { name: "Focused and away time" });
     expect(within(summary).getByText("Focused").nextSibling).toHaveTextContent("2h 00m");
@@ -143,7 +143,7 @@ describe("TodayContainer", () => {
       get_report: () => report(),
       get_timeline: () => [],
     });
-    renderWithProviders(<TodayContainer />);
+    renderWithProviders(<TodayContainer onOpenGoals={() => {}} />);
 
     expect(await screen.findByText("Nothing tracked yet today")).toBeInTheDocument();
     expect(screen.getByText(/Tracking is on/)).toBeInTheDocument();
@@ -156,7 +156,7 @@ describe("TodayContainer", () => {
       get_report: () => report(),
       get_timeline: () => [],
     });
-    renderWithProviders(<TodayContainer />);
+    renderWithProviders(<TodayContainer onOpenGoals={() => {}} />);
 
     expect(await screen.findByText(/Tracking is not running/)).toBeInTheDocument();
   });
@@ -169,7 +169,7 @@ describe("TodayContainer", () => {
       get_timeline: () => [],
       start: () => status({ state: "running" }),
     });
-    renderWithProviders(<TodayContainer />);
+    renderWithProviders(<TodayContainer onOpenGoals={() => {}} />);
 
     await user.click(await screen.findByRole("button", { name: "Start tracking" }));
     await waitFor(() => expect(calls.some((c) => c.cmd === "start")).toBe(true));
@@ -183,7 +183,7 @@ describe("TodayContainer", () => {
       },
       get_timeline: () => [],
     });
-    renderWithProviders(<TodayContainer />);
+    renderWithProviders(<TodayContainer onOpenGoals={() => {}} />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent("database is locked");
   });
@@ -200,7 +200,7 @@ describe("TodayContainer", () => {
         }),
       get_timeline: () => [open],
     });
-    renderWithProviders(<TodayContainer />);
+    renderWithProviders(<TodayContainer onOpenGoals={() => {}} />);
     await waitFor(() => expect(screen.getByTestId("today-total")).toHaveTextContent("1:00:"));
     const before = calls.length;
 
@@ -220,7 +220,7 @@ describe("TodayContainer", () => {
       get_report: () => report({ total_ms: HOUR, by_app: [], by_activity: [] }),
       get_timeline: () => rows,
     });
-    renderWithProviders(<TodayContainer />);
+    renderWithProviders(<TodayContainer onOpenGoals={() => {}} />);
     await screen.findByRole("img", { name: /1 block,/ });
 
     rows = [item(at(9), at(10)), item(at(10), at(11))];
@@ -230,5 +230,85 @@ describe("TodayContainer", () => {
 
     expect(await screen.findByRole("img", { name: /2 blocks/ })).toBeInTheDocument();
     expect(calls.filter((c) => c.cmd === "get_timeline").length).toBeGreaterThan(1);
+  });
+
+  describe("goals strip", () => {
+    const tracked = {
+      get_status: () => status({ state: "paused", current: null, since: null }),
+      get_report: () => report({ total_ms: HOUR, by_app: [], by_activity: [{ ...work, total_ms: HOUR }] }),
+      get_timeline: () => [item(at(9), at(10))],
+    };
+
+    it("invites the user to create a goal when there are none, and opens Goals", async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      mockBackend({ ...tracked, goals_status: () => [] });
+      let opened = 0;
+      renderWithProviders(<TodayContainer onOpenGoals={() => (opened += 1)} />);
+
+      const strip = await screen.findByRole("region", { name: "Goals" });
+      expect(within(strip).getByText("No goals yet")).toBeInTheDocument();
+      await user.click(within(strip).getByRole("button", { name: "Create a goal" }));
+      expect(opened).toBe(1);
+    });
+
+    it("shows progress, streak and the alert of a crossed limit", async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      const { calls } = mockBackend({
+        ...tracked,
+        goals_status: () => [
+          goalStatus({ streak: { current: 3, best: 3, at_risk: false } }, { id: 1 }),
+          goalStatus(
+            { state: "exceeded", unseen: "exceeded", actual_ms: 2 * HOUR, target_ms: HOUR, percent: 200 },
+            { id: 2, label: "Mail limit", kind: "maximum", target_ms: HOUR, scope: { kind: "app", app_id: "mail" } },
+          ),
+        ],
+        goal_events_mark_seen: () => null,
+      });
+      renderWithProviders(<TodayContainer onOpenGoals={() => {}} />);
+
+      const strip = await screen.findByRole("region", { name: "Goals" });
+      const rows = within(strip).getAllByRole("listitem");
+      // The unseen crossing comes first.
+      expect(within(rows[0]!).getByText("Mail limit")).toBeInTheDocument();
+      expect(within(rows[0]!).getByTestId("goal-badge")).toHaveTextContent("Limit passed");
+      expect(within(rows[1]!).getByText("Streak: 3 days in a row")).toBeInTheDocument();
+      await user.click(within(rows[0]!).getByRole("button", { name: "Dismiss the alert for Mail limit" }));
+      await waitFor(() => expect(calls.some((c) => c.cmd === "goal_events_mark_seen")).toBe(true));
+    });
+
+    it("keeps the bars moving while recording, without extra IPC calls", async () => {
+      const open = item(at(14), at(14, 59), { open: true });
+      const { calls } = mockBackend({
+        get_status: () => status({ state: "running" }),
+        get_report: () => report({ total_ms: HOUR, by_app: [], by_activity: [{ ...work, total_ms: HOUR }] }),
+        get_timeline: () => [open],
+        // The goal counts the activity of the open segment (Work, id 2).
+        goals_status: () => [goalStatus({ actual_ms: HOUR, percent: 25 }, { id: 1 })],
+      });
+      renderWithProviders(<TodayContainer onOpenGoals={() => {}} />);
+      const bar = await screen.findByRole("progressbar");
+      expect(bar).toHaveAttribute("aria-label", expect.stringContaining("1h of 4h"));
+      const before = calls.length;
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(30 * MINUTE);
+      });
+
+      expect(screen.getByRole("progressbar")).toHaveAttribute("aria-label", expect.stringContaining("1h 30m of 4h"));
+      expect(calls.length).toBe(before);
+    });
+
+    it("does not repeat the invitation on an empty day without goals", async () => {
+      mockBackend({
+        get_status: () => status({ state: "running" }),
+        get_report: () => report(),
+        get_timeline: () => [],
+        goals_status: () => [],
+      });
+      renderWithProviders(<TodayContainer onOpenGoals={() => {}} />);
+
+      expect(await screen.findByText("Nothing tracked yet today")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Create a goal" })).not.toBeInTheDocument();
+    });
   });
 });

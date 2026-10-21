@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { emit } from "@tauri-apps/api/event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { focus, mockBackend, renderWithProviders, report, status } from "@/test/ipc";
+import { focus, goalStatus, mockBackend, renderWithProviders, report, status } from "@/test/ipc";
 
 import { TrackingPopoverContainer } from "./TrackingPopoverContainer";
 
@@ -32,6 +32,34 @@ describe("TrackingPopoverContainer", () => {
     const top = screen.getByRole("region", { name: "Top apps today" });
     expect(within(top).getAllByRole("listitem")).toHaveLength(2);
     expect(within(top).getByText("2h 00m")).toBeInTheDocument();
+  });
+
+  it("shows only the two goals most worth a glance, unseen crossings first", async () => {
+    mockBackend({
+      get_status: () => status({ state: "paused", current: null, since: null }),
+      get_report: () => report(),
+      goals_status: () => [
+        goalStatus({ state: "reached" }, { id: 1, label: "Done early" }),
+        goalStatus({}, { id: 2, label: "In progress" }),
+        goalStatus({ unseen: "exceeded", state: "exceeded" }, { id: 3, label: "Mail limit", kind: "maximum" }),
+      ],
+    });
+    renderWithProviders(<TrackingPopoverContainer />);
+
+    const goals = await screen.findByRole("region", { name: "Goals" });
+    const items = within(goals).getAllByRole("listitem");
+    expect(items).toHaveLength(2);
+    expect(within(items[0]!).getByText("Mail limit")).toBeInTheDocument();
+    expect(within(items[0]!).getByText("Limit passed")).toBeInTheDocument();
+    expect(within(items[1]!).getByText("In progress")).toBeInTheDocument();
+  });
+
+  it("shows no goals block when there are none", async () => {
+    mockBackend({ get_status: () => status(), get_report: () => report(), goals_status: () => [] });
+    renderWithProviders(<TrackingPopoverContainer />);
+
+    await screen.findByRole("region", { name: "Top apps today" });
+    expect(screen.queryByRole("region", { name: "Goals" })).not.toBeInTheDocument();
   });
 
   it("renders window titles as literal text (R7.3)", async () => {

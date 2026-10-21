@@ -7,8 +7,8 @@ use crate::backup::BackupData;
 use crossbeam_channel::Sender;
 use domain::{
     Activity, ActivityId, ActivityRule, AssignedSpan, EndReason, FocusSnapshot, GapId, GapStatus,
-    HourSlot, IdleGap, PermissionState, PrivacyPolicy, Productivity, SeenApp, Segment, SegmentId,
-    UtcMs,
+    Goal, GoalEventKind, HourSlot, IdleGap, PermissionState, PrivacyPolicy, Productivity, SeenApp,
+    Segment, SegmentId, UtcMs,
 };
 
 /// Failure reported by an adapter (storage, OS call...). Carries a readable message only.
@@ -61,6 +61,7 @@ pub struct TrackingStatus {
 pub enum DataKind {
     Segments,
     Gaps,
+    Goals,
 }
 
 /// Facts the UI shell turns into frontend events.
@@ -210,6 +211,11 @@ pub trait Calendar: Send + Sync {
     fn local_day(&self, at: UtcMs) -> i64 {
         at.0.div_euclid(86_400_000)
     }
+    /// The first instant of local day number `day` (days since 1970-01-01). A day whose
+    /// midnight does not exist (a DST jump) starts at its first instant that does.
+    fn start_of_day(&self, day: i64) -> UtcMs {
+        UtcMs(day.saturating_mul(86_400_000))
+    }
 }
 
 /// Reads and writes whole-store snapshots: the source of exports and backups and the target
@@ -238,6 +244,39 @@ pub trait FileSink: Send + Sync {
     fn read(&self, path: &Path, max_bytes: u64) -> PortResult<Vec<u8>>;
 }
 
+/// A threshold a goal crossed, as stored in the event log.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GoalEvent {
+    pub goal_id: i64,
+    /// Local day number of the first day of the period it belongs to.
+    pub period_start_day: i64,
+    pub kind: GoalEventKind,
+    pub at: UtcMs,
+    /// A notification was (attempted to be) shown for it.
+    pub notified: bool,
+    /// The user acknowledged the in-app badge.
+    pub seen: bool,
+}
+
+/// Goals and the log of the thresholds they crossed.
+pub trait GoalRepository: Send + Sync {
+    /// Every goal, archived ones included, in creation order.
+    fn list(&self) -> PortResult<Vec<Goal>>;
+    /// `goal.id <= 0` inserts; a positive id updates that goal (error if missing). Returns
+    /// the stored goal.
+    fn save(&self, goal: &Goal) -> PortResult<Goal>;
+    /// Also deletes the goal's events.
+    fn delete(&self, id: i64) -> PortResult<()>;
+    /// Stores the event unless one exists for the same goal, period and kind; `true` when it
+    /// was stored (the caller then announces it).
+    fn record_event(&self, event: &GoalEvent) -> PortResult<bool>;
+    /// Forgets the events of one period (the goal changed, so it may cross again).
+    fn clear_events(&self, goal_id: i64, period_start_day: i64) -> PortResult<()>;
+    /// Events the user has not acknowledged yet.
+    fn unseen_events(&self) -> PortResult<Vec<GoalEvent>>;
+    fn mark_seen(&self, goal_id: i64) -> PortResult<()>;
+}
+
 pub trait EventSink: Send {
     fn emit(&self, event: DomainEvent);
 }
@@ -246,4 +285,7 @@ pub trait EventSink: Send {
 pub trait Notifier: Send {
     fn idle_return(&self, gap: &IdleGap);
     fn permission_revoked(&self);
+    /// A goal crossed its threshold (reached a minimum, exceeded a maximum). Never blocks
+    /// anything; the in-app badge exists whether or not this shows.
+    fn goal_crossed(&self, _label: &str, _kind: GoalEventKind) {}
 }

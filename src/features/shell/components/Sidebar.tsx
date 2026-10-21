@@ -1,4 +1,4 @@
-import { CalendarDays, ChartNoAxesColumn, Settings, ShieldCheck, Tags, type LucideIcon } from "lucide-react";
+import { CalendarDays, ChartNoAxesColumn, Settings, ShieldCheck, Tags, Target, type LucideIcon } from "lucide-react";
 
 import { cn } from "@/shared/lib/utils";
 import { Kbd } from "@/shared/ui/kbd";
@@ -8,6 +8,7 @@ import { SECTIONS, type SectionId } from "../lib/sections";
 const ICONS: Record<SectionId, LucideIcon> = {
   today: CalendarDays,
   overview: ChartNoAxesColumn,
+  goals: Target,
   activities: Tags,
   privacy: ShieldCheck,
   settings: Settings,

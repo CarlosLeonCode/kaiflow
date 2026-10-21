@@ -7,6 +7,7 @@ pub mod calendar;
 pub mod composition;
 pub mod error;
 pub mod event_sink;
+pub mod goal_watcher;
 pub mod ipc;
 pub mod notifications;
 pub mod placeholders;
@@ -97,7 +98,16 @@ pub fn run() {
             let tray_text = tray_text::TrayText::spawn(&handle);
             app.manage(tray_text.clone());
             app.manage(backup_worker::BackupWorker::spawn(&handle, state.clone()));
-            apply_outside_settings(&handle, &state, &shortcut, &settings, tray_text);
+            let goal_watcher = goal_watcher::GoalWatcher::spawn(&handle);
+            app.manage(goal_watcher.clone());
+            apply_outside_settings(
+                &handle,
+                &state,
+                &shortcut,
+                &settings,
+                tray_text,
+                goal_watcher,
+            );
             updater::spawn_schedule(&handle);
 
             // Spec R6.3 scenario: after login the app registers on its own. Before the
@@ -121,6 +131,9 @@ pub fn run() {
             if let Some(tray_text) = handle.try_state::<tray_text::TrayText>() {
                 tray_text.stop();
             }
+            if let Some(goals) = handle.try_state::<goal_watcher::GoalWatcher>() {
+                goals.stop();
+            }
             if let Some(worker) = handle.try_state::<backup_worker::BackupWorker>() {
                 worker.stop();
             }
@@ -141,6 +154,7 @@ fn apply_outside_settings(
     shortcut: &crate::ipc::events::SharedShortcut,
     settings: &application::commands::Settings,
     tray_text: tray_text::TrayText,
+    goal_watcher: goal_watcher::GoalWatcher,
 ) {
     let press_handle = handle.clone();
     let shortcuts = Arc::new(ShortcutManager::new(
@@ -161,6 +175,7 @@ fn apply_outside_settings(
         Box::new(login),
         shortcuts,
         tray_text,
+        goal_watcher,
     )));
 }
 

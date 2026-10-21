@@ -58,21 +58,27 @@ export function useBackendEventSync(): void {
     client.setQueryData(queryKeys.status, status);
     invalidate(queryKeys.reports);
     invalidate(queryKeys.timelines);
+    invalidate(queryKeys.goals);
   });
   useTauriEvent(events.currentSegmentChanged, () => {
     invalidate(queryKeys.status);
     invalidate(queryKeys.reports);
     invalidate(queryKeys.timelines);
+    invalidate(queryKeys.goals);
   });
   useTauriEvent(events.dataChanged, () => {
     invalidate(queryKeys.reports);
     invalidate(queryKeys.timelines);
     invalidate(queryKeys.idleGaps);
+    invalidate(queryKeys.goals);
   });
+  // A threshold was crossed: the badge shows even when system notifications are denied.
+  useTauriEvent(events.goalCrossed, () => invalidate(queryKeys.goals));
   useTauriEvent(events.idleGapPending, () => invalidate(queryKeys.idleGaps));
   useTauriEvent(events.idleGapResolved, () => {
     invalidate(queryKeys.idleGaps);
     invalidate(queryKeys.reports);
+    invalidate(queryKeys.goals);
   });
   useTauriEvent(events.permissionChanged, () => {
     invalidate(queryKeys.permission);

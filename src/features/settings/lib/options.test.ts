@@ -31,7 +31,7 @@ describe("idle threshold options", () => {
 
 describe("menu bar display options", () => {
   it("offers every backend variant once, icon only first", () => {
-    expect(TRAY_DISPLAY_OPTIONS.map((o) => o.value)).toEqual(["off", "today_total", "current_app", "today_and_current"]);
+    expect(TRAY_DISPLAY_OPTIONS.map((o) => o.value)).toEqual(["off", "today_total", "current_app", "today_and_current", "goal_progress"]);
   });
 
   it("falls back to today's total for unknown values", () => {

@@ -18,6 +18,21 @@ pub const KEY_BACKUP: &str = "backup";
 /// Key of the [`SuggestionSettings`] blob.
 pub const KEY_SUGGESTIONS: &str = "suggestions";
 
+/// Flat setting holding the first day of the week (0 = Monday .. 6 = Sunday).
+pub const KEY_WEEK_START: &str = "week_start";
+
+/// The configured first day of the week; Monday when unset or out of range.
+pub fn read_week_start(repo: &dyn SettingsRepository) -> PortResult<u8> {
+    match repo.get(KEY_WEEK_START)? {
+        None => Ok(0),
+        Some(raw) => raw
+            .trim()
+            .parse::<u8>()
+            .map(|v| if v < 7 { v } else { 0 })
+            .map_err(|_| PortError(format!("invalid value for setting {KEY_WEEK_START}: {raw}"))),
+    }
+}
+
 /// Most dismissed apps remembered; the oldest fall off first.
 pub const MAX_DISMISSED_APPS: usize = 500;
 

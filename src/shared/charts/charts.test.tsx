@@ -26,6 +26,20 @@ describe("Heatmap", () => {
     expect(within(grid).getByRole("gridcell", { name: /Monday, 12 AM: nothing tracked/ })).toBeInTheDocument();
   });
 
+  it("starts its rows on the configured weekday and keeps every cell on its own day", () => {
+    // Index 33 = Tuesday 9 o'clock; with Sunday first it becomes row 2 (Sun, Mon, Tue).
+    render(<Heatmap cells={cells({ 33: 2 * HOUR })} weekStart={6} label="Heatmap" />);
+
+    const rows = screen.getAllByRole("row");
+    expect(within(rows[0]!).getAllByRole("gridcell")[0]).toHaveAttribute("aria-label", expect.stringMatching(/^Sunday, 12 AM/));
+    expect(within(rows[1]!).getAllByRole("gridcell")[0]).toHaveAttribute("aria-label", expect.stringMatching(/^Monday, 12 AM/));
+    const busiest = screen.getByRole("gridcell", { name: /Tuesday, 9 AM: 2h 00m/ });
+    expect(rows[2]).toContainElement(busiest);
+    expect(busiest).toHaveAttribute("tabindex", "0");
+    // The screen reader table follows the displayed order too.
+    expect(within(screen.getByRole("table")).getByText("Tuesday")).toBeInTheDocument();
+  });
+
   it("moves between cells with the arrow keys, Home and End", async () => {
     const user = userEvent.setup();
     render(<Heatmap cells={cells({ 33: HOUR })} label="Heatmap" />);

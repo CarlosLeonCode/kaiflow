@@ -16,6 +16,7 @@
     "allow-list-pending-idle-gaps",
     "allow-resolve-idle-gap",
     "allow-activities-list",
+    "allow-goals-status",
     "allow-permission-status",
     "allow-settings-get",
     "allow-permission-open-settings",

@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 
 import { BackupNoticeContainer } from "@/features/data/containers/BackupNoticeContainer";
 import { ActivitiesContainer } from "@/features/activities/containers/ActivitiesContainer";
+import { GoalsContainer } from "@/features/goals/containers/GoalsContainer";
 import { OverviewContainer } from "@/features/overview/containers/OverviewContainer";
 import { PrivacyContainer } from "@/features/privacy/containers/PrivacyContainer";
 import { Sidebar } from "@/features/shell/components/Sidebar";
@@ -15,9 +16,11 @@ import { useStatusQuery } from "@/shared/ipc";
 function SectionView({ section, onNavigate }: { section: SectionId; onNavigate: (next: SectionId) => void }) {
   switch (section) {
     case "today":
-      return <TodayContainer />;
+      return <TodayContainer onOpenGoals={() => onNavigate("goals")} />;
     case "overview":
       return <OverviewContainer />;
+    case "goals":
+      return <GoalsContainer />;
     case "activities":
       return <ActivitiesContainer />;
     case "privacy":
@@ -28,7 +31,7 @@ function SectionView({ section, onNavigate }: { section: SectionId; onNavigate: 
 }
 
 /**
- * Dashboard window: sidebar + one section. Navigation is plain state, not a router: five
+ * Dashboard window: sidebar + one section. Navigation is plain state, not a router: six
  * fixed sections, no deep links (a webview has no address bar), and the window is hidden
  * rather than closed, so the selection survives. This avoids a routing dependency
  * (deviation from the design's `react-router` note, which assumed deep links).

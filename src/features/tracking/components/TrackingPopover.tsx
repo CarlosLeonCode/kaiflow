@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
-import type { DegradedReasonDto, FocusDto, ShortcutStatusDto, TrackingStateDto } from "@/shared/ipc";
+import { GoalsMini } from "@/features/goals/components/GoalsMini";
+import type { DegradedReasonDto, FocusDto, GoalStatusDto, ShortcutStatusDto, TrackingStateDto } from "@/shared/ipc";
 
 import type { ToggleCommand, TopAppRow } from "../lib/derive";
 import { CurrentActivity } from "./CurrentActivity";
@@ -21,6 +22,8 @@ export interface TrackingPopoverProps {
   totalMs: number | undefined;
   topApps: TopAppRow[];
   topAppsLoading: boolean;
+  /** Progress of the goals; the popover shows the two most relevant. */
+  goals?: readonly GoalStatusDto[];
   togglePending: boolean;
   /** Slot above the totals, used for the idle-return card. */
   notice?: ReactNode;
@@ -53,6 +56,7 @@ export function TrackingPopover(props: TrackingPopoverProps) {
         <div className="mt-4">
           <TopApps rows={props.topApps} loading={props.topAppsLoading} />
         </div>
+        <GoalsMini goals={props.goals ?? []} />
       </div>
 
       <TrackingFooter

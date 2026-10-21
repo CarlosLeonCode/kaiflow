@@ -26,6 +26,8 @@ interface Props {
   cells: readonly number[];
   /** Describes the chart for assistive tech. */
   label: string;
+  /** First day of the week shown on top: 0 = Monday .. 6 = Sunday (the data is always Monday first). */
+  weekStart?: number;
 }
 
 function cellLabel(weekday: number, hour: number, ms: number): string {
@@ -47,16 +49,23 @@ function fillFor(ms: number, max: number): string {
  * and the readout under the chart follows hover and focus. A visually hidden table carries the
  * same numbers for screen readers.
  */
-export function Heatmap({ cells, label }: Props) {
+export function Heatmap({ cells, label, weekStart = 0 }: Props) {
   const [active, setActive] = useState<{ row: number; col: number } | null>(null);
   const [focused, setFocused] = useState<{ row: number; col: number } | null>(null);
   const refs = useRef<(SVGRectElement | null)[]>([]);
   const wantFocus = useRef(false);
 
-  const valueAt = (row: number, col: number) => cells[row * COLS + col] ?? 0;
+  // Row `r` shows the weekday `weekStart + r`; the data is indexed by weekday, Monday first.
+  const first = ((weekStart % ROWS) + ROWS) % ROWS;
+  const weekdayOf = (row: number) => (row + first) % ROWS;
+  const valueAt = (row: number, col: number) => cells[weekdayOf(row) * COLS + col] ?? 0;
   const max = Math.max(0, ...cells);
   const peak = cells.findIndex((ms) => ms === max && max > 0);
-  const tabStop = focused ?? (peak >= 0 ? { row: Math.floor(peak / COLS), col: peak % COLS } : { row: 0, col: 0 });
+  const tabStop =
+    focused ??
+    (peak >= 0
+      ? { row: (Math.floor(peak / COLS) - first + ROWS) % ROWS, col: peak % COLS }
+      : { row: 0, col: 0 });
   const readout = active ? { ...active, ms: valueAt(active.row, active.col) } : null;
 
   useEffect(() => {
@@ -98,7 +107,7 @@ export function Heatmap({ cells, label }: Props) {
         >
           {Array.from({ length: ROWS }, (_, weekday) => (
             <span key={weekday} className="flex items-center">
-              {weekdayName(weekday, "short")}
+              {weekdayName(weekdayOf(weekday), "short")}
             </span>
           ))}
         </div>
@@ -125,7 +134,7 @@ export function Heatmap({ cells, label }: Props) {
                     }}
                     role="gridcell"
                     aria-colindex={col + 1}
-                    aria-label={cellLabel(row, col, ms)}
+                    aria-label={cellLabel(weekdayOf(row), col, ms)}
                     tabIndex={isStop ? 0 : -1}
                     x={col * CELL + INSET}
                     y={row * CELL + INSET}
@@ -173,7 +182,7 @@ export function Heatmap({ cells, label }: Props) {
         {readout ? (
           <>
             <span className="font-medium text-foreground">
-              {weekdayName(readout.row, "long")}, {hourName(readout.col)}
+              {weekdayName(weekdayOf(readout.row), "long")}, {hourName(readout.col)}
             </span>
             <span> · {readout.ms > 0 ? formatDuration(readout.ms) : "nothing tracked"}</span>
           </>
@@ -192,16 +201,17 @@ export function Heatmap({ cells, label }: Props) {
           </tr>
         </thead>
         <tbody>
-          {cells.flatMap((ms, index) =>
-            ms > 0
-              ? [
-                  <tr key={index}>
-                    <th scope="row">{weekdayName(Math.floor(index / COLS), "long")}</th>
-                    <td>{hourName(index % COLS)}</td>
-                    <td>{formatDuration(ms)}</td>
-                  </tr>,
-                ]
-              : [],
+          {Array.from({ length: ROWS }, (_, row) =>
+            Array.from({ length: COLS }, (_, col) => {
+              const ms = valueAt(row, col);
+              return ms > 0 ? (
+                <tr key={`${row}-${col}`}>
+                  <th scope="row">{weekdayName(weekdayOf(row), "long")}</th>
+                  <td>{hourName(col)}</td>
+                  <td>{formatDuration(ms)}</td>
+                </tr>
+              ) : null;
+            }),
           )}
         </tbody>
       </table>

@@ -122,6 +122,48 @@ pub struct GapRecord {
     pub resolved_at: Option<i64>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GoalRecord {
+    pub id: i64,
+    pub label: String,
+    /// `activity`, `app` or `total`.
+    pub scope_kind: String,
+    #[serde(default)]
+    pub activity_id: Option<i64>,
+    #[serde(default)]
+    pub app_id: Option<String>,
+    /// `daily`, `weekly` or `monthly`.
+    pub period: String,
+    /// `minimum` or `maximum`.
+    pub kind: String,
+    pub target_ms: i64,
+    /// Bit 0 = Monday .. bit 6 = Sunday.
+    #[serde(default = "all_days")]
+    pub active_days: i64,
+    #[serde(default)]
+    pub archived: bool,
+    #[serde(default)]
+    pub created_at: i64,
+}
+
+fn all_days() -> i64 {
+    127
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GoalEventRecord {
+    pub goal_id: i64,
+    /// Local day number (days since 1970-01-01) of the first day of the period.
+    pub period_start: i64,
+    /// `reached` or `exceeded`.
+    pub kind: String,
+    pub at: i64,
+    #[serde(default)]
+    pub notified: bool,
+    #[serde(default)]
+    pub seen: bool,
+}
+
 /// The data a snapshot carries and a restore replaces.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -132,6 +174,9 @@ pub struct BackupData {
     pub settings: Vec<SettingRecord>,
     pub segments: Vec<SegmentRecord>,
     pub idle_gaps: Vec<GapRecord>,
+    /// Added with goals; documents written before them simply lack the array.
+    pub goals: Vec<GoalRecord>,
+    pub goal_events: Vec<GoalEventRecord>,
 }
 
 impl BackupData {
@@ -167,8 +212,6 @@ pub struct Document {
     #[serde(flatten)]
     pub data: BackupData,
     /// Reserved for later features; empty today and tolerated by every reader.
-    #[serde(default)]
-    pub goals: Vec<serde_json::Value>,
     #[serde(default)]
     pub focus_sessions: Vec<serde_json::Value>,
     #[serde(default)]
@@ -222,7 +265,6 @@ impl Document {
                 to: to.0,
             }),
             data,
-            goals: Vec::new(),
             focus_sessions: Vec::new(),
             ai_reviews: Vec::new(),
         }
@@ -310,6 +352,27 @@ impl Document {
         {
             return bad("an idle gap points to an unknown activity");
         }
+        if self
+            .data
+            .goals
+            .iter()
+            .any(|g| g.activity_id.is_some_and(|id| !known(id)))
+        {
+            return bad("a goal points to an unknown activity");
+        }
+        let goal_ids: std::collections::HashSet<i64> =
+            self.data.goals.iter().map(|g| g.id).collect();
+        if goal_ids.len() != self.data.goals.len() {
+            return bad("duplicate goal ids");
+        }
+        if self
+            .data
+            .goal_events
+            .iter()
+            .any(|e| !goal_ids.contains(&e.goal_id))
+        {
+            return bad("a goal event points to an unknown goal");
+        }
         // Only one open segment can exist; documents close them, but never trust a file.
         for segment in &mut self.data.segments {
             if segment.ended_at.is_none() {
@@ -331,6 +394,7 @@ pub struct Summary {
     pub rules: usize,
     pub segments: usize,
     pub idle_gaps: usize,
+    pub goals: usize,
     /// First start and last end among the segments (UTC ms).
     pub first_at: Option<i64>,
     pub last_at: Option<i64>,
@@ -347,6 +411,7 @@ impl Document {
             rules: self.data.rules.len(),
             segments: segments.len(),
             idle_gaps: self.data.idle_gaps.len(),
+            goals: self.data.goals.len(),
             first_at: segments.iter().map(|s| s.started_at).min(),
             last_at: segments
                 .iter()
@@ -423,6 +488,27 @@ mod tests {
                 activity_id: None,
             }],
             idle_gaps: Vec::new(),
+            goals: vec![GoalRecord {
+                id: 1,
+                label: "Deep work".into(),
+                scope_kind: "activity".into(),
+                activity_id: Some(2),
+                app_id: None,
+                period: "daily".into(),
+                kind: "minimum".into(),
+                target_ms: 7_200_000,
+                active_days: 31,
+                archived: false,
+                created_at: 500,
+            }],
+            goal_events: vec![GoalEventRecord {
+                goal_id: 1,
+                period_start: 19_000,
+                kind: "reached".into(),
+                at: 900,
+                notified: true,
+                seen: false,
+            }],
         }
     }
 
@@ -473,8 +559,12 @@ mod tests {
         let mut value: serde_json::Value = serde_json::from_slice(&doc().to_json()).unwrap();
         value["brand_new"] = serde_json::json!({"x": 1});
         value.as_object_mut().unwrap().remove("goals");
+        value.as_object_mut().unwrap().remove("goal_events");
         let parsed = Document::parse(&serde_json::to_vec(&value).unwrap()).unwrap();
-        assert!(parsed.goals.is_empty());
+        assert!(
+            parsed.data.goals.is_empty(),
+            "files from before goals still restore"
+        );
         assert_eq!(parsed.data.segments.len(), 1);
     }
 
@@ -511,6 +601,19 @@ mod tests {
             Err(DocumentError::Inconsistent(_))
         ));
 
+        let mut dangling_goal = doc();
+        dangling_goal.data.goals[0].activity_id = Some(99);
+        assert!(matches!(
+            Document::parse(&dangling_goal.to_json()),
+            Err(DocumentError::Inconsistent(_))
+        ));
+        let mut dangling_event = doc();
+        dangling_event.data.goal_events[0].goal_id = 5;
+        assert!(matches!(
+            Document::parse(&dangling_event.to_json()),
+            Err(DocumentError::Inconsistent(_))
+        ));
+
         let mut open = doc();
         open.data.segments[0].ended_at = None;
         open.data.segments[0].end_reason = None;
@@ -528,7 +631,7 @@ mod tests {
         d.strip_titles();
         assert!(d.segments[0].window_title.is_none());
         let s = doc().summary();
-        assert_eq!((s.activities, s.rules, s.segments), (2, 1, 1));
+        assert_eq!((s.activities, s.rules, s.segments, s.goals), (2, 1, 1, 1));
         assert_eq!((s.first_at, s.last_at), (Some(1_000), Some(5_000)));
     }
 

@@ -42,6 +42,34 @@ describe("SettingsContainer", () => {
     await waitFor(() => expect(lastUpdate(calls)).toMatchObject({ tray_display: "current_app", theme: null }));
   });
 
+  it("saves the first day of the week", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockBackend({
+      get_status: () => status(),
+      settings_update: (args) => mergePatch(args.patch),
+    });
+    renderWithProviders(<SettingsContainer />);
+
+    const select = await screen.findByRole("combobox", { name: "Week starts on" });
+    expect(select).toHaveValue("0");
+    await user.selectOptions(select, "Sunday");
+
+    await waitFor(() => expect(lastUpdate(calls)).toMatchObject({ week_start: 6, theme: null }));
+  });
+
+  it("offers the top goal in the menu bar", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockBackend({
+      get_status: () => status(),
+      settings_update: (args) => mergePatch(args.patch),
+    });
+    renderWithProviders(<SettingsContainer />);
+
+    await user.selectOptions(await screen.findByRole("combobox", { name: "Show next to the icon" }), "Top goal (2h 10m / 3h)");
+
+    await waitFor(() => expect(lastUpdate(calls)).toMatchObject({ tray_display: "goal_progress" }));
+  });
+
   it("saves the theme immediately and applies it (light/dark/system)", async () => {
     const user = userEvent.setup();
     const { calls } = mockBackend({

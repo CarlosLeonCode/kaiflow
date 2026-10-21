@@ -70,9 +70,8 @@ export function PrivacyContainer({ onOpenSettings }: Props) {
   const tracking = useTrackingCommandMutation();
 
   const [pending, setPending] = useState<Pending | null>(null);
-  // Dry run of the pending purge: how much goes and whether it cuts an active streak.
-  // TODO(goals): the backend reports `streak_days_cut` once goals exist; the dialog already
-  // shows the warning when it is set.
+  // Dry run of the pending purge: how much goes and whether it cuts an active goal streak
+  // (`streak_days_cut`); the confirmation shows a warning when it does.
   const impact = useRetentionImpactQuery(pending?.op.kind === "older_than_days" ? pending.op.days : null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);

@@ -51,6 +51,11 @@ const COMMANDS: &[&str] = &[
     "restore_prepare",
     "restore_apply",
     "retention_impact",
+    "goals_list",
+    "goals_upsert",
+    "goals_delete",
+    "goals_status",
+    "goal_events_mark_seen",
     "update_check",
     "update_install",
 ];

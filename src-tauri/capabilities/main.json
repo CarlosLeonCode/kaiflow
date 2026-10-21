@@ -54,6 +54,11 @@
     "allow-restore-prepare",
     "allow-restore-apply",
     "allow-retention-impact",
+    "allow-goals-list",
+    "allow-goals-upsert",
+    "allow-goals-delete",
+    "allow-goals-status",
+    "allow-goal-events-mark-seen",
     "allow-update-check",
     "allow-update-install"
   ]

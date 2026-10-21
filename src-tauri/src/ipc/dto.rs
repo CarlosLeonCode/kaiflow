@@ -8,6 +8,7 @@ use application::commands::{
 };
 use application::dashboard::{Dashboard, DashboardActivity, ProductivityTotals, StackedBucket};
 use application::export::{BackupReport, BackupStatus, RestorePreview, RestoreReport};
+use application::goals::GoalStatus;
 use application::ports::{DegradedReason, PrivacyMode, TrackingKind, TrackingStatus};
 use application::presets::{ApplyOutcome, SuggestionView};
 use application::queries::{
@@ -15,9 +16,10 @@ use application::queries::{
 };
 use application::settings_blobs::UiSettings;
 use domain::{
-    Activity, ActivityId, ActivityRule, EndReason, FocusRatio, FocusSnapshot, GapId, IdleGap,
-    IdleResolution, PermissionState, Preset, PrivacyPolicy, Productivity, RuleKind, SegmentSource,
-    Trend, UtcMs,
+    Activity, ActivityId, ActivityRule, EndReason, FocusRatio, FocusSnapshot, GapId, Goal,
+    GoalEventKind, GoalKind, GoalScope, GoalState, IdleGap, IdleResolution, Period,
+    PermissionState, Preset, PrivacyPolicy, Productivity, RuleKind, SegmentSource, Streak, Trend,
+    UtcMs,
 };
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -418,6 +420,17 @@ pub struct DashboardDto {
     pub productivity: ProductivityTotalsDto,
     pub focus_ratio: FocusRatioDto,
     pub auto_discarded_gaps: u32,
+    /// Progress and streak of every active goal (the same figures as `goals_status`).
+    pub goals: Vec<GoalStatusDto>,
+}
+
+impl DashboardDto {
+    pub fn new(d: Dashboard, goals: Vec<GoalStatus>) -> Self {
+        Self {
+            goals: goals.into_iter().map(Into::into).collect(),
+            ..Self::from(d)
+        }
+    }
 }
 
 impl From<Dashboard> for DashboardDto {
@@ -435,6 +448,224 @@ impl From<Dashboard> for DashboardDto {
             productivity: d.productivity.into(),
             focus_ratio: d.focus_ratio.into(),
             auto_discarded_gaps: d.auto_discarded_gaps,
+            goals: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum PeriodDto {
+    Daily,
+    Weekly,
+    Monthly,
+}
+
+impl From<Period> for PeriodDto {
+    fn from(p: Period) -> Self {
+        match p {
+            Period::Daily => Self::Daily,
+            Period::Weekly => Self::Weekly,
+            Period::Monthly => Self::Monthly,
+        }
+    }
+}
+
+impl From<PeriodDto> for Period {
+    fn from(p: PeriodDto) -> Self {
+        match p {
+            PeriodDto::Daily => Self::Daily,
+            PeriodDto::Weekly => Self::Weekly,
+            PeriodDto::Monthly => Self::Monthly,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum GoalKindDto {
+    Minimum,
+    Maximum,
+}
+
+impl From<GoalKind> for GoalKindDto {
+    fn from(k: GoalKind) -> Self {
+        match k {
+            GoalKind::Minimum => Self::Minimum,
+            GoalKind::Maximum => Self::Maximum,
+        }
+    }
+}
+
+impl From<GoalKindDto> for GoalKind {
+    fn from(k: GoalKindDto) -> Self {
+        match k {
+            GoalKindDto::Minimum => Self::Minimum,
+            GoalKindDto::Maximum => Self::Maximum,
+        }
+    }
+}
+
+/// What a goal measures: one activity, one app or all tracked time.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum GoalScopeDto {
+    Activity { activity_id: i64 },
+    App { app_id: String },
+    Total,
+}
+
+impl From<GoalScope> for GoalScopeDto {
+    fn from(s: GoalScope) -> Self {
+        match s {
+            GoalScope::Activity(id) => Self::Activity { activity_id: id.0 },
+            GoalScope::App(app_id) => Self::App { app_id },
+            GoalScope::Total => Self::Total,
+        }
+    }
+}
+
+impl From<GoalScopeDto> for GoalScope {
+    fn from(s: GoalScopeDto) -> Self {
+        match s {
+            GoalScopeDto::Activity { activity_id } => Self::Activity(ActivityId(activity_id)),
+            GoalScopeDto::App { app_id } => Self::App(app_id),
+            GoalScopeDto::Total => Self::Total,
+        }
+    }
+}
+
+/// A goal as the UI edits it. `id <= 0` creates one.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct GoalDto {
+    pub id: i64,
+    pub label: String,
+    pub scope: GoalScopeDto,
+    pub period: PeriodDto,
+    pub kind: GoalKindDto,
+    pub target_ms: i64,
+    /// Bit 0 = Monday .. bit 6 = Sunday; only daily goals use it.
+    pub active_days: u8,
+    pub archived: bool,
+}
+
+impl From<Goal> for GoalDto {
+    fn from(g: Goal) -> Self {
+        Self {
+            id: g.id,
+            label: g.label,
+            scope: g.scope.into(),
+            period: g.period.into(),
+            kind: g.kind.into(),
+            target_ms: g.target_ms,
+            active_days: g.active_days,
+            archived: g.archived,
+        }
+    }
+}
+
+impl From<GoalDto> for Goal {
+    fn from(g: GoalDto) -> Self {
+        Self {
+            id: g.id,
+            label: g.label,
+            scope: g.scope.into(),
+            period: g.period.into(),
+            kind: g.kind.into(),
+            target_ms: g.target_ms,
+            active_days: g.active_days,
+            archived: g.archived,
+            // The service stamps new goals and the store keeps the original on updates.
+            created_at: UtcMs(0),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum GoalStateDto {
+    Pending,
+    Reached,
+    Exceeded,
+}
+
+impl From<GoalState> for GoalStateDto {
+    fn from(s: GoalState) -> Self {
+        match s {
+            GoalState::Pending => Self::Pending,
+            GoalState::Reached => Self::Reached,
+            GoalState::Exceeded => Self::Exceeded,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum GoalEventKindDto {
+    Reached,
+    Exceeded,
+}
+
+impl From<GoalEventKind> for GoalEventKindDto {
+    fn from(k: GoalEventKind) -> Self {
+        match k {
+            GoalEventKind::Reached => Self::Reached,
+            GoalEventKind::Exceeded => Self::Exceeded,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct StreakDto {
+    pub current: u32,
+    pub best: u32,
+    /// The open period is not met (yet) and would end the streak if it closed as it is.
+    pub at_risk: bool,
+}
+
+impl From<Streak> for StreakDto {
+    fn from(s: Streak) -> Self {
+        Self {
+            current: s.current,
+            best: s.best,
+            at_risk: s.at_risk,
+        }
+    }
+}
+
+/// Progress of one goal in its current period.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct GoalStatusDto {
+    pub goal: GoalDto,
+    /// The current period as a UTC range `[from, to)`.
+    pub period: RangeDto,
+    pub actual_ms: i64,
+    pub target_ms: i64,
+    /// `actual / target` in whole percent; may pass 100.
+    pub percent: u32,
+    pub state: GoalStateDto,
+    /// `false` on a rest day of a daily goal.
+    pub active: bool,
+    pub streak: StreakDto,
+    /// A threshold crossed in this period that the user has not acknowledged yet.
+    pub unseen: Option<GoalEventKindDto>,
+}
+
+impl From<GoalStatus> for GoalStatusDto {
+    fn from(s: GoalStatus) -> Self {
+        Self {
+            goal: s.goal.into(),
+            period: RangeDto {
+                from: s.from.0,
+                to: s.to.0,
+            },
+            actual_ms: s.actual_ms,
+            target_ms: s.target_ms,
+            percent: s.percent,
+            state: s.state.into(),
+            active: s.active,
+            streak: s.streak.into(),
+            unseen: s.unseen.map(Into::into),
         }
     }
 }
@@ -785,6 +1016,7 @@ pub enum TrayDisplayDto {
     TodayTotal,
     CurrentApp,
     TodayAndCurrent,
+    GoalProgress,
 }
 
 impl From<TrayDisplay> for TrayDisplayDto {
@@ -794,6 +1026,7 @@ impl From<TrayDisplay> for TrayDisplayDto {
             TrayDisplay::TodayTotal => Self::TodayTotal,
             TrayDisplay::CurrentApp => Self::CurrentApp,
             TrayDisplay::TodayAndCurrent => Self::TodayAndCurrent,
+            TrayDisplay::GoalProgress => Self::GoalProgress,
         }
     }
 }
@@ -805,6 +1038,7 @@ impl From<TrayDisplayDto> for TrayDisplay {
             TrayDisplayDto::TodayTotal => Self::TodayTotal,
             TrayDisplayDto::CurrentApp => Self::CurrentApp,
             TrayDisplayDto::TodayAndCurrent => Self::TodayAndCurrent,
+            TrayDisplayDto::GoalProgress => Self::GoalProgress,
         }
     }
 }
@@ -822,6 +1056,8 @@ pub struct SettingsDto {
     pub shortcut: String,
     pub onboarding_completed: bool,
     pub tray_display: TrayDisplayDto,
+    /// First day of the week: 0 = Monday .. 6 = Sunday.
+    pub week_start: u8,
     pub ui: UiSettingsDto,
 }
 
@@ -861,6 +1097,7 @@ impl From<Settings> for SettingsDto {
             shortcut: s.shortcut,
             onboarding_completed: s.onboarding_completed,
             tray_display: s.tray_display.into(),
+            week_start: s.week_start,
             ui: s.ui.into(),
         }
     }
@@ -887,6 +1124,7 @@ pub struct SettingsPatchDto {
     pub shortcut: Option<String>,
     pub onboarding_completed: Option<bool>,
     pub tray_display: Option<TrayDisplayDto>,
+    pub week_start: Option<u8>,
     pub ui: Option<UiSettingsDto>,
 }
 
@@ -906,6 +1144,7 @@ impl From<SettingsPatchDto> for SettingsPatch {
             shortcut: p.shortcut,
             onboarding_completed: p.onboarding_completed,
             tray_display: p.tray_display.map(Into::into),
+            week_start: p.week_start,
             ui: p.ui.map(Into::into),
         }
     }

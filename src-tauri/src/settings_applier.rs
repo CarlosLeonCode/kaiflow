@@ -9,6 +9,7 @@ use tauri_plugin_autostart::ManagerExt;
 
 use crate::composition::SettingsApplier;
 use crate::error::AppError;
+use crate::goal_watcher::GoalWatcher;
 use crate::shortcuts::ShortcutManager;
 use crate::tray_text::TrayText;
 
@@ -60,6 +61,7 @@ pub struct ShellApplier {
     login: Box<dyn LoginItem>,
     shortcuts: Arc<ShortcutManager>,
     tray_text: TrayText,
+    goals: GoalWatcher,
 }
 
 impl ShellApplier {
@@ -67,11 +69,13 @@ impl ShellApplier {
         login: Box<dyn LoginItem>,
         shortcuts: Arc<ShortcutManager>,
         tray_text: TrayText,
+        goals: GoalWatcher,
     ) -> Self {
         Self {
             login,
             shortcuts,
             tray_text,
+            goals,
         }
     }
 }
@@ -89,6 +93,10 @@ impl SettingsApplier for ShellApplier {
 
     fn refresh_tray_text(&self) {
         self.tray_text.refresh();
+    }
+
+    fn refresh_goals(&self) {
+        self.goals.refresh();
     }
 }
 

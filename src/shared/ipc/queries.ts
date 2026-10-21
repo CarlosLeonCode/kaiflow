@@ -5,6 +5,7 @@ import type {
   ActivityDto,
   BackupStatusDto,
   DeleteOpDto,
+  GoalDto,
   IdleResolutionDto,
   ProductivityDto,
   RangeDto,
@@ -144,6 +145,7 @@ export function settingsPatch(changes: Partial<SettingsPatchDto>): SettingsPatch
     shortcut: null,
     onboarding_completed: null,
     tray_display: null,
+    week_start: null,
     ui: null,
     ...changes,
   };
@@ -164,6 +166,8 @@ export function useUpdateSettingsMutation() {
       void client.invalidateQueries({ queryKey: queryKeys.status });
       // The privacy page mirrors `store_titles` and the retention policy.
       void client.invalidateQueries({ queryKey: queryKeys.privacy });
+      // The first day of the week moves weekly goals and the Overview periods.
+      void client.invalidateQueries({ queryKey: queryKeys.goals });
     },
     onError: () => {
       void client.invalidateQueries({ queryKey: queryKeys.settings });
@@ -187,7 +191,15 @@ export function useHidePopoverMutation() {
 /** Activity and rule edits change how existing segments are grouped (R9.2): refresh everything derived. */
 function invalidateClassification(client: QueryClient): Promise<unknown> {
   return Promise.all(
-    [queryKeys.activities, queryKeys.rules, queryKeys.suggestions, queryKeys.reports, queryKeys.timelines].map((queryKey) =>
+    [
+      queryKeys.activities,
+      queryKeys.rules,
+      queryKeys.suggestions,
+      queryKeys.reports,
+      queryKeys.timelines,
+      // Goals follow the activities they target (and their rules).
+      queryKeys.goals,
+    ].map((queryKey) =>
       client.invalidateQueries({ queryKey }),
     ),
   );
@@ -329,6 +341,8 @@ export function useDeleteDataMutation() {
         client.invalidateQueries({ queryKey: queryKeys.reports }),
         client.invalidateQueries({ queryKey: queryKeys.timelines }),
         client.invalidateQueries({ queryKey: queryKeys.idleGaps }),
+        // Deleting tracked time changes progress and streaks.
+        client.invalidateQueries({ queryKey: queryKeys.goals }),
       ]),
   });
 }
@@ -425,4 +439,50 @@ export function useCheckUpdateMutation() {
 /** Downloads and installs the announced update; the app relaunches on success. */
 export function useInstallUpdateMutation() {
   return useMutation({ mutationFn: () => unwrap(commands.updateInstall()) });
+}
+
+/** Every goal, archived ones included (the Goals section). */
+export function useGoalsQuery() {
+  return useQuery({
+    queryKey: queryKeys.goalList,
+    queryFn: () => unwrap(commands.goalsList()),
+  });
+}
+
+/**
+ * Progress and streak of every active goal: what Today, the popover and Overview show.
+ * Refreshed by backend events like every other query; the time of the open segment is added
+ * on screen (`withLiveTime`), so no polling is needed.
+ */
+export function useGoalsStatusQuery() {
+  return useQuery({
+    queryKey: queryKeys.goalStatus,
+    queryFn: () => unwrap(commands.goalsStatus()),
+  });
+}
+
+/** Creates (`id <= 0`) or updates a goal; also used to archive and restore one. */
+export function useUpsertGoalMutation() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (goal: GoalDto) => unwrap(commands.goalsUpsert(goal)),
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.goals }),
+  });
+}
+
+export function useDeleteGoalMutation() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => unwrap(commands.goalsDelete(id)),
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.goals }),
+  });
+}
+
+/** The user saw the badge of a crossed goal. */
+export function useMarkGoalSeenMutation() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (goalId: number) => unwrap(commands.goalEventsMarkSeen(goalId)),
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.goals }),
+  });
 }

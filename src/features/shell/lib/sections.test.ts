@@ -7,10 +7,11 @@ function key(k: string, mods: Partial<ShortcutEvent> = {}): ShortcutEvent {
 }
 
 describe("sectionForShortcut", () => {
-  it("maps ⌘1..⌘5 in sidebar order", () => {
-    expect(["1", "2", "3", "4", "5"].map((d) => sectionForShortcut(key(d)))).toEqual([
+  it("maps ⌘1..⌘6 in sidebar order", () => {
+    expect(["1", "2", "3", "4", "5", "6"].map((d) => sectionForShortcut(key(d)))).toEqual([
       "today",
       "overview",
+      "goals",
       "activities",
       "privacy",
       "settings",
@@ -18,7 +19,7 @@ describe("sectionForShortcut", () => {
   });
 
   it("ignores other digits and modified combinations", () => {
-    expect(sectionForShortcut(key("6"))).toBeNull();
+    expect(sectionForShortcut(key("7"))).toBeNull();
     expect(sectionForShortcut(key("1", { metaKey: false }))).toBeNull();
     expect(sectionForShortcut(key("1", { shiftKey: true }))).toBeNull();
     expect(sectionForShortcut(key("1", { altKey: true }))).toBeNull();

@@ -14,6 +14,7 @@ import type {
   ActivityTotalDto,
   BackupStatusDto,
   FocusDto,
+  GoalDto,
   IdleResolutionDto,
   PermissionStateDto,
   ProductivityDto,
@@ -31,6 +32,15 @@ import type {
 } from "@/shared/ipc";
 
 import { buildDashboard } from "./mockDashboard";
+import {
+  baseline,
+  evaluateCrossings,
+  goalDto,
+  goalProblem,
+  goalStatus,
+  type MockGoal,
+  type MockGoalEvent,
+} from "./mockGoals";
 import { matchPreset, mockPresets } from "./mockPresets";
 import { buildSeed, type MockData, type MockSegment } from "./seed";
 
@@ -47,6 +57,8 @@ export interface MockOptions {
   emptyActivities?: boolean;
   /** Start without any tracked time (empty states of Today and Overview). */
   emptyHistory?: boolean;
+  /** Start with a handful of goals (progress bars, an exceeded limit, streaks). */
+  demoGoals?: boolean;
   /** The automatic backup has failed (Settings > Data shows the error, "Back up now" fails). */
   backupFails?: boolean;
   now?: () => number;
@@ -104,7 +116,33 @@ export function installMockBackend(options: MockOptions = {}): void {
     shortcut: "⌃⌥⌘T",
     onboarding_completed: true,
     tray_display: "today_total",
+    week_start: 0,
     ui: { dismissed_intros: [] },
+  };
+  const goals: MockGoal[] = [];
+  const goalEvents: MockGoalEvent[] = [];
+  let nextGoalId = 1;
+  if (options.demoGoals) {
+    const created = clock() - 60 * 86_400_000;
+    const demo = (goal: Omit<GoalDto, "id" | "archived">): MockGoal => ({ ...goal, id: nextGoalId++, archived: false, created_at: created });
+    goals.push(
+      demo({ label: "Deep work", scope: { kind: "activity", activity_id: 2 }, period: "daily", kind: "minimum", target_ms: 4 * 3_600_000, active_days: 0b0011111 }),
+      demo({ label: "Slack limit", scope: { kind: "app", app_id: "com.tinyspeck.slackmacgap" }, period: "daily", kind: "maximum", target_ms: 20 * 60_000, active_days: 127 }),
+      demo({ label: "Show up", scope: { kind: "total" }, period: "daily", kind: "minimum", target_ms: 10 * 60_000, active_days: 127 }),
+      demo({ label: "Weekly development", scope: { kind: "activity", activity_id: 2 }, period: "weekly", kind: "minimum", target_ms: 20 * 3_600_000, active_days: 127 }),
+    );
+  }
+  const goalContext = () => ({
+    segments: data.segments,
+    classify: (segment: MockSegment) => classify(segment, data.rules),
+    now: clock(),
+    weekStart: settings.week_start,
+  });
+  /** Like the goal watcher: look for thresholds crossed since the last look, then report. */
+  const goalStatuses = () => {
+    const context = goalContext();
+    evaluateCrossings(goals, context, goalEvents);
+    return goals.filter((g) => !g.archived).map((g) => goalStatus(g, context, goalEvents));
   };
   const MOCK_BACKUP_DIR = "/Users/demo/Library/Application Support/Time Track Copilot/backups";
   let backup: BackupStatusDto = {
@@ -344,8 +382,8 @@ export function installMockBackend(options: MockOptions = {}): void {
       return status();
     },
     get_report: (args) => report(args.range as RangeDto, (args.buckets as RangeDto[] | undefined) ?? []),
-    get_dashboard: (args) =>
-      buildDashboard({
+    get_dashboard: (args) => ({
+      ...buildDashboard({
         range: args.range as RangeDto,
         buckets: (args.buckets as RangeDto[] | undefined) ?? [],
         previous: (args.previous as RangeDto | null | undefined) ?? null,
@@ -355,6 +393,8 @@ export function installMockBackend(options: MockOptions = {}): void {
         title: redact,
         now: clock(),
       }),
+      goals: goalStatuses().map((s) => s.status),
+    }),
     get_timeline: (args) => timeline(args.range as RangeDto),
     list_pending_idle_gaps: () => data.gaps,
     resolve_idle_gap: (args) => {
@@ -393,6 +433,11 @@ export function installMockBackend(options: MockOptions = {}): void {
       const id = args.id as number;
       if (id === SYSTEM_ACTIVITY) fail({ kind: "invalid", message: "the system activity cannot be deleted" });
       data.activities = data.activities.filter((c) => c.id !== id);
+      // Goals on the activity go with it, like the cascade in the database.
+      for (let i = goals.length - 1; i >= 0; i--) {
+        const scope = goals[i]?.scope;
+        if (scope?.kind === "activity" && scope.activity_id === id) goals.splice(i, 1);
+      }
       data.rules = data.rules.filter((r) => r.activity_id !== id);
       for (const segment of data.segments) {
         if (segment.activity_id === id) segment.activity_id = SYSTEM_ACTIVITY;
@@ -566,10 +611,47 @@ export function installMockBackend(options: MockOptions = {}): void {
     },
     retention_impact: (args) => {
       const cutoff = clock() - (args.days as number) * 86_400_000;
+      // The longest active streak that starts before the cutoff loses those days.
+      const cut = goalStatuses()
+        .filter((s) => s.streakStart !== null && s.streakStart < cutoff)
+        .map((s) => Math.round((cutoff - (s.streakStart ?? cutoff)) / 86_400_000));
       return {
         segments: data.segments.filter((s) => s.ended_at !== null && s.ended_at < cutoff).length,
-        streak_days_cut: null,
+        streak_days_cut: cut.length > 0 ? Math.max(...cut) : null,
       };
+    },
+    goals_list: (): GoalDto[] => goals.map(goalDto),
+    goals_status: () => goalStatuses().map((s) => s.status),
+    goals_upsert: (args) => {
+      const input = args.goal as GoalDto;
+      const problem = goalProblem(input, (id) => id === SYSTEM_ACTIVITY || data.activities.some((a) => a.id === id));
+      if (problem) fail({ kind: "invalid", message: problem });
+      const clean: GoalDto = { ...input, label: input.label.trim() };
+      let saved: MockGoal;
+      if (clean.id > 0) {
+        const index = goals.findIndex((g) => g.id === clean.id);
+        const existing = goals[index];
+        if (!existing) fail({ kind: "not_found" });
+        saved = { ...clean, created_at: existing.created_at };
+        goals[index] = saved;
+      } else {
+        saved = { ...clean, id: nextGoalId++, created_at: clock() };
+        goals.push(saved);
+      }
+      baseline(saved, goalContext(), goalEvents);
+      return goalDto(saved);
+    },
+    goals_delete: (args) => {
+      const id = args.id as number;
+      const index = goals.findIndex((g) => g.id === id);
+      if (index >= 0) goals.splice(index, 1);
+      return null;
+    },
+    goal_events_mark_seen: (args) => {
+      for (const event of goalEvents) {
+        if (event.goal_id === args.goalId) event.seen = true;
+      }
+      return null;
     },
     update_check: () => offeredUpdate,
     // The real app downloads and relaunches: the UI stays on "Installing..." until it exits.

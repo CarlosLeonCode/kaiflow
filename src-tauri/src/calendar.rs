@@ -3,7 +3,7 @@
 //! free of any zone.
 
 use application::ports::Calendar;
-use chrono::{Datelike, Local, Offset, TimeZone, Timelike};
+use chrono::{Datelike, Local, NaiveDate, Offset, TimeZone, Timelike};
 use domain::{HourSlot, UtcMs};
 
 const HOUR_MS: i64 = 3_600_000;
@@ -20,6 +20,33 @@ impl Calendar for ChronoLocalCalendar {
     fn local_day(&self, at: UtcMs) -> i64 {
         day_in(&Local, at)
     }
+
+    fn start_of_day(&self, day: i64) -> UtcMs {
+        start_of_day_in(&Local, day)
+    }
+}
+
+/// First instant of local day number `day` (days since 1970-01-01) in `tz`. A midnight that a
+/// DST jump skips starts the day at the first hour that exists; an ambiguous one (clocks
+/// going back) uses the earlier instant.
+fn start_of_day_in<Tz: TimeZone>(tz: &Tz, day: i64) -> UtcMs {
+    let utc_fallback = UtcMs(day.saturating_mul(86_400_000));
+    let Some(date) = i32::try_from(day + DAYS_FROM_CE_TO_EPOCH)
+        .ok()
+        .and_then(NaiveDate::from_num_days_from_ce_opt)
+    else {
+        return utc_fallback;
+    };
+    let Some(midnight) = date.and_hms_opt(0, 0, 0) else {
+        return utc_fallback;
+    };
+    // Try the midnight, then each following hour (zones skip at most a few hours).
+    (0..=3)
+        .find_map(|hours| {
+            tz.from_local_datetime(&(midnight + chrono::TimeDelta::hours(hours)))
+                .earliest()
+        })
+        .map_or(utc_fallback, |t| UtcMs(t.timestamp_millis()))
 }
 
 /// Local calendar day of `at` in `tz`, as days since 1970-01-01.
@@ -139,6 +166,50 @@ mod tests {
         // Epoch day 0 and a pre-epoch instant.
         assert_eq!(day_in(&FixedOffset::east_opt(0).unwrap(), UtcMs(0)), 0);
         assert_eq!(day_in(&FixedOffset::east_opt(0).unwrap(), UtcMs(-1)), -1);
+    }
+
+    #[test]
+    fn a_day_starts_at_local_midnight() {
+        let day = 20_000_i64;
+        let utc_midnight = day * 24 * 60 * MIN;
+        // UTC-5: local midnight is 05:00 UTC; UTC+2: it is 22:00 UTC the day before.
+        let west = FixedOffset::west_opt(5 * 3600).unwrap();
+        assert_eq!(
+            start_of_day_in(&west, day),
+            UtcMs(utc_midnight + 5 * 60 * MIN)
+        );
+        let east = FixedOffset::east_opt(2 * 3600).unwrap();
+        assert_eq!(
+            start_of_day_in(&east, day),
+            UtcMs(utc_midnight - 2 * 60 * MIN)
+        );
+        // It is the inverse of `day_in` at the boundary.
+        for tz in [west, east] {
+            let start = start_of_day_in(&tz, day);
+            assert_eq!(day_in(&tz, start), day);
+            assert_eq!(day_in(&tz, UtcMs(start.0 - 1)), day - 1);
+        }
+        assert_eq!(
+            start_of_day_in(&FixedOffset::east_opt(0).unwrap(), 0),
+            UtcMs(0)
+        );
+    }
+
+    #[test]
+    fn consecutive_local_days_in_the_system_zone_are_ascending_and_a_day_apart_or_so() {
+        let calendar = ChronoLocalCalendar;
+        let mut previous = calendar.start_of_day(19_000);
+        for day in 19_001..19_400 {
+            let start = calendar.start_of_day(day);
+            let length = start.0 - previous.0;
+            // 23 to 25 hours around DST changes.
+            assert!(
+                (22 * HOUR_MS..=26 * HOUR_MS).contains(&length),
+                "day {day} lasted {length} ms"
+            );
+            assert_eq!(calendar.local_day(start), day);
+            previous = start;
+        }
     }
 
     #[test]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-goals-status"
+description = "Enables the goals_status command without any pre-configured scope."
+commands.allow = ["goals_status"]
+
+[[permission]]
+identifier = "deny-goals-status"
+description = "Denies the goals_status command without any pre-configured scope."
+commands.deny = ["goals_status"]

@@ -2,7 +2,7 @@ import { useEffect } from "react";
 
 import { isReservedShortcut, type SectionId, sectionForShortcut } from "../lib/sections";
 
-/** ⌘1..⌘5 switch sections; ⌘K is swallowed for the future command palette. */
+/** ⌘1..⌘6 switch sections; ⌘K is swallowed for the future command palette. */
 export function useSectionShortcuts(onSelect: (section: SectionId) => void): void {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

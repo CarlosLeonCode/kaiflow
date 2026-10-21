@@ -3,6 +3,7 @@
 mod activity_repo;
 mod backup_repo;
 pub mod db;
+mod goal_repo;
 pub mod migrations;
 mod privacy_repo;
 mod report_repo;
@@ -13,6 +14,7 @@ mod settings_repo;
 pub use activity_repo::SqliteActivityRepository;
 pub use backup_repo::SqliteBackupStore;
 pub use db::{DbError, open, open_in_memory};
+pub use goal_repo::SqliteGoalRepository;
 pub use privacy_repo::SqlitePrivacyRepository;
 pub use report_repo::SqliteReportRepository;
 pub use retention_repo::SqliteRetentionRepository;

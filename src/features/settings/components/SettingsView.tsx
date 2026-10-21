@@ -19,6 +19,7 @@ import {
   idleThresholdOptions,
   parseTrayDisplay,
   promptTimeoutOptions,
+  weekStartOptions,
 } from "../lib/options";
 import { ShortcutField } from "./ShortcutField";
 
@@ -87,10 +88,31 @@ export function SettingsView({
             </Row>
           </Panel>
 
+          <Panel title="Calendar">
+            <Row
+              label="Week starts on"
+              description="Weekly goals and the Overview count weeks from this day."
+              controlId="setting-week-start"
+            >
+              <Select
+                id="setting-week-start"
+                aria-describedby="setting-week-start-hint"
+                value={settings.week_start}
+                onChange={(event) => onChange({ week_start: Number(event.target.value) })}
+              >
+                {weekStartOptions(settings.week_start).map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </Row>
+          </Panel>
+
           <Panel title="Menu bar">
             <Row
               label="Show next to the icon"
-              description="Updates once a minute while tracking. Paused time shows ⏸."
+              description="Updates once a minute while tracking. Paused time shows ⏸. The top goal is the first one still in progress today."
               controlId="setting-tray-display"
             >
               <Select

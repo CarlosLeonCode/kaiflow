@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-goal-events-mark-seen"
+description = "Enables the goal_events_mark_seen command without any pre-configured scope."
+commands.allow = ["goal_events_mark_seen"]
+
+[[permission]]
+identifier = "deny-goal-events-mark-seen"
+description = "Denies the goal_events_mark_seen command without any pre-configured scope."
+commands.deny = ["goal_events_mark_seen"]

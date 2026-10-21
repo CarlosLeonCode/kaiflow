@@ -185,3 +185,33 @@ describe("period math in the southern hemisphere (Australia/Sydney)", () => {
     expect(dayRanges(week)).toHaveLength(7);
   });
 });
+
+describe("weeks with a configurable first day", () => {
+  // Wednesday 2026-10-21.
+  const wednesday = local(2026, 10, 21, 12);
+
+  it("defaults to Monday and moves to Sunday or Saturday on request", () => {
+    expect(periodRange("week", wednesday)).toEqual({ from: local(2026, 10, 19), to: local(2026, 10, 26) });
+    expect(periodRange("week", wednesday, 6)).toEqual({ from: local(2026, 10, 18), to: local(2026, 10, 25) });
+    expect(periodRange("week", wednesday, 5)).toEqual({ from: local(2026, 10, 17), to: local(2026, 10, 24) });
+  });
+
+  it("a week starting on the day itself begins there, and the day before closes the old one", () => {
+    expect(periodStart("week", local(2026, 10, 18), 6)).toBe(local(2026, 10, 18));
+    expect(periodStart("week", local(2026, 10, 17, 23), 6)).toBe(local(2026, 10, 11));
+  });
+
+  it("navigates, compares and stops at the present with the same first day", () => {
+    const range = periodRange("week", wednesday, 6);
+    expect(previousRange("week", range, 6)).toEqual({ from: local(2026, 10, 11), to: local(2026, 10, 18) });
+    expect(periodRange("week", shiftAnchor("week", range, -1, 6), 6)).toEqual(previousRange("week", range, 6));
+    expect(canGoNext("week", range, wednesday, 6)).toBe(false);
+    expect(canGoNext("week", previousRange("week", range, 6), wednesday, 6)).toBe(true);
+  });
+
+  it("does not change days, months or the rolling 90 days", () => {
+    expect(periodRange("day", wednesday, 6)).toEqual(periodRange("day", wednesday));
+    expect(periodRange("month", wednesday, 6)).toEqual(periodRange("month", wednesday));
+    expect(periodRange("last90", wednesday, 6)).toEqual(periodRange("last90", wednesday));
+  });
+});

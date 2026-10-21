@@ -14,7 +14,9 @@ import { Page } from "@/shared/ui/page";
 import { Segmented, type SegmentedOption } from "@/shared/ui/segmented";
 import { Skeleton } from "@/shared/ui/skeleton";
 
-import { periodNoun, type Period } from "../lib/periods";
+import { GoalSummary } from "@/features/goals/components/GoalSummary";
+
+import { periodNoun, type Period, type WeekStart } from "../lib/periods";
 import type { Averages, Row, TrendView } from "../lib/summary";
 import { BreakdownList } from "./BreakdownList";
 import { PeriodNav } from "./PeriodNav";
@@ -41,6 +43,9 @@ interface Props {
   loading: boolean;
   error: string | null;
   dark: boolean;
+  /** First day of the week, for the heatmap rows. */
+  weekStart: WeekStart;
+  onMarkGoalSeen: (goalId: number) => void;
   /** `undefined` while the first load is pending. */
   data: DashboardDto | undefined;
   trend: TrendView;
@@ -180,6 +185,16 @@ export function OverviewView(props: Props) {
               </Card>
             </div>
 
+            {data.goals.length > 0 && (
+              <Card title="Goals" hint="Progress in the current period">
+                <ul aria-label="Goal progress" className="divide-y divide-border">
+                  {data.goals.map((status) => (
+                    <GoalSummary key={status.goal.id} status={status} onMarkSeen={props.onMarkGoalSeen} />
+                  ))}
+                </ul>
+              </Card>
+            )}
+
             <Card title={bucketTitle}>
               <StackedBars bars={props.bars} dark={props.dark} label={chartLabel} />
             </Card>
@@ -187,7 +202,7 @@ export function OverviewView(props: Props) {
             {period !== "day" && (
               <div className="grid gap-4 lg:grid-cols-2">
                 <Card title="Busiest hours" hint="Local time">
-                  <Heatmap cells={data.heatmap} label="Tracked time by weekday and hour" />
+                  <Heatmap cells={data.heatmap} weekStart={props.weekStart} label="Tracked time by weekday and hour" />
                 </Card>
                 <Card title="Trend">
                   <TrendLine points={props.trendPoints} label={`Tracked time per ${props.bucket.singular}`} />

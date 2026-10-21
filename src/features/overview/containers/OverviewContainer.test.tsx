@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { DashboardDto, RangeDto } from "@/shared/ipc";
 import { HOUR } from "@/shared/lib/time";
-import { dashboard, mockBackend, renderWithProviders } from "@/test/ipc";
+import { dashboard, goalStatus, mockBackend, renderWithProviders, settings } from "@/test/ipc";
 
 import { OverviewContainer } from "./OverviewContainer";
 
@@ -312,5 +312,32 @@ describe("OverviewContainer", () => {
     renderWithProviders(<OverviewContainer />);
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Could not load the overview: database is locked");
+  });
+
+  it("lists the goals of the dashboard with their progress", async () => {
+    backend({
+      get_dashboard: (args) => ({
+        ...weekDashboard(args.buckets as RangeDto[]),
+        goals: [goalStatus({ streak: { current: 4, best: 6, at_risk: false } }, { label: "Deep work" })],
+      }),
+    });
+    renderWithProviders(<OverviewContainer />);
+
+    const card = await screen.findByRole("region", { name: "Goals" });
+    expect(within(card).getByText("Deep work")).toBeInTheDocument();
+    expect(within(card).getByText("Streak: 4 days in a row")).toBeInTheDocument();
+    expect(within(card).getByRole("progressbar")).toBeInTheDocument();
+  });
+
+  it("starts weeks on the configured day and orders the heatmap rows the same way", async () => {
+    // Sunday-first: the week of Wed Oct 21 runs Sun Oct 18 .. Sun Oct 25.
+    const { calls } = backend({ settings_get: () => settings({ week_start: 6 }) });
+    renderWithProviders(<OverviewContainer />);
+
+    await waitFor(() => {
+      const sent = dashboardCalls(calls).at(-1);
+      expect(sent?.range).toEqual({ from: local(2026, 10, 18), to: local(2026, 10, 25) });
+      expect(sent?.previous).toEqual({ from: local(2026, 10, 11), to: local(2026, 10, 18) });
+    });
   });
 });

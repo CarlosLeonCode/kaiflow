@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-goals-delete"
+description = "Enables the goals_delete command without any pre-configured scope."
+commands.allow = ["goals_delete"]
+
+[[permission]]
+identifier = "deny-goals-delete"
+description = "Denies the goals_delete command without any pre-configured scope."
+commands.deny = ["goals_delete"]

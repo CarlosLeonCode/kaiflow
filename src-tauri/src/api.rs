@@ -14,10 +14,10 @@ use crate::composition::AppState;
 use crate::error::AppError;
 use crate::ipc::dto::{
     ActivityDto, ApplyPresetResultDto, BackupReportDto, BackupStatusDto, DashboardDto, DeleteOpDto,
-    IdleGapDto, IdleResolutionDto, PermissionStateDto, PresetDto, PrivacyModeDto, PrivacyRulesDto,
-    ProductivityDto, RangeDto, ReportDto, RestorePreviewDto, RestoreResultDto, RetentionImpactDto,
-    RuleDto, RuleInputDto, SettingsDto, SettingsPatchDto, ShortcutStatusDto, SuggestionDto,
-    TimelineItemDto, TrackingStateDto, TrackingStatusDto,
+    GoalDto, GoalStatusDto, IdleGapDto, IdleResolutionDto, PermissionStateDto, PresetDto,
+    PrivacyModeDto, PrivacyRulesDto, ProductivityDto, RangeDto, ReportDto, RestorePreviewDto,
+    RestoreResultDto, RetentionImpactDto, RuleDto, RuleInputDto, SettingsDto, SettingsPatchDto,
+    ShortcutStatusDto, SuggestionDto, TimelineItemDto, TrackingStateDto, TrackingStatusDto,
 };
 
 impl AppState {
@@ -88,7 +88,8 @@ impl AppState {
             &self.calendar,
             self.now(),
         )?;
-        Ok(dashboard.into())
+        let goals = self.goals.statuses(self.now())?;
+        Ok(DashboardDto::new(dashboard, goals))
     }
 
     pub fn get_timeline(&self, range: RangeDto) -> Result<Vec<TimelineItemDto>, AppError> {
@@ -168,12 +169,53 @@ impl AppState {
         );
         if let Some(applier) = self.applier() {
             applier.refresh_tray_text();
+            // Goals and the week start came with the restored data.
+            applier.refresh_goals();
         }
     }
 
     /// What purging data older than `days` days would delete, for the confirmation.
     pub fn retention_impact(&self, days: u32) -> Result<RetentionImpactDto, AppError> {
         Ok(self.commands.retention_impact(days, self.now())?.into())
+    }
+
+    pub fn goals_list(&self) -> Result<Vec<GoalDto>, AppError> {
+        Ok(self.goals.list()?.into_iter().map(Into::into).collect())
+    }
+
+    /// Creates (`id <= 0`) or updates a goal, then asks the watcher and the tray to look again.
+    pub fn goals_upsert(&self, goal: GoalDto) -> Result<GoalDto, AppError> {
+        let saved = self.goals.save(goal.into(), self.now())?;
+        self.refresh_goal_views();
+        Ok(saved.into())
+    }
+
+    pub fn goals_delete(&self, id: i64) -> Result<(), AppError> {
+        self.goals.delete(id)?;
+        self.refresh_goal_views();
+        Ok(())
+    }
+
+    /// Progress and streak of every active goal: what the popover, Today and Overview show.
+    pub fn goals_status(&self) -> Result<Vec<GoalStatusDto>, AppError> {
+        Ok(self
+            .goals
+            .statuses(self.now())?
+            .into_iter()
+            .map(Into::into)
+            .collect())
+    }
+
+    /// The user saw the badge of a goal.
+    pub fn goal_events_mark_seen(&self, goal_id: i64) -> Result<(), AppError> {
+        Ok(self.goals.mark_seen(goal_id)?)
+    }
+
+    fn refresh_goal_views(&self) {
+        if let Some(applier) = self.applier() {
+            applier.refresh_goals();
+            applier.refresh_tray_text();
+        }
     }
 
     pub fn list_pending_idle_gaps(&self) -> Result<Vec<IdleGapDto>, AppError> {
@@ -297,6 +339,7 @@ impl AppState {
         let autostart_changed = patch.autostart.is_some();
         let shortcut_changed = patch.shortcut.is_some();
         let tray_changed = patch.tray_display.is_some();
+        let week_changed = patch.week_start.is_some();
         let settings = self.commands.update_settings(&patch.into())?;
         if titles_changed {
             self.engine.request(Command::ReloadPrivacy)?;
@@ -315,8 +358,11 @@ impl AppState {
             if shortcut_changed && let Err(e) = applier.set_shortcut(&settings.shortcut) {
                 first_error.get_or_insert(e);
             }
-            if tray_changed {
+            if tray_changed || week_changed {
                 applier.refresh_tray_text();
+            }
+            if week_changed {
+                applier.refresh_goals();
             }
         }
         match first_error {
@@ -384,7 +430,10 @@ mod tests {
 
     use super::*;
     use crate::composition::{Providers, compose};
-    use crate::ipc::dto::{RetentionPatchDto, RuleSpecDto, TrackingStateDto, TrayDisplayDto};
+    use crate::ipc::dto::{
+        GoalKindDto, GoalScopeDto, GoalStateDto, PeriodDto, RetentionPatchDto, RuleSpecDto,
+        TrackingStateDto, TrayDisplayDto,
+    };
 
     struct Rig {
         state: AppState,
@@ -1099,6 +1148,140 @@ mod tests {
         assert_eq!(impact.segments, 0);
         assert_eq!(impact.streak_days_cut, None);
         assert!(rig.state.retention_impact(0).is_err());
+        rig.state.shutdown();
+    }
+
+    fn minimum_goal(scope: GoalScopeDto, target_ms: i64) -> GoalDto {
+        GoalDto {
+            id: 0,
+            label: "Deep work".into(),
+            scope,
+            period: PeriodDto::Daily,
+            kind: GoalKindDto::Minimum,
+            target_ms,
+            active_days: 127,
+            archived: false,
+        }
+    }
+
+    #[test]
+    fn goals_are_created_listed_reported_and_deleted() {
+        let rig = rig();
+        assert!(rig.state.goals_status().unwrap().is_empty());
+        let saved = rig
+            .state
+            .goals_upsert(minimum_goal(GoalScopeDto::Total, 3_600_000))
+            .unwrap();
+        assert!(saved.id > 0);
+        assert_eq!(rig.state.goals_list().unwrap(), vec![saved.clone()]);
+
+        let status = rig.state.goals_status().unwrap();
+        assert_eq!(status.len(), 1);
+        assert_eq!(status[0].state, GoalStateDto::Pending);
+        assert_eq!(status[0].target_ms, 3_600_000);
+
+        // The Overview carries the same figures.
+        let dashboard = rig
+            .state
+            .get_dashboard(around_now(&rig.state), Vec::new(), None)
+            .unwrap();
+        assert_eq!(dashboard.goals, status);
+
+        // Invalid goals are rejected before storage; an unknown activity too.
+        assert!(matches!(
+            rig.state
+                .goals_upsert(minimum_goal(GoalScopeDto::Total, 0))
+                .unwrap_err(),
+            AppError::Invalid { .. }
+        ));
+        assert!(matches!(
+            rig.state
+                .goals_upsert(minimum_goal(
+                    GoalScopeDto::Activity { activity_id: 99 },
+                    1_000
+                ))
+                .unwrap_err(),
+            AppError::Invalid { .. }
+        ));
+
+        rig.state.goals_delete(saved.id).unwrap();
+        assert!(rig.state.goals_list().unwrap().is_empty());
+        rig.state.shutdown();
+    }
+
+    #[test]
+    fn deleting_an_activity_removes_the_goals_that_target_it() {
+        let rig = rig();
+        let work = rig
+            .state
+            .activities_create("Work", "#111111", ProductivityDto::Productive)
+            .unwrap();
+        rig.state
+            .goals_upsert(minimum_goal(
+                GoalScopeDto::Activity {
+                    activity_id: work.id,
+                },
+                3_600_000,
+            ))
+            .unwrap();
+        rig.state
+            .goals_upsert(minimum_goal(GoalScopeDto::Total, 1_000))
+            .unwrap();
+        rig.state.activities_delete(work.id).unwrap();
+        let left = rig.state.goals_list().unwrap();
+        assert_eq!(left.len(), 1);
+        assert_eq!(left[0].scope, GoalScopeDto::Total);
+        rig.state.shutdown();
+    }
+
+    #[test]
+    fn the_week_start_is_a_setting_and_changes_weekly_periods() {
+        let rig = rig();
+        assert_eq!(rig.state.settings_get().unwrap().week_start, 0);
+        let mut weekly = minimum_goal(GoalScopeDto::Total, 3_600_000);
+        weekly.period = PeriodDto::Weekly;
+        rig.state.goals_upsert(weekly).unwrap();
+        let monday_first = rig.state.goals_status().unwrap().remove(0).period;
+
+        let patch = SettingsPatchDto {
+            week_start: Some(6),
+            ..SettingsPatchDto::default()
+        };
+        assert_eq!(rig.state.settings_update(patch).unwrap().week_start, 6);
+        let sunday_first = rig.state.goals_status().unwrap().remove(0).period;
+        // Both weeks last seven days (DST aside) but do not start on the same day.
+        assert_ne!(monday_first.from, sunday_first.from);
+        assert!(
+            rig.state
+                .settings_update(SettingsPatchDto {
+                    week_start: Some(9),
+                    ..SettingsPatchDto::default()
+                })
+                .is_err()
+        );
+        rig.state.shutdown();
+    }
+
+    #[test]
+    fn goals_survive_a_backup_and_restore() {
+        let rig = rig();
+        rig.state
+            .goals_upsert(minimum_goal(GoalScopeDto::Total, 3_600_000))
+            .unwrap();
+        let report = rig.state.backup_now().unwrap();
+        let first = rig.state.goals_list().unwrap().remove(0);
+        rig.state.goals_delete(first.id).unwrap();
+        rig.state
+            .goals_upsert(minimum_goal(GoalScopeDto::Total, 7_200_000))
+            .unwrap();
+
+        let preview = rig
+            .state
+            .restore_prepare_file(std::path::Path::new(&report.path))
+            .unwrap();
+        rig.state.restore_apply(preview.token).unwrap();
+        let restored = rig.state.goals_list().unwrap();
+        assert_eq!(restored, vec![first]);
         rig.state.shutdown();
     }
 }

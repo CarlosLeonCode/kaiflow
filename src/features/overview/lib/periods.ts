@@ -14,17 +14,27 @@ export type Period = "day" | "week" | "month" | "last90";
 /** Length of the rolling window. */
 export const LAST_DAYS = 90;
 
-/** Weeks start on Monday (ISO 8601). */
-const WEEK_STARTS_ON = 1;
+/**
+ * First day of the week, as the backend stores it: 0 = Monday .. 6 = Sunday. Monday is the
+ * default (ISO 8601); the user can change it in Settings.
+ */
+export type WeekStart = number;
+
+export const DEFAULT_WEEK_START: WeekStart = 0;
+
+/** `Date#getDay` counts from Sunday = 0. */
+function jsWeekday(weekStart: WeekStart): number {
+  return (weekStart + 1) % 7;
+}
 
 /** Local midnight of the first day of the period that contains `anchor`. */
-export function periodStart(period: Period, anchor: number): number {
+export function periodStart(period: Period, anchor: number, weekStart: WeekStart = DEFAULT_WEEK_START): number {
   const date = new Date(anchor);
   switch (period) {
     case "day":
       return addLocalDays(anchor, 0);
     case "week": {
-      const sinceWeekStart = (date.getDay() - WEEK_STARTS_ON + 7) % 7;
+      const sinceWeekStart = (date.getDay() - jsWeekday(weekStart) + 7) % 7;
       return addLocalDays(anchor, -sinceWeekStart);
     }
     case "month":
@@ -35,8 +45,13 @@ export function periodStart(period: Period, anchor: number): number {
 }
 
 /** Start of the period `delta` periods away from the one containing `anchor`. */
-export function shiftPeriod(period: Period, anchor: number, delta: number): number {
-  const start = periodStart(period, anchor);
+export function shiftPeriod(
+  period: Period,
+  anchor: number,
+  delta: number,
+  weekStart: WeekStart = DEFAULT_WEEK_START,
+): number {
+  const start = periodStart(period, anchor, weekStart);
   switch (period) {
     case "day":
       return addLocalDays(start, delta);
@@ -52,26 +67,36 @@ export function shiftPeriod(period: Period, anchor: number, delta: number): numb
 }
 
 /** Half-open range of the whole period containing `anchor`. */
-export function periodRange(period: Period, anchor: number): RangeDto {
-  if (period === "last90") return { from: periodStart(period, anchor), to: addLocalDays(anchor, 1) };
-  return { from: periodStart(period, anchor), to: shiftPeriod(period, anchor, 1) };
+export function periodRange(period: Period, anchor: number, weekStart: WeekStart = DEFAULT_WEEK_START): RangeDto {
+  if (period === "last90") return { from: periodStart(period, anchor, weekStart), to: addLocalDays(anchor, 1) };
+  return { from: periodStart(period, anchor, weekStart), to: shiftPeriod(period, anchor, 1, weekStart) };
 }
 
 /** The period right before `range`, of the same kind (and length). */
-export function previousRange(period: Period, range: RangeDto): RangeDto {
+export function previousRange(period: Period, range: RangeDto, weekStart: WeekStart = DEFAULT_WEEK_START): RangeDto {
   if (period === "last90") return { from: addLocalDays(range.from, -LAST_DAYS), to: range.from };
-  return periodRange(period, shiftPeriod(period, range.from, -1));
+  return periodRange(period, shiftPeriod(period, range.from, -1, weekStart), weekStart);
 }
 
 /** An instant inside the period `delta` periods away from `range` (the new navigation anchor). */
-export function shiftAnchor(period: Period, range: RangeDto, delta: number): number {
+export function shiftAnchor(
+  period: Period,
+  range: RangeDto,
+  delta: number,
+  weekStart: WeekStart = DEFAULT_WEEK_START,
+): number {
   if (period === "last90") return addLocalDays(range.to, delta * LAST_DAYS - 1);
-  return shiftPeriod(period, range.from, delta);
+  return shiftPeriod(period, range.from, delta, weekStart);
 }
 
 /** The next period only exists while it has started: the Overview never navigates into the future. */
-export function canGoNext(period: Period, range: RangeDto, now: number): boolean {
-  return periodRange(period, shiftAnchor(period, range, 1)).from <= now;
+export function canGoNext(
+  period: Period,
+  range: RangeDto,
+  now: number,
+  weekStart: WeekStart = DEFAULT_WEEK_START,
+): boolean {
+  return periodRange(period, shiftAnchor(period, range, 1, weekStart), weekStart).from <= now;
 }
 
 /** One range per local calendar day inside `range`. */

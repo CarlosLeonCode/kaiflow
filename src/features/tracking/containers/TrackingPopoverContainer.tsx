@@ -2,6 +2,7 @@ import { type ReactNode, useMemo } from "react";
 
 import {
   errorMessage,
+  useGoalsStatusQuery,
   useOpenAccessibilitySettingsMutation,
   useOpenMainWindowMutation,
   useReportQuery,
@@ -9,6 +10,7 @@ import {
   useTrackingCommandMutation,
 } from "@/shared/ipc";
 import { localDayRange } from "@/shared/lib/time";
+import { withLiveTime } from "@/features/goals/lib/goals";
 import { Alert, AlertDescription } from "@/shared/ui/alert";
 
 import { TrackingPopover } from "../components/TrackingPopover";
@@ -24,6 +26,7 @@ export function TrackingPopoverContainer({ notice }: { notice?: ReactNode }) {
   const dayStart = localDayRange(now).from;
   const range = useMemo(() => localDayRange(dayStart), [dayStart]);
   const report = useReportQuery(range);
+  const goals = useGoalsStatusQuery();
   const toggle = useTrackingCommandMutation();
   const openMain = useOpenMainWindowMutation();
   const openSettings = useOpenAccessibilitySettingsMutation();
@@ -53,6 +56,11 @@ export function TrackingPopoverContainer({ notice }: { notice?: ReactNode }) {
       totalMs={reportTotal === undefined ? undefined : reportTotal + elapsed}
       topApps={buildTopApps(report.data?.by_app ?? [], data?.current ?? null, elapsed, TOP_APPS)}
       topAppsLoading={report.isPending}
+      goals={withLiveTime(
+        goals.data ?? [],
+        data?.current ? { app_id: data.current.app_id, activity_id: null } : null,
+        goals.data ? elapsedSinceFetch(goals.dataUpdatedAt, now, accruing) : 0,
+      )}
       togglePending={toggle.isPending}
       notice={notice}
       onToggle={(command) => toggle.mutate(command)}

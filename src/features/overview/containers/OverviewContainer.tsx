@@ -2,13 +2,20 @@ import { useMemo, useState } from "react";
 
 import { SectionIntroContainer } from "@/features/shell/containers/SectionIntroContainer";
 import { useNow } from "@/features/tracking/hooks/useNow";
-import { errorMessage, useDashboardQuery, useExportJsonMutation } from "@/shared/ipc";
+import {
+  errorMessage,
+  useDashboardQuery,
+  useExportJsonMutation,
+  useMarkGoalSeenMutation,
+  useSettingsQuery,
+} from "@/shared/ipc";
 import { useIsDark } from "@/shared/lib/theme";
 
 import { OverviewView } from "../components/OverviewView";
 import {
   bucketsFor,
   canGoNext,
+  DEFAULT_WEEK_START,
   periodLabel,
   periodRange,
   previousRange,
@@ -39,8 +46,12 @@ export function OverviewContainer() {
   const [period, setPeriod] = useState<Period>("week");
   const [anchor, setAnchor] = useState(() => Date.now());
 
-  const range = useMemo(() => periodRange(period, anchor), [period, anchor]);
-  const previous = useMemo(() => previousRange(period, range), [period, range]);
+  const settings = useSettingsQuery();
+  const weekStart = settings.data?.week_start ?? DEFAULT_WEEK_START;
+  const markSeen = useMarkGoalSeenMutation();
+
+  const range = useMemo(() => periodRange(period, anchor, weekStart), [period, anchor, weekStart]);
+  const previous = useMemo(() => previousRange(period, range, weekStart), [period, range, weekStart]);
   const buckets = useMemo(() => bucketsFor(period, range), [period, range]);
 
   const dashboard = useDashboardQuery(range, buckets, previous);
@@ -59,7 +70,7 @@ export function OverviewContainer() {
   }
 
   function move(delta: number) {
-    setAnchor(shiftAnchor(period, range, delta));
+    setAnchor(shiftAnchor(period, range, delta, weekStart));
     clearExport();
   }
 
@@ -72,7 +83,7 @@ export function OverviewContainer() {
         clearExport();
       }}
       label={periodLabel(period, range)}
-      canGoNext={canGoNext(period, range, now)}
+      canGoNext={canGoNext(period, range, now, weekStart)}
       isCurrent={current}
       onPrevious={() => move(-1)}
       onNext={() => move(1)}
@@ -83,6 +94,8 @@ export function OverviewContainer() {
       loading={dashboard.isPending}
       error={dashboard.error ? errorMessage(dashboard.error) : null}
       dark={dark}
+      weekStart={weekStart}
+      onMarkGoalSeen={(goalId) => markSeen.mutate(goalId)}
       data={data}
       trend={trendView(period, data?.trend ?? { kind: "no_comparison" })}
       averages={averages(bars)}

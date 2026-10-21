@@ -18,6 +18,10 @@ import { DayTimeline } from "./DayTimeline";
 interface Props {
   /** Dismissible section introduction, rendered by `Page`. */
   intro?: ReactNode;
+  /** The goals strip, shown above the cards. */
+  goals?: ReactNode;
+  /** Whether any goal exists: with none, the empty day does not repeat an invitation. */
+  hasGoals?: boolean;
   /** Next step when nothing is tracked and tracking is not running (start or resume). */
   emptyAction?: { label: string; onClick: () => void };
   range: RangeDto;
@@ -56,6 +60,8 @@ function Card({ title, children, label }: { title: string; children: React.React
 /** Today dashboard (presentational): totals, SVG timeline, by app and by activity. */
 export function TodayView({
   intro,
+  goals,
+  hasGoals = false,
   emptyAction,
   range,
   now,
@@ -105,13 +111,17 @@ export function TodayView({
           <Skeleton className="h-40" />
         </div>
       ) : empty ? (
-        <EmptyState title="Nothing tracked yet today" action={state === "running" ? undefined : emptyAction}>
-          {state === "running"
-            ? "Tracking is on. Switch between a few apps and your day will start to fill in here."
-            : "Tracking is not running. Start it and your day will appear here."}
-        </EmptyState>
+        <>
+          {hasGoals && <div className="mb-4">{goals}</div>}
+          <EmptyState title="Nothing tracked yet today" action={state === "running" ? undefined : emptyAction}>
+            {state === "running"
+              ? "Tracking is on. Switch between a few apps and your day will start to fill in here."
+              : "Tracking is not running. Start it and your day will appear here."}
+          </EmptyState>
+        </>
       ) : (
         <div className="space-y-4">
+          {goals}
           <Card title="Focused time" label="Focused and away time">
             <div className="flex flex-wrap items-end gap-x-10 gap-y-3">
               <p

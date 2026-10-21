@@ -11,13 +11,14 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use adapters_common::files::FsFileSink;
 use adapters_common::idle::IdleThreshold;
 use adapters_sqlite::{
-    DbError, SqliteActivityRepository, SqliteBackupStore, SqlitePrivacyRepository,
-    SqliteReportRepository, SqliteRetentionRepository, SqliteSessionRepository,
-    SqliteSettingsRepository,
+    DbError, SqliteActivityRepository, SqliteBackupStore, SqliteGoalRepository,
+    SqlitePrivacyRepository, SqliteReportRepository, SqliteRetentionRepository,
+    SqliteSessionRepository, SqliteSettingsRepository,
 };
 use application::commands::Commands;
 use application::engine::{Command, Engine, EngineHandle, Ports};
 use application::export::DataService;
+use application::goals::GoalService;
 use application::idle_policy::IdlePolicy;
 use application::ports::{
     ActiveWindowProvider, ActivityRepository, Clock, EventSink, Notifier, PermissionProvider,
@@ -94,6 +95,8 @@ pub trait SettingsApplier: Send + Sync {
     fn set_shortcut(&self, shortcut: &str) -> Result<(), AppError>;
     /// The tray text reads `tray_display` itself; this only asks it to recompute. Never blocks.
     fn refresh_tray_text(&self);
+    /// Goals or the week start changed: the goal watcher re-evaluates. Never blocks.
+    fn refresh_goals(&self) {}
 }
 
 #[derive(Debug)]
@@ -130,6 +133,8 @@ pub struct AppState {
     pub presets: PresetService,
     /// JSON export, daily backup and restore.
     pub data: DataService,
+    /// Goals, their progress and streaks (shared by the popover, Today and Overview).
+    pub goals: Arc<GoalService>,
     /// Read-only listing of activities and rules (writes go through `commands`).
     pub activities: Arc<dyn ActivityRepository>,
     pub permission: Arc<dyn PermissionProvider>,
@@ -184,13 +189,18 @@ pub fn compose(
 
     let reports = Arc::new(reports);
     let queries = Queries::new(reports.clone(), activities.clone());
-    let presets = PresetService::new(activities.clone(), reports, settings.clone());
-    let commands = Arc::new(Commands::new(
+    let goals = Arc::new(GoalService::new(
+        Arc::new(SqliteGoalRepository::new(adapters_sqlite::open(db_path)?)),
+        reports.clone(),
         activities.clone(),
-        privacy.clone(),
-        settings,
-        retention,
+        settings.clone(),
+        Arc::new(ChronoLocalCalendar),
     ));
+    let presets = PresetService::new(activities.clone(), reports, settings.clone());
+    let commands = Arc::new(
+        Commands::new(activities.clone(), privacy.clone(), settings, retention)
+            .with_streaks(goals.clone()),
+    );
 
     let idle_policy = IdlePolicy::default();
     if let Ok(settings) = commands.get_settings() {
@@ -221,6 +231,7 @@ pub fn compose(
         commands,
         presets,
         data,
+        goals,
         activities,
         permission: providers.permission,
         shortcut,

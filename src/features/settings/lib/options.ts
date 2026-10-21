@@ -11,7 +11,24 @@ export const TRAY_DISPLAY_OPTIONS: readonly TrayDisplayOption[] = [
   { value: "today_total", label: "Today's total (3h 12m)" },
   { value: "current_app", label: "Current app (Xcode · 40m)" },
   { value: "today_and_current", label: "Both (3h 12m · Xcode 40m)" },
+  { value: "goal_progress", label: "Top goal (2h 10m / 3h)" },
 ];
+
+const WEEKDAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] as const;
+
+export interface WeekStartOption {
+  value: number;
+  label: string;
+}
+
+/** The usual first days of the week; the stored value is always selectable (0 = Monday). */
+export function weekStartOptions(current: number): WeekStartOption[] {
+  const values = new Set<number>([0, 5, 6, current]);
+  return [...values]
+    .filter((value) => value >= 0 && value <= 6)
+    .sort((a, b) => (a === 0 ? -1 : b === 0 ? 1 : a - b))
+    .map((value) => ({ value, label: WEEKDAY_NAMES[value] ?? "Monday" }));
+}
 
 /** Narrows the stored string to a known option, falling back to the default. */
 export function parseTrayDisplay(value: string): TrayDisplayDto {

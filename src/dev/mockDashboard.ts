@@ -130,5 +130,7 @@ export function buildDashboard(input: Input): DashboardDto {
     productivity,
     focus_ratio: signal > 0 ? { kind: "ratio", ratio: productivity.productive_ms / signal } : { kind: "no_signal" },
     auto_discarded_gaps: 0,
+    // Filled in by the mocked `get_dashboard` handler (it owns the goals).
+    goals: [],
   };
 }

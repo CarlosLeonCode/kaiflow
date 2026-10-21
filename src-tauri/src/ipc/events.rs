@@ -11,8 +11,8 @@ use tauri::{AppHandle, Wry};
 use tauri_specta::Event;
 
 use super::dto::{
-    DegradedReasonDto, FocusDto, IdleGapDto, IdleResolutionDto, PermissionStateDto,
-    ShortcutStatusDto, TrackingStatusDto, UpdateInfoDto,
+    DegradedReasonDto, FocusDto, GoalEventKindDto, IdleGapDto, IdleResolutionDto,
+    PermissionStateDto, ShortcutStatusDto, TrackingStatusDto, UpdateInfoDto,
 };
 
 /// Shortcut state shared between the commands, the shortcut registrar and this sink.
@@ -23,6 +23,7 @@ pub type SharedShortcut = Arc<Mutex<ShortcutStatusDto>>;
 pub enum DataKindDto {
     Segments,
     Gaps,
+    Goals,
 }
 
 impl From<DataKind> for DataKindDto {
@@ -30,6 +31,7 @@ impl From<DataKind> for DataKindDto {
         match k {
             DataKind::Segments => Self::Segments,
             DataKind::Gaps => Self::Gaps,
+            DataKind::Goals => Self::Goals,
         }
     }
 }
@@ -105,6 +107,16 @@ pub struct BackupFinished {
     pub ok: bool,
     /// The file written, or the reason it failed.
     pub message: String,
+}
+
+/// A goal crossed its threshold for the first time in its period: a minimum was reached or
+/// a maximum exceeded. The windows refresh their goal views (the badge shows the crossing
+/// even when system notifications are denied).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type, Event)]
+pub struct GoalCrossed {
+    pub goal_id: i64,
+    pub label: String,
+    pub kind: GoalEventKindDto,
 }
 
 /// Everything the backend can push, as one value so translation is testable.

@@ -15,6 +15,10 @@ export const INTROS: Record<SectionId, IntroCopy> = {
     title: "See the bigger picture",
     body: "Pick a day, a week, a month or the last 90 days to see where your time went: totals by activity and app, a trend against the period before, the hours you are busiest and how much of your time was productive. Time that crosses midnight is shared between both days.",
   },
+  goals: {
+    title: "Aim for what matters",
+    body: "A goal is a target for your time: at least some hours of an activity, or at most some minutes in an app. Pick a period and the days that count, and you will see your progress and a streak of periods in a row. Rest days never break a streak. Goals only keep you informed: nothing is ever blocked.",
+  },
   activities: {
     title: "Organize time into activities",
     body: "An activity is a label for what you were doing: a project, a client or a kind of task. Rules say which apps and window titles belong to each one, so your time is sorted for you, past time included. Anything without a rule stays Unassigned.",
@@ -25,6 +29,6 @@ export const INTROS: Record<SectionId, IntroCopy> = {
   },
   settings: {
     title: "Tune the app",
-    body: "Idle detection, appearance, startup behavior and the global shortcut live here, along with your data: a daily backup of your tracked time and a way to restore it from a file.",
+    body: "Idle detection, appearance, the first day of your week, startup behavior and the global shortcut live here, along with your data: a daily backup of your tracked time and a way to restore it from a file.",
   },
 };

@@ -8,8 +8,8 @@ use std::sync::{Arc, Mutex};
 use crossbeam_channel::Sender;
 use domain::{
     Activity, ActivityId, ActivityRule, AssignedSpan, EndReason, FocusSnapshot, GapId, GapStatus,
-    IdleGap, PermissionState, PrivacyPolicy, Productivity, SeenApp, Segment, SegmentId,
-    SegmentSource, UtcMs,
+    Goal, GoalEventKind, IdleGap, PermissionState, PrivacyPolicy, Productivity, SeenApp, Segment,
+    SegmentId, SegmentSource, UtcMs,
 };
 
 use crate::ports::*;
@@ -478,6 +478,8 @@ impl EventSink for RecordingSink {
 pub struct RecordingNotifier {
     pub idle_returns: Arc<AtomicUsize>,
     pub revocations: Arc<AtomicUsize>,
+    /// `(goal label, kind)` of every goal alert.
+    pub goal_alerts: Arc<Mutex<Vec<(String, GoalEventKind)>>>,
 }
 
 impl Notifier for RecordingNotifier {
@@ -486,6 +488,9 @@ impl Notifier for RecordingNotifier {
     }
     fn permission_revoked(&self) {
         self.revocations.fetch_add(1, Ordering::SeqCst);
+    }
+    fn goal_crossed(&self, label: &str, kind: GoalEventKind) {
+        self.goal_alerts.lock().unwrap().push((label.into(), kind));
     }
 }
 
@@ -579,6 +584,13 @@ impl FixedCalendar {
 }
 
 impl Calendar for FixedCalendar {
+    fn start_of_day(&self, day: i64) -> UtcMs {
+        const DAY: i64 = 86_400_000;
+        let local_midnight = day * DAY;
+        let guess = local_midnight - self.offset_at(local_midnight);
+        UtcMs(local_midnight - self.offset_at(guess))
+    }
+
     fn local_day(&self, at: UtcMs) -> i64 {
         (at.0 + self.offset_at(at.0)).div_euclid(86_400_000)
     }
@@ -720,6 +732,101 @@ impl BackupStore for FakeBackupStore {
             return Err(PortError("replace failed".into()));
         }
         state.data = data.clone();
+        Ok(())
+    }
+}
+
+#[derive(Default)]
+struct Goals {
+    goals: Vec<Goal>,
+    events: Vec<GoalEvent>,
+    next_id: i64,
+}
+
+/// In-memory goals and event log.
+#[derive(Clone, Default)]
+pub struct FakeGoals(Arc<Mutex<Goals>>);
+
+impl FakeGoals {
+    pub fn events(&self) -> Vec<GoalEvent> {
+        self.0.lock().unwrap().events.clone()
+    }
+}
+
+impl GoalRepository for FakeGoals {
+    fn list(&self) -> PortResult<Vec<Goal>> {
+        Ok(self.0.lock().unwrap().goals.clone())
+    }
+
+    fn save(&self, goal: &Goal) -> PortResult<Goal> {
+        let mut g = self.0.lock().unwrap();
+        if goal.id > 0 {
+            let Some(existing) = g.goals.iter_mut().find(|e| e.id == goal.id) else {
+                return Err(PortError("goal not found".into()));
+            };
+            let created_at = existing.created_at;
+            *existing = Goal {
+                created_at,
+                ..goal.clone()
+            };
+            return Ok(existing.clone());
+        }
+        g.next_id += 1;
+        let stored = Goal {
+            id: g.next_id,
+            ..goal.clone()
+        };
+        g.goals.push(stored.clone());
+        Ok(stored)
+    }
+
+    fn delete(&self, id: i64) -> PortResult<()> {
+        let mut g = self.0.lock().unwrap();
+        g.goals.retain(|e| e.id != id);
+        g.events.retain(|e| e.goal_id != id);
+        Ok(())
+    }
+
+    fn record_event(&self, event: &GoalEvent) -> PortResult<bool> {
+        let mut g = self.0.lock().unwrap();
+        let exists = g.events.iter().any(|e| {
+            e.goal_id == event.goal_id
+                && e.period_start_day == event.period_start_day
+                && e.kind == event.kind
+        });
+        if !exists {
+            g.events.push(event.clone());
+        }
+        Ok(!exists)
+    }
+
+    fn clear_events(&self, goal_id: i64, period_start_day: i64) -> PortResult<()> {
+        self.0
+            .lock()
+            .unwrap()
+            .events
+            .retain(|e| !(e.goal_id == goal_id && e.period_start_day == period_start_day));
+        Ok(())
+    }
+
+    fn unseen_events(&self) -> PortResult<Vec<GoalEvent>> {
+        Ok(self
+            .0
+            .lock()
+            .unwrap()
+            .events
+            .iter()
+            .filter(|e| !e.seen)
+            .cloned()
+            .collect())
+    }
+
+    fn mark_seen(&self, goal_id: i64) -> PortResult<()> {
+        for e in &mut self.0.lock().unwrap().events {
+            if e.goal_id == goal_id {
+                e.seen = true;
+            }
+        }
         Ok(())
     }
 }

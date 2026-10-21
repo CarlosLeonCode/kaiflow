@@ -248,7 +248,7 @@ impl Queries {
 
 /// Activity of a segment: a manual assignment wins, otherwise the rules (memoized per app and
 /// title). A rule or assignment pointing at a deleted activity counts as unassigned.
-fn resolve<'a>(
+pub(crate) fn resolve<'a>(
     segment: &'a Segment,
     rules: &[domain::ActivityRule],
     known: &HashMap<ActivityId, &Activity>,

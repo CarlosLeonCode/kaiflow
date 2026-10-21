@@ -63,12 +63,21 @@ pub struct AppToday<'a> {
     pub today_ms: i64,
 }
 
+/// The goal the `GoalProgress` variant shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GoalTray {
+    pub actual_ms: i64,
+    pub target_ms: i64,
+}
+
 /// Everything the text depends on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TraySnapshot<'a> {
     pub kind: TrackingKind,
     pub today_ms: i64,
     pub current: Option<AppToday<'a>>,
+    /// The top goal; only read by `TrayDisplay::GoalProgress`.
+    pub goal: Option<GoalTray>,
 }
 
 /// Minute resolution, two digit columns for the minutes (see the module docs).
@@ -80,6 +89,28 @@ pub fn format_duration(ms: i64) -> String {
         (0, m) => format!("{m}m"),
         (h, m) => format!("{h}h {m:02}m"),
     }
+}
+
+/// A goal target without the zero-padding of [`format_duration`]: `3h`, `3h 30m`, `45m`.
+pub fn format_target(ms: i64) -> String {
+    let minutes = ms.max(0) / MINUTE_MS;
+    match (minutes / 60, minutes % 60) {
+        (0, m) => format!("{m}m"),
+        (h, 0) => format!("{h}h"),
+        (h, m) => format!("{h}h {m}m"),
+    }
+}
+
+/// `2h 10m / 3h`, kept within the label limit.
+fn goal_text(goal: GoalTray) -> String {
+    truncate(
+        &format!(
+            "{} / {}",
+            format_duration(goal.actual_ms),
+            format_target(goal.target_ms)
+        ),
+        MAX_LABEL_CHARS,
+    )
 }
 
 /// Trims `text` and shortens it to at most `max_chars` characters, ending with `…` when cut.
@@ -104,7 +135,11 @@ pub fn tray_text(display: TrayDisplay, snap: &TraySnapshot<'_>) -> String {
     if display == TrayDisplay::Off {
         return String::new();
     }
-    let total = format_duration(snap.today_ms);
+    // The goal variant replaces the day total; without a goal it falls back to the total.
+    let total = match (display, snap.goal) {
+        (TrayDisplay::GoalProgress, Some(goal)) => goal_text(goal),
+        _ => format_duration(snap.today_ms),
+    };
     match snap.kind {
         TrackingKind::Stopped => String::new(),
         TrackingKind::Paused => format!("{PAUSED_MARKER} {total}"),
@@ -153,7 +188,11 @@ pub fn next_refresh(
                 }
                 _ => None,
             };
-            let next_minute = [Some(snap.today_ms), app]
+            let shown_total = match (display, snap.goal) {
+                (TrayDisplay::GoalProgress, Some(goal)) => goal.actual_ms,
+                _ => snap.today_ms,
+            };
+            let next_minute = [Some(shown_total), app]
                 .into_iter()
                 .flatten()
                 .map(|ms| MINUTE_MS - ms.max(0).rem_euclid(MINUTE_MS))
@@ -315,6 +354,18 @@ fn compute(state: &AppState) -> Result<(String, Option<Duration>), String> {
         });
         (report.total_ms, app)
     };
+    let goal = if display == TrayDisplay::GoalProgress {
+        state
+            .goals
+            .tray_goal(now)
+            .map_err(|e| e.to_string())?
+            .map(|g| GoalTray {
+                actual_ms: g.actual_ms,
+                target_ms: g.target_ms,
+            })
+    } else {
+        None
+    };
     let snap = TraySnapshot {
         kind: status.kind,
         today_ms,
@@ -322,6 +373,7 @@ fn compute(state: &AppState) -> Result<(String, Option<Duration>), String> {
             name,
             today_ms: *today_ms,
         }),
+        goal,
     };
     Ok((
         tray_text(display, &snap),
@@ -356,6 +408,7 @@ mod tests {
             kind: TrackingKind::Running,
             today_ms,
             current,
+            goal: None,
         }
     }
 
@@ -410,6 +463,7 @@ mod tests {
                 kind,
                 today_ms: HOUR,
                 current: xcode(MIN),
+                goal: None,
             };
             assert_eq!(tray_text(TrayDisplay::Off, &snap), "");
         }
@@ -477,6 +531,7 @@ mod tests {
                 kind,
                 today_ms: 3 * HOUR + 12 * MIN,
                 current: xcode(40 * MIN),
+                goal: None,
             };
             assert_eq!(
                 tray_text(display, &at(TrackingKind::Paused)),
@@ -486,6 +541,79 @@ mod tests {
             assert_eq!(tray_text(display, &at(TrackingKind::Asleep)), "3h 12m");
             assert_eq!(tray_text(display, &at(TrackingKind::Stopped)), "");
         }
+    }
+
+    fn with_goal(kind: TrackingKind, actual_ms: i64, target_ms: i64) -> TraySnapshot<'static> {
+        TraySnapshot {
+            kind,
+            today_ms: 5 * HOUR,
+            current: xcode(40 * MIN),
+            goal: Some(GoalTray {
+                actual_ms,
+                target_ms,
+            }),
+        }
+    }
+
+    #[test]
+    fn targets_are_compact() {
+        assert_eq!(format_target(3 * HOUR), "3h");
+        assert_eq!(format_target(3 * HOUR + 30 * MIN), "3h 30m");
+        assert_eq!(format_target(45 * MIN), "45m");
+        assert_eq!(format_target(0), "0m");
+    }
+
+    #[test]
+    fn goal_progress_shows_the_top_goal_and_fits_the_limit() {
+        let snap = with_goal(TrackingKind::Running, 2 * HOUR + 10 * MIN, 3 * HOUR);
+        assert_eq!(tray_text(TrayDisplay::GoalProgress, &snap), "2h 10m / 3h");
+        assert_eq!(
+            tray_text(
+                TrayDisplay::GoalProgress,
+                &with_goal(TrackingKind::Paused, 30 * MIN, HOUR + 30 * MIN)
+            ),
+            "\u{23F8}\u{FE0E} 30m / 1h 30m"
+        );
+        assert_eq!(
+            tray_text(
+                TrayDisplay::GoalProgress,
+                &with_goal(TrackingKind::Stopped, 30 * MIN, HOUR)
+            ),
+            ""
+        );
+        // The longest realistic label still fits the 24 character limit.
+        let long = tray_text(
+            TrayDisplay::GoalProgress,
+            &with_goal(
+                TrackingKind::Running,
+                100 * HOUR + 59 * MIN,
+                124 * HOUR + 59 * MIN,
+            ),
+        );
+        assert!(long.chars().count() <= MAX_LABEL_CHARS, "{long}");
+        // Other variants ignore the goal.
+        assert_eq!(
+            tray_text(
+                TrayDisplay::TodayTotal,
+                &with_goal(TrackingKind::Running, MIN, HOUR)
+            ),
+            "5h 00m"
+        );
+    }
+
+    #[test]
+    fn goal_progress_without_a_goal_shows_the_day_total() {
+        let snap = running(3 * HOUR + 12 * MIN, xcode(40 * MIN));
+        assert_eq!(tray_text(TrayDisplay::GoalProgress, &snap), "3h 12m");
+    }
+
+    #[test]
+    fn goal_progress_wakes_when_the_goal_minute_changes() {
+        let snap = with_goal(TrackingKind::Running, 2 * HOUR + 20_000, 3 * HOUR);
+        assert_eq!(
+            next_refresh(TrayDisplay::GoalProgress, &snap, 10 * HOUR),
+            Some(Duration::from_millis(40_000 + 2_500))
+        );
     }
 
     #[test]
@@ -532,6 +660,7 @@ mod tests {
             kind,
             today_ms: HOUR,
             current: None,
+            goal: None,
         };
         for kind in [
             TrackingKind::Paused,

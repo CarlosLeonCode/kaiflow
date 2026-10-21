@@ -11,10 +11,10 @@ use tauri_specta::Event;
 
 use super::dto::{
     ActivityDto, ApplyPresetResultDto, BackupReportDto, BackupStatusDto, DashboardDto, DeleteOpDto,
-    IdleGapDto, IdleResolutionDto, PermissionStateDto, PresetDto, PrivacyModeDto, PrivacyRulesDto,
-    ProductivityDto, RangeDto, ReportDto, RestorePreviewDto, RestoreResultDto, RetentionImpactDto,
-    RuleDto, RuleInputDto, SettingsDto, SettingsPatchDto, SuggestionDto, TimelineItemDto,
-    TrackingStatusDto, UpdateInfoDto,
+    GoalDto, GoalStatusDto, IdleGapDto, IdleResolutionDto, PermissionStateDto, PresetDto,
+    PrivacyModeDto, PrivacyRulesDto, ProductivityDto, RangeDto, ReportDto, RestorePreviewDto,
+    RestoreResultDto, RetentionImpactDto, RuleDto, RuleInputDto, SettingsDto, SettingsPatchDto,
+    SuggestionDto, TimelineItemDto, TrackingStatusDto, UpdateInfoDto,
 };
 use super::events::{DataChanged, DataKindDto};
 use crate::composition::AppState;
@@ -40,6 +40,14 @@ where
 fn announce_data_changed(app: &AppHandle) {
     let _ = DataChanged {
         kind: DataKindDto::Segments,
+    }
+    .emit(app);
+}
+
+/// Tells every window that goals changed (the popover keeps its own copy of their progress).
+fn announce_goals_changed(app: &AppHandle) {
+    let _ = DataChanged {
+        kind: DataKindDto::Goals,
     }
     .emit(app);
 }
@@ -535,6 +543,50 @@ pub async fn update_install(
     updates: State<'_, crate::updater::UpdaterState>,
 ) -> Result<(), AppError> {
     crate::updater::install_pending(&app, state.inner(), updates.inner()).await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn goals_list(state: Shared<'_>) -> Result<Vec<GoalDto>, AppError> {
+    run(state, AppState::goals_list).await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn goals_upsert(
+    app: AppHandle,
+    state: Shared<'_>,
+    goal: GoalDto,
+) -> Result<GoalDto, AppError> {
+    let saved = run(state, move |s| s.goals_upsert(goal)).await?;
+    announce_goals_changed(&app);
+    Ok(saved)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn goals_delete(app: AppHandle, state: Shared<'_>, id: i64) -> Result<(), AppError> {
+    run(state, move |s| s.goals_delete(id)).await?;
+    announce_goals_changed(&app);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn goals_status(state: Shared<'_>) -> Result<Vec<GoalStatusDto>, AppError> {
+    run(state, AppState::goals_status).await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn goal_events_mark_seen(
+    app: AppHandle,
+    state: Shared<'_>,
+    goal_id: i64,
+) -> Result<(), AppError> {
+    run(state, move |s| s.goal_events_mark_seen(goal_id)).await?;
+    announce_goals_changed(&app);
+    Ok(())
 }
 
 #[cfg(test)]

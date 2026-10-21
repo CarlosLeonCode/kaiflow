@@ -7,6 +7,7 @@ use application::ports::DataKind;
 use application::ports::{DomainEvent, EventSink, TrackingKind};
 use tauri::{AppHandle, Manager, Wry};
 
+use crate::goal_watcher::GoalWatcher;
 use crate::ipc::dto::DegradedReasonDto;
 use crate::ipc::events::{SharedShortcut, TauriEventSink};
 use crate::tray_text::TrayText;
@@ -22,6 +23,8 @@ pub enum ShellAction {
     TrackingState(TrackingKind),
     /// Status or recorded time changed: recompute the text next to the tray icon.
     RefreshTrayText,
+    /// Status or recorded time changed: the goal watcher looks at the goals again.
+    RefreshGoals,
 }
 
 /// Pure mapping from engine events to shell actions.
@@ -31,9 +34,10 @@ pub fn actions_for(event: &DomainEvent) -> Vec<ShellAction> {
         DomainEvent::TrackingStatusChanged(status) => vec![
             ShellAction::TrackingState(status.kind),
             ShellAction::RefreshTrayText,
+            ShellAction::RefreshGoals,
         ],
         DomainEvent::CurrentSegmentChanged(_) | DomainEvent::DataChanged(DataKind::Segments) => {
-            vec![ShellAction::RefreshTrayText]
+            vec![ShellAction::RefreshTrayText, ShellAction::RefreshGoals]
         }
         _ => Vec::new(),
     }
@@ -64,6 +68,11 @@ impl Shell for TauriShell {
             ShellAction::RefreshTrayText => {
                 if let Some(tray_text) = self.app.try_state::<TrayText>() {
                     tray_text.refresh();
+                }
+            }
+            ShellAction::RefreshGoals => {
+                if let Some(goals) = self.app.try_state::<GoalWatcher>() {
+                    goals.refresh();
                 }
             }
         }
@@ -159,18 +168,22 @@ mod tests {
             ))),
             vec![
                 ShellAction::TrackingState(TrackingKind::Paused),
-                ShellAction::RefreshTrayText
+                ShellAction::RefreshTrayText,
+                ShellAction::RefreshGoals
             ]
         );
     }
 
     #[test]
-    fn segment_changes_refresh_the_tray_text() {
+    fn segment_changes_refresh_the_tray_text_and_the_goals() {
         for event in [
             DomainEvent::CurrentSegmentChanged(None),
             DomainEvent::DataChanged(DataKind::Segments),
         ] {
-            assert_eq!(actions_for(&event), vec![ShellAction::RefreshTrayText]);
+            assert_eq!(
+                actions_for(&event),
+                vec![ShellAction::RefreshTrayText, ShellAction::RefreshGoals]
+            );
         }
     }
 

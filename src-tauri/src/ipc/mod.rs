@@ -9,9 +9,9 @@ use tauri::Wry;
 use tauri_specta::{Builder, collect_commands, collect_events};
 
 use self::events::{
-    BackupFinished, CurrentSegmentChanged, DataChanged, IdleGapPending, IdleGapResolved,
-    PermissionChanged, ShortcutStatusChanged, StorageFailed, TrackingStatusChanged,
-    UpdateAvailable,
+    BackupFinished, CurrentSegmentChanged, DataChanged, GoalCrossed, IdleGapPending,
+    IdleGapResolved, PermissionChanged, ShortcutStatusChanged, StorageFailed,
+    TrackingStatusChanged, UpdateAvailable,
 };
 
 /// Where the generated bindings live, relative to `src-tauri/` (design section 8).
@@ -67,6 +67,11 @@ pub fn builder() -> Builder<Wry> {
             commands::restore_prepare,
             commands::restore_apply,
             commands::retention_impact,
+            commands::goals_list,
+            commands::goals_upsert,
+            commands::goals_delete,
+            commands::goals_status,
+            commands::goal_events_mark_seen,
             commands::update_check,
             commands::update_install,
         ])
@@ -81,6 +86,7 @@ pub fn builder() -> Builder<Wry> {
             StorageFailed,
             UpdateAvailable,
             BackupFinished,
+            GoalCrossed,
         ])
         // Timestamps are UTC milliseconds (about 1.8e12), far below 2^53.
         .dangerously_cast_bigints_to_number()

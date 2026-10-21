@@ -17,7 +17,9 @@ use crate::ports::{
     SettingsRepository,
 };
 use crate::queries::Range;
-use crate::settings_blobs::{KEY_UI, UiSettings, read_blob, write_blob};
+use crate::settings_blobs::{
+    KEY_UI, KEY_WEEK_START, UiSettings, read_blob, read_week_start, write_blob,
+};
 
 /// How long a confirmation token stays valid.
 pub const CONFIRM_TOKEN_TTL_MS: i64 = 60_000;
@@ -119,14 +121,17 @@ pub enum TrayDisplay {
     CurrentApp,
     /// Both, e.g. `3h 12m · Xcode 40m`.
     TodayAndCurrent,
+    /// Progress of the top goal, e.g. `2h 10m / 3h`.
+    GoalProgress,
 }
 
 impl TrayDisplay {
-    pub const ALL: [Self; 4] = [
+    pub const ALL: [Self; 5] = [
         Self::Off,
         Self::TodayTotal,
         Self::CurrentApp,
         Self::TodayAndCurrent,
+        Self::GoalProgress,
     ];
 
     /// Stable name used in the settings table and on the wire.
@@ -136,6 +141,7 @@ impl TrayDisplay {
             Self::TodayTotal => "today_total",
             Self::CurrentApp => "current_app",
             Self::TodayAndCurrent => "today_and_current",
+            Self::GoalProgress => "goal_progress",
         }
     }
 
@@ -160,6 +166,8 @@ pub struct Settings {
     pub shortcut: String,
     pub onboarding_completed: bool,
     pub tray_display: TrayDisplay,
+    /// First day of the week for goals and the Overview: 0 = Monday .. 6 = Sunday.
+    pub week_start: u8,
     /// Interface state kept across restarts (`ui` blob).
     pub ui: UiSettings,
 }
@@ -177,6 +185,7 @@ impl Default for Settings {
             shortcut: "⌃⌥⌘T".into(),
             onboarding_completed: false,
             tray_display: TrayDisplay::default(),
+            week_start: 0,
             ui: UiSettings::default(),
         }
     }
@@ -196,8 +205,16 @@ pub struct SettingsPatch {
     pub shortcut: Option<String>,
     pub onboarding_completed: Option<bool>,
     pub tray_display: Option<TrayDisplay>,
+    pub week_start: Option<u8>,
     /// Replaces the whole `ui` blob.
     pub ui: Option<UiSettings>,
+}
+
+/// Tells how much of an active goal streak a purge would cut; implemented by `GoalService`.
+pub trait StreakImpact: Send + Sync {
+    /// Days of the longest active streak that start before `cutoff` (data older than that
+    /// would be deleted), or `None` when no active streak is touched.
+    fn streak_days_cut(&self, cutoff: UtcMs, now: UtcMs) -> Result<Option<u32>, PortError>;
 }
 
 pub struct Commands {
@@ -205,6 +222,7 @@ pub struct Commands {
     privacy: Arc<dyn PrivacyRepository>,
     settings: Arc<dyn SettingsRepository>,
     retention: Arc<dyn RetentionRepository>,
+    streaks: Option<Arc<dyn StreakImpact>>,
     pending: Mutex<Option<Pending>>,
     counter: AtomicU64,
 }
@@ -221,9 +239,17 @@ impl Commands {
             privacy,
             settings,
             retention,
+            streaks: None,
             pending: Mutex::new(None),
             counter: AtomicU64::new(0),
         }
+    }
+
+    /// Lets the purge confirmation warn when it would cut into an active goal streak.
+    #[must_use]
+    pub fn with_streaks(mut self, streaks: Arc<dyn StreakImpact>) -> Self {
+        self.streaks = Some(streaks);
+        self
     }
 
     // ---- activities and rules (R9.1, R9.4) ----
@@ -331,6 +357,7 @@ impl Commands {
             shortcut: self.read(KEY_SHORTCUT, parse_string, d.shortcut)?,
             onboarding_completed: self.read(KEY_ONBOARDING, parse_bool, d.onboarding_completed)?,
             tray_display: self.read(KEY_TRAY_DISPLAY, parse_tray_display, d.tray_display)?,
+            week_start: read_week_start(self.settings.as_ref())?,
             ui: read_blob(self.settings.as_ref(), KEY_UI)?,
         })
     }
@@ -371,6 +398,9 @@ impl Commands {
         }
         if let Some(v) = patch.tray_display {
             set(KEY_TRAY_DISPLAY, json_string(v.as_str()))?;
+        }
+        if let Some(v) = patch.week_start {
+            set(KEY_WEEK_START, v.to_string())?;
         }
         if let Some(v) = &patch.ui {
             write_blob(self.settings.as_ref(), KEY_UI, &v.clone().normalized())?;
@@ -423,13 +453,15 @@ impl Commands {
         if days == 0 {
             return Err(CommandError::Invalid("days must be at least 1".into()));
         }
-        let segments = self.retention.count_older_than(cutoff(now, days))?;
-        // TODO(goals unit): streaks do not exist yet. Once `GoalService` can report the first
-        // day of each active streak, fill `streak_days_cut` with
-        // `domain::goals::retention_cuts_streak(cutoff, streak.start)`.
+        let limit = cutoff(now, days);
+        let segments = self.retention.count_older_than(limit)?;
+        let streak_days_cut = match &self.streaks {
+            Some(streaks) => streaks.streak_days_cut(limit, now)?,
+            None => None,
+        };
         Ok(RetentionImpact {
             segments,
-            streak_days_cut: None,
+            streak_days_cut,
         })
     }
 
@@ -536,6 +568,9 @@ fn validate_patch(p: &SettingsPatch) -> Result<(), CommandError> {
     }
     if p.shortcut.as_deref().is_some_and(|s| s.trim().is_empty()) {
         return bad("shortcut must not be empty");
+    }
+    if p.week_start.is_some_and(|v| v > 6) {
+        return bad("the week must start on a day from Monday (0) to Sunday (6)");
     }
     if let Some(Err(message)) = p.ui.as_ref().map(UiSettings::validate) {
         return bad(&message);
@@ -1109,6 +1144,61 @@ mod tests {
         assert_eq!(impact.streak_days_cut, None, "no goals exist yet");
         assert_eq!(f.store.segments().len(), 5);
         assert!(f.cmd.retention_impact(0, now).is_err());
+    }
+
+    #[test]
+    fn retention_impact_reports_the_streak_days_a_purge_would_cut() {
+        struct Streak(Option<u32>);
+        impl StreakImpact for Streak {
+            fn streak_days_cut(&self, cutoff: UtcMs, now: UtcMs) -> Result<Option<u32>, PortError> {
+                // The purge cutoff is handed over: 10 days before `now`.
+                assert_eq!(now.since(cutoff), 10 * DAY);
+                Ok(self.0)
+            }
+        }
+        let f = fixture();
+        let now = UtcMs(100 * DAY);
+        let with_streak = Commands::new(
+            Arc::new(f.cats.clone()),
+            Arc::new(f.privacy.clone()),
+            Arc::new(f.settings.clone()),
+            Arc::new(f.store.clone()),
+        )
+        .with_streaks(Arc::new(Streak(Some(20))));
+        assert_eq!(
+            with_streak
+                .retention_impact(10, now)
+                .unwrap()
+                .streak_days_cut,
+            Some(20)
+        );
+        let without = Commands::new(
+            Arc::new(f.cats.clone()),
+            Arc::new(f.privacy.clone()),
+            Arc::new(f.settings.clone()),
+            Arc::new(f.store.clone()),
+        )
+        .with_streaks(Arc::new(Streak(None)));
+        assert_eq!(
+            without.retention_impact(10, now).unwrap().streak_days_cut,
+            None
+        );
+    }
+
+    #[test]
+    fn the_week_starts_on_monday_until_changed_and_only_valid_days_are_stored() {
+        let f = fixture();
+        assert_eq!(f.cmd.get_settings().unwrap().week_start, 0);
+        let patch = |v| SettingsPatch {
+            week_start: Some(v),
+            ..SettingsPatch::default()
+        };
+        assert_eq!(f.cmd.update_settings(&patch(6)).unwrap().week_start, 6);
+        assert!(matches!(
+            f.cmd.update_settings(&patch(7)),
+            Err(CommandError::Invalid(_))
+        ));
+        assert_eq!(f.cmd.get_settings().unwrap().week_start, 6);
     }
 
     #[test]

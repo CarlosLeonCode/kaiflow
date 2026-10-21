@@ -8,6 +8,7 @@ pub mod engine;
 pub mod export;
 #[cfg(any(test, feature = "test-fakes"))]
 pub mod fakes;
+pub mod goals;
 pub mod idle_policy;
 pub mod ports;
 pub mod presets;

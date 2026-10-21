@@ -4,8 +4,8 @@ use std::path::Path;
 use std::sync::Mutex;
 
 use application::backup::{
-    ActivityRecord, BackupData, DEVICE_SETTINGS, GapRecord, PrivacyRuleRecord, RuleRecord,
-    SegmentRecord, SettingRecord,
+    ActivityRecord, BackupData, DEVICE_SETTINGS, GapRecord, GoalEventRecord, GoalRecord,
+    PrivacyRuleRecord, RuleRecord, SegmentRecord, SettingRecord,
 };
 use application::ports::{BackupStore, PortError, PortResult};
 use domain::UtcMs;
@@ -42,6 +42,8 @@ impl BackupStore for SqliteBackupStore {
             settings: read_settings(&tx)?,
             segments: read_segments(&tx, from, to)?,
             idle_gaps: read_gaps(&tx, from, to)?,
+            goals: read_goals(&tx)?,
+            goal_events: read_goal_events(&tx, from, to)?,
         };
         tx.finish().map_err(port_err)?;
         Ok(data)
@@ -71,7 +73,15 @@ impl BackupStore for SqliteBackupStore {
 }
 
 fn replace_in(tx: &rusqlite::Transaction<'_>, data: &BackupData) -> PortResult<()> {
-    for table in ["segments", "idle_gaps", "activity_rules", "privacy_rules"] {
+    // Goals first: they reference activities (the events go with them).
+    for table in [
+        "goal_events",
+        "goals",
+        "segments",
+        "idle_gaps",
+        "activity_rules",
+        "privacy_rules",
+    ] {
         tx.execute(&format!("DELETE FROM {table}"), [])
             .map_err(port_err)?;
     }
@@ -129,6 +139,35 @@ fn replace_in(tx: &rusqlite::Transaction<'_>, data: &BackupData) -> PortResult<(
         tx.execute(
             "INSERT INTO settings(key, value) VALUES (?1, ?2)",
             params![s.key, s.value],
+        )
+        .map_err(port_err)?;
+    }
+    for g in &data.goals {
+        tx.execute(
+            "INSERT INTO goals(id, label, scope_kind, activity_id, app_id, period, kind,
+               target_ms, active_days, archived, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            params![
+                g.id,
+                g.label,
+                g.scope_kind,
+                g.activity_id,
+                g.app_id,
+                g.period,
+                g.kind,
+                g.target_ms,
+                g.active_days,
+                g.archived,
+                g.created_at
+            ],
+        )
+        .map_err(port_err)?;
+    }
+    for e in &data.goal_events {
+        tx.execute(
+            "INSERT INTO goal_events(goal_id, period_start, kind, at, notified, seen)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![e.goal_id, e.period_start, e.kind, e.at, e.notified, e.seen],
         )
         .map_err(port_err)?;
     }
@@ -249,6 +288,57 @@ fn read_settings(c: &Connection) -> PortResult<Vec<SettingRecord>> {
         .collect())
 }
 
+fn read_goals(c: &Connection) -> PortResult<Vec<GoalRecord>> {
+    let mut stmt = c
+        .prepare(
+            "SELECT id, label, scope_kind, activity_id, app_id, period, kind, target_ms,
+                    active_days, archived, created_at
+             FROM goals ORDER BY id",
+        )
+        .map_err(port_err)?;
+    stmt.query_map([], |r| {
+        Ok(GoalRecord {
+            id: r.get(0)?,
+            label: r.get(1)?,
+            scope_kind: r.get(2)?,
+            activity_id: r.get(3)?,
+            app_id: r.get(4)?,
+            period: r.get(5)?,
+            kind: r.get(6)?,
+            target_ms: r.get(7)?,
+            active_days: r.get(8)?,
+            archived: r.get::<_, i64>(9)? != 0,
+            created_at: r.get(10)?,
+        })
+    })
+    .map_err(port_err)?
+    .collect::<Result<_, _>>()
+    .map_err(port_err)
+}
+
+/// Goal events logged in `[from, to)`.
+fn read_goal_events(c: &Connection, from: i64, to: i64) -> PortResult<Vec<GoalEventRecord>> {
+    let mut stmt = c
+        .prepare(
+            "SELECT goal_id, period_start, kind, at, notified, seen
+             FROM goal_events WHERE at >= ?1 AND at < ?2 ORDER BY at, goal_id, kind",
+        )
+        .map_err(port_err)?;
+    stmt.query_map([from, to], |r| {
+        Ok(GoalEventRecord {
+            goal_id: r.get(0)?,
+            period_start: r.get(1)?,
+            kind: r.get(2)?,
+            at: r.get(3)?,
+            notified: r.get::<_, i64>(4)? != 0,
+            seen: r.get::<_, i64>(5)? != 0,
+        })
+    })
+    .map_err(port_err)?
+    .collect::<Result<_, _>>()
+    .map_err(port_err)
+}
+
 /// Segments overlapping `[from, to)`. A segment still open is returned closed at its
 /// heartbeat (`recovered`), which is what the app itself would do after a crash.
 fn read_segments(c: &Connection, from: i64, to: i64) -> PortResult<Vec<SegmentRecord>> {
@@ -335,7 +425,13 @@ mod tests {
              INSERT INTO idle_gaps(id, started_at, ended_at, prev_app_id, prev_app_name, prev_title,
                status, activity_id, expires_at, resolved_at)
                VALUES (1, 3000, 4000, 'com.code', 'Code', 'main.rs', 'discard', NULL, 9999, 4100),
-                      (2, 7000, 8000, NULL, NULL, NULL, 'pending', NULL, 9999, NULL);",
+                      (2, 7000, 8000, NULL, NULL, NULL, 'pending', NULL, 9999, NULL);
+             INSERT INTO goals(id, label, scope_kind, activity_id, app_id, period, kind,
+               target_ms, active_days, archived, created_at)
+               VALUES (1, 'Deep work', 'activity', 2, NULL, 'daily', 'minimum', 7200000, 31, 0, 500),
+                      (2, 'Less mail', 'app', NULL, 'com.mail', 'weekly', 'maximum', 3600000, 127, 1, 600);
+             INSERT INTO goal_events(goal_id, period_start, kind, at, notified, seen)
+               VALUES (1, 19000, 'reached', 2500, 1, 0), (2, 19000, 'exceeded', 6000, 0, 1);",
         )
         .unwrap();
         SqliteBackupStore::new(conn)
@@ -358,6 +454,8 @@ mod tests {
         assert_eq!(open.ended_at, Some(9500));
         assert_eq!(open.end_reason.as_deref(), Some("recovered"));
         assert_eq!(data.idle_gaps.len(), 1);
+        assert_eq!((data.goals.len(), data.goal_events.len()), (2, 2));
+        assert!(data.goals[1].archived && data.goal_events[0].notified);
         let keys: Vec<&str> = data.settings.iter().map(|s| s.key.as_str()).collect();
         assert_eq!(keys, ["theme"]);
     }
@@ -369,6 +467,10 @@ mod tests {
         let ids: Vec<i64> = data.segments.iter().map(|s| s.id).collect();
         assert_eq!(ids, [1, 2]);
         assert_eq!(data.idle_gaps.len(), 1);
+        // Goal definitions are not time-bound; their events follow the range.
+        assert_eq!((data.goals.len(), data.goal_events.len()), (2, 1));
+        let narrow = store.snapshot(Some((UtcMs(0), UtcMs(3000)))).unwrap();
+        assert_eq!((narrow.goals.len(), narrow.goal_events.len()), (2, 1));
         assert!(
             store
                 .snapshot(Some((UtcMs(2000), UtcMs(3000))))
@@ -403,6 +505,8 @@ mod tests {
         assert_eq!(again.privacy_rules, data.privacy_rules);
         assert_eq!(again.segments, data.segments);
         assert_eq!(again.idle_gaps, data.idle_gaps);
+        assert_eq!(again.goals, data.goals);
+        assert_eq!(again.goal_events, data.goal_events);
         assert_eq!(again.settings, data.settings, "stale setting replaced");
         let conn = open(&other_path).unwrap();
         let shortcut: String = conn

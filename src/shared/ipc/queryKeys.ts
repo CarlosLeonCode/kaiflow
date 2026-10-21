@@ -12,6 +12,10 @@ export const queryKeys = {
   privacy: ["privacy"] as const,
   idleGaps: ["idle-gaps"] as const,
   backup: ["backup"] as const,
+  /** Prefix of every goal query (the list and the progress). */
+  goals: ["goals"] as const,
+  goalList: ["goals", "list"] as const,
+  goalStatus: ["goals", "status"] as const,
   retentionImpact: (days: number | null) => ["retention-impact", days] as const,
   /** The update the backend announced (written by the `update-available` event, never fetched). */
   update: ["update"] as const,

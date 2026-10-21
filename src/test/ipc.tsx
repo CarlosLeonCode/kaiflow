@@ -6,6 +6,8 @@ import type {
   BackupStatusDto,
   DashboardDto,
   FocusDto,
+  GoalDto,
+  GoalStatusDto,
   ReportDto,
   SettingsDto,
   TrackingStatusDto,
@@ -49,6 +51,37 @@ export function dashboard(overrides: Partial<DashboardDto> = {}): DashboardDto {
     productivity: { productive_ms: 0, neutral_ms: 0, distracting_ms: 0 },
     focus_ratio: { kind: "no_signal" },
     auto_discarded_gaps: 0,
+    goals: [],
+    ...overrides,
+  };
+}
+
+export function goal(overrides: Partial<GoalDto> = {}): GoalDto {
+  return {
+    id: 1,
+    label: "Deep work",
+    scope: { kind: "activity", activity_id: 2 },
+    period: "daily",
+    kind: "minimum",
+    target_ms: 4 * 3_600_000,
+    active_days: 0b0011111,
+    archived: false,
+    ...overrides,
+  };
+}
+
+/** A goal in progress (1h of 4h, nothing crossed); override what the test needs. */
+export function goalStatus(overrides: Partial<GoalStatusDto> = {}, goalOverrides: Partial<GoalDto> = {}): GoalStatusDto {
+  return {
+    goal: goal(goalOverrides),
+    period: { from: 0, to: 1 },
+    actual_ms: 3_600_000,
+    target_ms: goalOverrides.target_ms ?? 4 * 3_600_000,
+    percent: 25,
+    state: "pending",
+    active: true,
+    streak: { current: 0, best: 0, at_risk: false },
+    unseen: null,
     ...overrides,
   };
 }
@@ -65,6 +98,7 @@ export function settings(overrides: Partial<SettingsDto> = {}): SettingsDto {
     shortcut: "⌃⌥⌘T",
     onboarding_completed: true,
     tray_display: "today_total",
+    week_start: 0,
     ui: { dismissed_intros: [] },
     ...overrides,
   };
@@ -114,7 +148,9 @@ export function mockBackend(handlers: Handlers): { calls: Call[] } {
           ? () => settings()
           : cmd === "backup_status"
             ? () => backupStatus()
-            : undefined);
+            : cmd === "goals_status" || cmd === "goals_list"
+              ? () => []
+              : undefined);
       if (!handler) throw new Error(`unmocked command: ${cmd}`);
       return handler(payload);
     },
