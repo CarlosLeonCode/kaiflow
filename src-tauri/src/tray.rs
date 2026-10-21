@@ -81,9 +81,17 @@ pub fn set_tracking_state(app: &AppHandle<Wry>, kind: TrackingKind) {
     });
 }
 
-/// Monochrome so macOS can tint it for light and dark menu bars. Variants for
-/// recording / paused / degraded arrive with the status wiring.
+/// The ensō mark as a template image (black on transparent, 36 px = 18 pt @2x): macOS tints
+/// it for light and dark menu bars. Built from `assets/brand/kaiflow-mark-mono.svg`.
+#[cfg(target_os = "macos")]
 const ICON: &[u8] = include_bytes!("../icons/tray-template.png");
+/// Windows and Linux trays do not tint template images, so they get the full-color app icon,
+/// which stays visible on both light and dark taskbars and panels.
+#[cfg(not(target_os = "macos"))]
+const ICON: &[u8] = include_bytes!("../icons/64x64.png");
+
+/// Template rendering only makes sense where the OS recolors the icon (the macOS menu bar).
+const ICON_AS_TEMPLATE: bool = cfg!(target_os = "macos");
 
 pub fn install(app: &AppHandle<Wry>) -> tauri::Result<()> {
     let (text, enabled) = toggle_label(TrackingKind::Stopped);
@@ -98,7 +106,7 @@ pub fn install(app: &AppHandle<Wry>) -> tauri::Result<()> {
 
     TrayIconBuilder::with_id(TRAY_ID)
         .icon(Image::from_bytes(ICON)?)
-        .icon_as_template(true)
+        .icon_as_template(ICON_AS_TEMPLATE)
         .tooltip("Kaiflow")
         .menu(&menu)
         .show_menu_on_left_click(false)

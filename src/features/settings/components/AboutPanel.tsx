@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { Panel } from "@/shared/ui/field";
+import { KaiflowMark } from "@/shared/ui/kaiflow-mark";
 
 interface Props {
   version: string;
@@ -13,6 +14,10 @@ export function AboutPanel({ version, license, repositoryUrl }: Props) {
   const releasesUrl = `${repositoryUrl}/releases`;
   return (
     <Panel title="About" description="Free and open source. New versions are published on GitHub Releases.">
+      <div className="flex items-center gap-3 border-b border-border px-3 py-3">
+        <KaiflowMark decorative className="size-9" />
+        <p className="text-base font-medium tracking-tight">Kaiflow</p>
+      </div>
       <dl className="divide-y divide-border">
         <AboutRow term="Version">{version}</AboutRow>
         <AboutRow term="License">{license}</AboutRow>

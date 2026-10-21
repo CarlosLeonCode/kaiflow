@@ -2,7 +2,7 @@
 /**
  * Generates the static Open Graph / Twitter card image at `public/og.png` (1200x630).
  *
- * It composes the app icon, a headline and the light Today screenshot with sharp (already
+ * It composes the app icon (the ensō, see assets/brand/), the wordmark, a headline and the light Today screenshot with sharp (already
  * installed as Astro's image service). Re-run after `npm run screenshots` or copy changes:
  *   npm run og
  */
@@ -44,7 +44,7 @@ const background = `
   <text x="72" y="320" font-family="${FONT}" font-size="60" font-weight="700" fill="#1d1d1f" letter-spacing="-1.5">day actually goes.</text>
   <text x="72" y="388" font-family="${FONT}" font-size="26" fill="#57575c">Improve your focus, one day at a time.</text>
   <text x="72" y="428" font-family="${FONT}" font-size="26" fill="#57575c">A private, open source time tracker.</text>
-  <text x="168" y="148" font-family="${FONT}" font-size="34" font-weight="600" fill="#1d1d1f">Kaiflow</text>
+  <text x="168" y="148" font-family="${FONT}" font-size="34" font-weight="500" fill="#17140f" letter-spacing="-0.7">Kaiflow</text>
   <rect x="${WIDTH - SHOT_W + 59}" y="${(HEIGHT - SHOT_H) / 2 + 49}" width="${SHOT_W + 2}" height="${SHOT_H + 2}" rx="${RADIUS + 1}" fill="#e3e3e8"/>
 </svg>`;
 

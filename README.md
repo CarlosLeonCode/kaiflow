@@ -1,4 +1,9 @@
-# Kaiflow
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/brand/kaiflow-wordmark-dark.svg">
+    <img alt="Kaiflow" src="assets/brand/kaiflow-wordmark.svg" height="56">
+  </picture>
+</h1>
 
 [![CI](https://github.com/CarlosLeonCode/kaiflow/actions/workflows/ci.yml/badge.svg)](https://github.com/CarlosLeonCode/kaiflow/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -10,6 +15,16 @@
 Kaiflow lives in your menu bar and records which app and window you use, so you can
 see where your day actually goes. No timers, no account, no cloud: your data stays on your
 computer.
+
+## Why Kaiflow?
+
+**Kai** comes from *kaizen* (改善, "change for the better"), the Japanese idea of continuous
+improvement through small steps. **Flow** is the state of focused work you lose track of time
+in. Kaiflow helps you see your day as it is, so you can improve it a little at a time.
+
+The logo is an *ensō*, the Zen circle drawn in a single brush stroke. It is left open because
+the day is still in progress, and the vermilion dot in the opening marks the present moment:
+the next step. Brand files and usage notes live in [assets/brand/](assets/brand/).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="website/src/assets/screenshots/today-dark.png">

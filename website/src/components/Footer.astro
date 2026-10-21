@@ -1,6 +1,7 @@
 ---
 import { getContent, type Locale } from "../i18n";
 import { LINKS } from "../lib/links";
+import Logo from "./Logo.astro";
 
 interface Props {
   locale: Locale;
@@ -19,7 +20,7 @@ const links = [
 <footer class="border-t border-line">
   <div class="container-page flex flex-col gap-6 py-10 text-sm text-fg-muted sm:flex-row sm:items-center sm:justify-between">
     <div>
-      <p class="font-semibold text-fg">Kaiflow</p>
+      <p class="text-fg"><Logo size={24} wordmark class="text-[15px]" /></p>
       <p class="mt-1">{t.footer.tagline}</p>
       <p class="mt-1 max-w-md text-xs">{t.footer.nameNote}</p>
     </div>

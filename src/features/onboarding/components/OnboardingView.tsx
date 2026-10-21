@@ -5,6 +5,7 @@ import type { PermissionStateDto } from "@/shared/ipc";
 import { cn } from "@/shared/lib/utils";
 import { Alert, AlertDescription, AlertTitle } from "@/shared/ui/alert";
 import { Button } from "@/shared/ui/button";
+import { KaiflowMark } from "@/shared/ui/kaiflow-mark";
 import { Switch } from "@/shared/ui/switch";
 
 import { buildSummary, STEP_LABELS, STEPS, type Step } from "../lib/steps";
@@ -71,6 +72,7 @@ export function OnboardingView(props: Props) {
       </nav>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-8 py-6">
+        {step === "welcome" && <KaiflowMark variant="detailed" className="mb-3 size-12" />}
         <h1
           ref={heading}
           tabIndex={-1}
