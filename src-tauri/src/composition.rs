@@ -25,6 +25,7 @@ use application::queries::Queries;
 use crossbeam_channel::{Receiver, Sender, bounded};
 use domain::{PrivacyPolicy, UtcMs};
 
+use crate::calendar::ChronoLocalCalendar;
 use crate::error::AppError;
 use crate::ipc::dto::ShortcutStatusDto;
 use crate::ipc::events::SharedShortcut;
@@ -117,6 +118,8 @@ impl From<DbError> for ComposeError {
 pub struct AppState {
     pub engine: EngineHandle,
     pub queries: Queries,
+    /// Local weekday and hour for the Overview heatmap.
+    pub calendar: ChronoLocalCalendar,
     pub commands: Arc<Commands>,
     /// Opt-in activity presets and app suggestions.
     pub presets: PresetService,
@@ -197,6 +200,7 @@ pub fn compose(
     let state = AppState {
         engine: handle,
         queries,
+        calendar: ChronoLocalCalendar,
         commands,
         presets,
         activities,

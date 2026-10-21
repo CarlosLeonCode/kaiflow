@@ -11,6 +11,7 @@ const COMMANDS: &[&str] = &[
     "resume",
     "stop",
     "get_report",
+    "get_dashboard",
     "get_timeline",
     "list_pending_idle_gaps",
     "resolve_idle_gap",

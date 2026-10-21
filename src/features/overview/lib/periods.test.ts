@@ -11,6 +11,7 @@ import {
   periodRange,
   periodStart,
   previousRange,
+  shiftAnchor,
   shiftPeriod,
 } from "./periods";
 
@@ -125,11 +126,45 @@ describe("period math in a DST time zone (America/New_York)", () => {
     expect(bucketsFor("month", periodRange("month", now))).toHaveLength(31);
   });
 
+  it("last90 is the 90 local days ending with today, across a DST change", () => {
+    const now = local(2026, 3, 20, 15);
+    const range = periodRange("last90", now);
+    expect(range.to).toBe(local(2026, 3, 21));
+    expect(range.from).toBe(local(2025, 12, 21));
+    expect(dayRanges(range)).toHaveLength(90);
+    expect(new Date(range.from).getHours()).toBe(0);
+  });
+
+  it("last90 navigates in 90 day steps, adjacent and never into the future", () => {
+    const now = local(2026, 3, 20, 15);
+    const range = periodRange("last90", now);
+    const previous = previousRange("last90", range);
+    expect(previous.to).toBe(range.from);
+    expect(dayRanges(previous)).toHaveLength(90);
+    expect(canGoNext("last90", range, now)).toBe(false);
+
+    const back = periodRange("last90", shiftAnchor("last90", range, -1));
+    expect(back).toEqual(previous);
+    expect(canGoNext("last90", back, now)).toBe(true);
+    expect(periodRange("last90", shiftAnchor("last90", back, 1))).toEqual(range);
+  });
+
+  it("last90 stacks weekly buckets that tile the range, the last one may be shorter", () => {
+    const range = periodRange("last90", local(2026, 10, 20, 12));
+    const weeks = bucketsFor("last90", range);
+    expect(weeks).toHaveLength(13);
+    expect(weeks[0]?.from).toBe(range.from);
+    expect(weeks.at(-1)?.to).toBe(range.to);
+    weeks.slice(1).forEach((week, index) => expect(week.from).toBe(weeks[index]?.to));
+    expect(dayRanges(weeks.at(-1) ?? range)).toHaveLength(6);
+  });
+
   it("labels each period with its year", () => {
     const now = local(2026, 10, 20, 12);
     expect(periodLabel("day", periodRange("day", now))).toContain("2026");
     expect(periodLabel("week", periodRange("week", now))).toContain("2026");
     expect(periodLabel("month", periodRange("month", now))).toContain("October");
+    expect(periodLabel("last90", periodRange("last90", now))).toContain("2026");
   });
 });
 

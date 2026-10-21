@@ -10,7 +10,7 @@ use domain::{Activity, ActivityId, GapId};
 use crate::composition::AppState;
 use crate::error::AppError;
 use crate::ipc::dto::{
-    ActivityDto, ApplyPresetResultDto, DeleteOpDto, IdleGapDto, IdleResolutionDto,
+    ActivityDto, ApplyPresetResultDto, DashboardDto, DeleteOpDto, IdleGapDto, IdleResolutionDto,
     PermissionStateDto, PresetDto, PrivacyModeDto, PrivacyRulesDto, ProductivityDto, RangeDto,
     ReportDto, RuleDto, RuleInputDto, SettingsDto, SettingsPatchDto, ShortcutStatusDto,
     SuggestionDto, TimelineItemDto, TrackingStatusDto,
@@ -67,6 +67,24 @@ impl AppState {
             .queries
             .range_report(range.into(), &buckets, self.now())?;
         Ok(report.into())
+    }
+
+    /// Everything the Overview shows for `range`, with one load that also covers `previous`.
+    pub fn get_dashboard(
+        &self,
+        range: RangeDto,
+        buckets: Vec<RangeDto>,
+        previous: Option<RangeDto>,
+    ) -> Result<DashboardDto, AppError> {
+        let buckets: Vec<_> = buckets.into_iter().map(Into::into).collect();
+        let dashboard = self.queries.dashboard(
+            range.into(),
+            &buckets,
+            previous.map(Into::into),
+            &self.calendar,
+            self.now(),
+        )?;
+        Ok(dashboard.into())
     }
 
     pub fn get_timeline(&self, range: RangeDto) -> Result<Vec<TimelineItemDto>, AppError> {
@@ -390,6 +408,38 @@ mod tests {
         let report = rig.state.get_report(range, vec![range]).unwrap();
         assert_eq!(report.by_app[0].app_name, "Safari");
         assert_eq!(report.by_bucket.len(), 1);
+        rig.state.shutdown();
+    }
+
+    #[test]
+    fn the_dashboard_summarizes_tracked_time_in_one_call() {
+        let rig = rig();
+        rig.window.set(Some(safari()));
+        rig.state.start().unwrap();
+        // The open segment counts up to "now".
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        let range = around_now(&rig.state);
+        let before = RangeDto {
+            from: range.from - 7_200_000,
+            to: range.from,
+        };
+
+        let dashboard = rig
+            .state
+            .get_dashboard(range, vec![range], Some(before))
+            .unwrap();
+        assert!(dashboard.total_ms > 0);
+        assert_eq!(dashboard.by_app[0].app_name, "Safari");
+        assert_eq!(dashboard.buckets.len(), 1);
+        assert_eq!(dashboard.buckets[0].total_ms, dashboard.total_ms);
+        assert_eq!(dashboard.heatmap.len(), 7 * 24);
+        assert_eq!(dashboard.heatmap.iter().sum::<i64>(), dashboard.total_ms);
+        // Nothing before the range: no comparison, and no productive/distracting signal.
+        assert_eq!(dashboard.trend, crate::ipc::dto::TrendDto::NoComparison);
+        assert_eq!(
+            dashboard.focus_ratio,
+            crate::ipc::dto::FocusRatioDto::NoSignal
+        );
         rig.state.shutdown();
     }
 

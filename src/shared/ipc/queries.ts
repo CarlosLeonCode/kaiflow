@@ -1,4 +1,4 @@
-import { useMutation, useQueries, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 
 import { commands } from "./bindings";
 import type {
@@ -32,14 +32,14 @@ export function useReportQuery(range: RangeDto, buckets: readonly RangeDto[] = [
   });
 }
 
-/** One report per range, sharing cache keys with `useReportQuery` (no buckets). `enabled: false` skips them all. */
-export function useReportsQuery(ranges: readonly RangeDto[], enabled = true) {
-  return useQueries({
-    queries: ranges.map((range) => ({
-      queryKey: queryKeys.report(range),
-      queryFn: () => unwrap(commands.getReport(range, [])),
-      enabled,
-    })),
+/**
+ * Everything the Overview shows for a range in one call: totals, breakdowns, stacked buckets,
+ * heatmap, trend against `previous` and the focus ratio.
+ */
+export function useDashboardQuery(range: RangeDto, buckets: readonly RangeDto[], previous: RangeDto | null) {
+  return useQuery({
+    queryKey: queryKeys.dashboard(range, buckets, previous),
+    queryFn: () => unwrap(commands.getDashboard(range, [...buckets], previous)),
   });
 }
 

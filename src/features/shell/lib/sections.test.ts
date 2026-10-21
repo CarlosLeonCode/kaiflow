@@ -10,7 +10,7 @@ describe("sectionForShortcut", () => {
   it("maps ⌘1..⌘5 in sidebar order", () => {
     expect(["1", "2", "3", "4", "5"].map((d) => sectionForShortcut(key(d)))).toEqual([
       "today",
-      "history",
+      "overview",
       "activities",
       "privacy",
       "settings",

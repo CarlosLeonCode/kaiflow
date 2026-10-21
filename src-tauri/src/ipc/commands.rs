@@ -9,7 +9,7 @@ use tauri_plugin_dialog::DialogExt;
 use tauri_specta::Event;
 
 use super::dto::{
-    ActivityDto, ApplyPresetResultDto, DeleteOpDto, IdleGapDto, IdleResolutionDto,
+    ActivityDto, ApplyPresetResultDto, DashboardDto, DeleteOpDto, IdleGapDto, IdleResolutionDto,
     PermissionStateDto, PresetDto, PrivacyModeDto, PrivacyRulesDto, ProductivityDto, RangeDto,
     ReportDto, RuleDto, RuleInputDto, SettingsDto, SettingsPatchDto, SuggestionDto,
     TimelineItemDto, TrackingStatusDto, UpdateInfoDto,
@@ -80,6 +80,17 @@ pub async fn get_report(
     buckets: Vec<RangeDto>,
 ) -> Result<ReportDto, AppError> {
     run(state, move |s| s.get_report(range, buckets)).await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn get_dashboard(
+    state: Shared<'_>,
+    range: RangeDto,
+    buckets: Vec<RangeDto>,
+    previous: Option<RangeDto>,
+) -> Result<DashboardDto, AppError> {
+    run(state, move |s| s.get_dashboard(range, buckets, previous)).await
 }
 
 #[tauri::command]

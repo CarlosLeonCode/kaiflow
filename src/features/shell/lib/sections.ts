@@ -1,7 +1,7 @@
 /** Dashboard sections in sidebar order; the digit is the ⌘ shortcut. */
 export const SECTIONS = [
   { id: "today", label: "Today", digit: "1" },
-  { id: "history", label: "History", digit: "2" },
+  { id: "overview", label: "Overview", digit: "2" },
   { id: "activities", label: "Activities", digit: "3" },
   { id: "privacy", label: "Privacy", digit: "4" },
   { id: "settings", label: "Settings", digit: "5" },

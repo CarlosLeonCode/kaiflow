@@ -121,6 +121,8 @@ struct Store {
     gaps: Vec<IdleGap>,
     next_segment: i64,
     next_gap: i64,
+    /// How many times `segments_in_range` was called.
+    range_loads: usize,
     /// Number of calls that should fail, to exercise error paths.
     fail_next: usize,
 }
@@ -142,6 +144,10 @@ impl FakeStore {
         s.next_segment += 1;
         segment.id = SegmentId(s.next_segment);
         s.segments.push(segment);
+    }
+    /// Number of `segments_in_range` calls so far.
+    pub fn range_loads(&self) -> usize {
+        self.0.lock().unwrap().range_loads
     }
     pub fn seed_gap(&self, mut gap: IdleGap) -> GapId {
         let mut s = self.0.lock().unwrap();
@@ -270,7 +276,8 @@ impl SessionRepository for FakeStore {
 
 impl ReportRepository for FakeStore {
     fn segments_in_range(&self, from: UtcMs, to: UtcMs) -> PortResult<Vec<Segment>> {
-        let s = self.0.lock().unwrap();
+        let mut s = self.0.lock().unwrap();
+        s.range_loads += 1;
         Ok(s.segments
             .iter()
             .filter(|g| g.started_at < to && g.ended_at.is_none_or(|e| e > from))
@@ -528,5 +535,64 @@ mod tests {
             .unwrap();
         let p = privacy.load_policy().unwrap();
         assert!(!p.excluded_apps.contains("x") && p.redacted_apps.contains("x"));
+    }
+}
+
+/// A calendar made of UTC offsets that change at known instants, to exercise DST without a
+/// system time zone. Offsets are in milliseconds, ascending by the instant they start at.
+#[derive(Clone, Default)]
+pub struct FixedCalendar {
+    /// `(from_utc_ms, offset_ms)`; before the first entry the offset is 0.
+    transitions: Vec<(i64, i64)>,
+}
+
+impl FixedCalendar {
+    /// A constant offset (no DST).
+    pub fn fixed(offset_ms: i64) -> Self {
+        Self {
+            transitions: vec![(i64::MIN, offset_ms)],
+        }
+    }
+
+    /// Offsets that apply from the given instants on.
+    pub fn with_transitions(transitions: &[(i64, i64)]) -> Self {
+        let mut transitions = transitions.to_vec();
+        transitions.sort_unstable();
+        Self { transitions }
+    }
+
+    fn offset_at(&self, at: i64) -> i64 {
+        self.transitions
+            .iter()
+            .rev()
+            .find(|(from, _)| *from <= at)
+            .map_or(0, |(_, offset)| *offset)
+    }
+}
+
+impl Calendar for FixedCalendar {
+    fn hour_slot(&self, at: UtcMs) -> domain::HourSlot {
+        const HOUR: i64 = 3_600_000;
+        const DAY: i64 = 24 * HOUR;
+        let offset = self.offset_at(at.0);
+        let local = at.0 + offset;
+        let hour_start = local.div_euclid(HOUR) * HOUR;
+        // 1970-01-01 was a Thursday; weekday 0 = Monday.
+        let weekday = (local.div_euclid(DAY) + 3).rem_euclid(7) as u8;
+        let hour = (local.rem_euclid(DAY) / HOUR) as u8;
+        let mut next = hour_start + HOUR - offset;
+        // The offset can change before the hour ends: cut there so the next slot is re-read.
+        if let Some((from, _)) = self
+            .transitions
+            .iter()
+            .find(|(from, _)| *from > at.0 && *from < next)
+        {
+            next = *from;
+        }
+        domain::HourSlot {
+            weekday,
+            hour,
+            next_boundary: UtcMs(next),
+        }
     }
 }

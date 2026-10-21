@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { tuneActivityColor } from "@/shared/lib/color";
 import { formatAxisDuration, formatDuration } from "@/shared/lib/time";
 
-import { niceCeiling, type Bar } from "../lib/summary";
+import { niceCeiling } from "./scale";
+import type { Bar } from "./types";
 
 const WIDTH = 1000;
 const HEIGHT = 160;
@@ -82,7 +83,7 @@ export function StackedBars({ bars, dark, label }: Props) {
       <div className="flex gap-2">
         <div
           aria-hidden="true"
-          data-testid="history-y-axis"
+          data-testid="chart-y-axis"
           className="tabular flex h-40 w-12 shrink-0 flex-col justify-between whitespace-nowrap text-right text-2xs text-muted-foreground"
         >
           <span className="-mt-1">{formatAxisDuration(ceiling)}</span>
@@ -192,6 +193,26 @@ export function StackedBars({ bars, dark, label }: Props) {
           "Hover or focus a bar for details."
         )}
       </p>
+
+      <table className="sr-only">
+        <caption>{label}</caption>
+        <thead>
+          <tr>
+            <th scope="col">Period</th>
+            <th scope="col">Total</th>
+            <th scope="col">Breakdown</th>
+          </tr>
+        </thead>
+        <tbody>
+          {bars.map((bar) => (
+            <tr key={bar.range.from}>
+              <th scope="row">{bar.fullLabel}</th>
+              <td>{bar.totalMs > 0 ? formatDuration(bar.totalMs) : "Nothing tracked"}</td>
+              <td>{bar.segments.map((segment) => `${segment.name} ${formatDuration(segment.ms)}`).join(", ")}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

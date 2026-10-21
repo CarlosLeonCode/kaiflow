@@ -3,13 +3,17 @@
 //! far below 2^53, so the bindings export them as TypeScript `number`.
 
 use application::commands::{DeleteOp, RuleInput, RuleSpec, Settings, SettingsPatch, TrayDisplay};
+use application::dashboard::{Dashboard, DashboardActivity, ProductivityTotals, StackedBucket};
 use application::ports::{DegradedReason, PrivacyMode, TrackingKind, TrackingStatus};
 use application::presets::{ApplyOutcome, SuggestionView};
-use application::queries::{ActivityTotal, AppTotal, BucketTotal, Range, Report, TimelineItem};
+use application::queries::{
+    ActivityTotal, AppTotal, BucketTotal, Range, Report, TimelineItem, TitleTotal,
+};
 use application::settings_blobs::UiSettings;
 use domain::{
-    Activity, ActivityId, ActivityRule, EndReason, FocusSnapshot, GapId, IdleGap, IdleResolution,
-    PermissionState, Preset, PrivacyPolicy, Productivity, RuleKind, SegmentSource, UtcMs,
+    Activity, ActivityId, ActivityRule, EndReason, FocusRatio, FocusSnapshot, GapId, IdleGap,
+    IdleResolution, PermissionState, Preset, PrivacyPolicy, Productivity, RuleKind, SegmentSource,
+    Trend, UtcMs,
 };
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -268,6 +272,165 @@ impl From<Report> for ReportDto {
             by_bucket: r.by_bucket.into_iter().map(Into::into).collect(),
             total_ms: r.total_ms,
             auto_discarded_gaps: r.auto_discarded_gaps,
+        }
+    }
+}
+
+/// Change against the previous period; `no_comparison` when that period has no time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum TrendDto {
+    NoComparison,
+    Change { delta_ms: i64, pct: i32 },
+}
+
+impl From<Trend> for TrendDto {
+    fn from(t: Trend) -> Self {
+        match t {
+            Trend::NoComparison => Self::NoComparison,
+            Trend::Change { delta_ms, pct } => Self::Change { delta_ms, pct },
+        }
+    }
+}
+
+/// Productive share of productive plus distracting time; `no_signal` when both are zero.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum FocusRatioDto {
+    NoSignal,
+    Ratio { ratio: f64 },
+}
+
+impl From<FocusRatio> for FocusRatioDto {
+    fn from(r: FocusRatio) -> Self {
+        match r {
+            FocusRatio::NoSignal => Self::NoSignal,
+            FocusRatio::Ratio(ratio) => Self::Ratio { ratio },
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct DashboardActivityDto {
+    pub activity_id: i64,
+    pub name: String,
+    pub color: String,
+    pub productivity: ProductivityDto,
+    pub total_ms: i64,
+}
+
+impl From<DashboardActivity> for DashboardActivityDto {
+    fn from(a: DashboardActivity) -> Self {
+        Self {
+            activity_id: a.total.activity_id.0,
+            name: a.total.name,
+            color: a.total.color,
+            productivity: a.productivity.into(),
+            total_ms: a.total.total_ms,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct TitleTotalDto {
+    pub app_id: Option<String>,
+    pub app_name: Option<String>,
+    pub window_title: Option<String>,
+    pub total_ms: i64,
+}
+
+impl From<TitleTotal> for TitleTotalDto {
+    fn from(t: TitleTotal) -> Self {
+        Self {
+            app_id: t.app_id,
+            app_name: t.app_name,
+            window_title: t.window_title,
+            total_ms: t.total_ms,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct BucketActivityDto {
+    pub activity_id: i64,
+    pub total_ms: i64,
+}
+
+/// One bucket of the stacked chart with its time split by activity.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct StackedBucketDto {
+    pub range: RangeDto,
+    pub total_ms: i64,
+    pub by_activity: Vec<BucketActivityDto>,
+}
+
+impl From<StackedBucket> for StackedBucketDto {
+    fn from(b: StackedBucket) -> Self {
+        Self {
+            range: b.range.into(),
+            total_ms: b.total_ms,
+            by_activity: b
+                .by_activity
+                .into_iter()
+                .map(|(id, total_ms)| BucketActivityDto {
+                    activity_id: id.0,
+                    total_ms,
+                })
+                .collect(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct ProductivityTotalsDto {
+    pub productive_ms: i64,
+    pub neutral_ms: i64,
+    pub distracting_ms: i64,
+}
+
+impl From<ProductivityTotals> for ProductivityTotalsDto {
+    fn from(p: ProductivityTotals) -> Self {
+        Self {
+            productive_ms: p.productive_ms,
+            neutral_ms: p.neutral_ms,
+            distracting_ms: p.distracting_ms,
+        }
+    }
+}
+
+/// Everything the Overview shows for one range, from a single call.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct DashboardDto {
+    pub range: RangeDto,
+    pub total_ms: i64,
+    pub previous_total_ms: i64,
+    pub trend: TrendDto,
+    pub by_activity: Vec<DashboardActivityDto>,
+    pub by_app: Vec<AppTotalDto>,
+    pub top_titles: Vec<TitleTotalDto>,
+    pub buckets: Vec<StackedBucketDto>,
+    /// Local time by weekday and hour: index `weekday * 24 + hour`, weekday 0 = Monday.
+    pub heatmap: Vec<i64>,
+    pub productivity: ProductivityTotalsDto,
+    pub focus_ratio: FocusRatioDto,
+    pub auto_discarded_gaps: u32,
+}
+
+impl From<Dashboard> for DashboardDto {
+    fn from(d: Dashboard) -> Self {
+        Self {
+            range: d.range.into(),
+            total_ms: d.total_ms,
+            previous_total_ms: d.previous_total_ms,
+            trend: d.trend.into(),
+            by_activity: d.by_activity.into_iter().map(Into::into).collect(),
+            by_app: d.by_app.into_iter().map(Into::into).collect(),
+            top_titles: d.top_titles.into_iter().map(Into::into).collect(),
+            buckets: d.buckets.into_iter().map(Into::into).collect(),
+            heatmap: d.heatmap,
+            productivity: d.productivity.into(),
+            focus_ratio: d.focus_ratio.into(),
+            auto_discarded_gaps: d.auto_discarded_gaps,
         }
     }
 }

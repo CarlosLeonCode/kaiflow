@@ -11,6 +11,10 @@ export const commands = {
 	resume: () => typedError<TrackingStatusDto, AppError>(__TAURI_INVOKE("resume")),
 	stop: () => typedError<TrackingStatusDto, AppError>(__TAURI_INVOKE("stop")),
 	getReport: (range: RangeDto, buckets: RangeDto[]) => typedError<ReportDto, AppError>(__TAURI_INVOKE("get_report", { range, buckets })),
+	getDashboard: (range: RangeDto, buckets: RangeDto[], previous: {
+	from: number,
+	to: number,
+} | null) => typedError<DashboardDto, AppError>(__TAURI_INVOKE("get_dashboard", { range, buckets, previous })),
 	getTimeline: (range: RangeDto) => typedError<TimelineItemDto[], AppError>(__TAURI_INVOKE("get_timeline", { range })),
 	listPendingIdleGaps: () => typedError<IdleGapDto[], AppError>(__TAURI_INVOKE("list_pending_idle_gaps")),
 	resolveIdleGap: (id: number, resolution: IdleResolutionDto) => typedError<null, AppError>(__TAURI_INVOKE("resolve_idle_gap", { id, resolution })),
@@ -143,12 +147,42 @@ export type ApplyPresetResultDto = {
 	rules_created: number,
 };
 
+export type BucketActivityDto = {
+	activity_id: number,
+	total_ms: number,
+};
+
 export type BucketTotalDto = {
 	range: RangeDto,
 	total_ms: number,
 };
 
 export type CurrentSegmentChanged = FocusDto | null;
+
+export type DashboardActivityDto = {
+	activity_id: number,
+	name: string,
+	color: string,
+	productivity: ProductivityDto,
+	total_ms: number,
+};
+
+/**  Everything the Overview shows for one range, from a single call. */
+export type DashboardDto = {
+	range: RangeDto,
+	total_ms: number,
+	previous_total_ms: number,
+	trend: TrendDto,
+	by_activity: DashboardActivityDto[],
+	by_app: AppTotalDto[],
+	top_titles: TitleTotalDto[],
+	buckets: StackedBucketDto[],
+	/**  Local time by weekday and hour: index `weekday * 24 + hour`, weekday 0 = Monday. */
+	heatmap: number[],
+	productivity: ProductivityTotalsDto,
+	focus_ratio: FocusRatioDto,
+	auto_discarded_gaps: number,
+};
 
 export type DataChanged = {
 	kind: DataKindDto,
@@ -178,6 +212,9 @@ export type FocusDto = {
 	app_name: string,
 	window_title: string | null,
 };
+
+/**  Productive share of productive plus distracting time; `no_signal` when both are zero. */
+export type FocusRatioDto = { kind: "no_signal" } | { kind: "ratio"; ratio: number | null };
 
 export type GapStatusDto = { kind: "pending" } | { kind: "resolved"; resolution: IdleResolutionDto } | { kind: "expired" };
 
@@ -234,6 +271,12 @@ export type PrivacyRulesDto = {
 
 /**  How an activity counts toward the focus ratio. */
 export type ProductivityDto = "productive" | "neutral" | "distracting";
+
+export type ProductivityTotalsDto = {
+	productive_ms: number,
+	neutral_ms: number,
+	distracting_ms: number,
+};
 
 /**  Half-open UTC range `[from, to)` computed by the frontend (local day bounds, DST included). */
 export type RangeDto = {
@@ -307,6 +350,13 @@ export type ShortcutStatusChanged = ShortcutStatusDto;
 /**  Global shortcut state (R6.3); `Unavailable` keeps tracking untouched. */
 export type ShortcutStatusDto = { kind: "registered"; shortcut: string } | { kind: "unavailable"; shortcut: string; reason: string } | { kind: "disabled" };
 
+/**  One bucket of the stacked chart with its time split by activity. */
+export type StackedBucketDto = {
+	range: RangeDto,
+	total_ms: number,
+	by_activity: BucketActivityDto[],
+};
+
 /**  A persistence call failed; the engine keeps running (the frontend may show a notice). */
 export type StorageFailed = {
 	message: string,
@@ -338,6 +388,13 @@ export type TimelineItemDto = {
 	open: boolean,
 };
 
+export type TitleTotalDto = {
+	app_id: string | null,
+	app_name: string | null,
+	window_title: string | null,
+	total_ms: number,
+};
+
 export type TrackingStateDto = "stopped" | "running" | "paused" | "idle" | "asleep";
 
 export type TrackingStatusChanged = TrackingStatusDto;
@@ -354,6 +411,9 @@ export type TrackingStatusDto = {
 
 /**  What the menu-bar / tray text next to the icon shows. */
 export type TrayDisplayDto = "off" | "today_total" | "current_app" | "today_and_current";
+
+/**  Change against the previous period; `no_comparison` when that period has no time. */
+export type TrendDto = { kind: "no_comparison" } | { kind: "change"; delta_ms: number; pct: number };
 
 /**  Interface state persisted across restarts; patches replace the whole blob. */
 export type UiSettingsDto = {

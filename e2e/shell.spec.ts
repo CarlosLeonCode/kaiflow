@@ -36,7 +36,7 @@ test.describe("main window shell", () => {
     await openWindow(page, "main");
     const steps: [() => Promise<void>, string][] = [
       [() => nav(page).getByRole("button", { name: /^Activities/ }).click(), "Activities"],
-      [() => nav(page).getByRole("button", { name: /^History/ }).click(), "History"],
+      [() => nav(page).getByRole("button", { name: /^Overview/ }).click(), "Overview"],
       [() => page.keyboard.press("Meta+3"), "Activities"],
       [() => page.keyboard.press("Meta+1"), "Today"],
     ];

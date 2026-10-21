@@ -3,6 +3,7 @@ import { render } from "@testing-library/react";
 import type { ReactElement } from "react";
 
 import type {
+  DashboardDto,
   FocusDto,
   ReportDto,
   SettingsDto,
@@ -30,6 +31,25 @@ export function status(overrides: Partial<TrackingStatusDto> = {}): TrackingStat
 
 export function report(overrides: Partial<ReportDto> = {}): ReportDto {
   return { by_app: [], by_activity: [], by_bucket: [], total_ms: 0, auto_discarded_gaps: 0, ...overrides };
+}
+
+/** An empty dashboard (nothing tracked, no previous period); override what the test needs. */
+export function dashboard(overrides: Partial<DashboardDto> = {}): DashboardDto {
+  return {
+    range: { from: 0, to: 1 },
+    total_ms: 0,
+    previous_total_ms: 0,
+    trend: { kind: "no_comparison" },
+    by_activity: [],
+    by_app: [],
+    top_titles: [],
+    buckets: [],
+    heatmap: Array.from({ length: 7 * 24 }, () => 0),
+    productivity: { productive_ms: 0, neutral_ms: 0, distracting_ms: 0 },
+    focus_ratio: { kind: "no_signal" },
+    auto_discarded_gaps: 0,
+    ...overrides,
+  };
 }
 
 export function settings(overrides: Partial<SettingsDto> = {}): SettingsDto {

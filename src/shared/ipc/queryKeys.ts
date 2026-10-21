@@ -17,6 +17,16 @@ export const queryKeys = {
   reports: ["report"] as const,
   report: (range: RangeDto, buckets: readonly RangeDto[] = []) =>
     ["report", range.from, range.to, buckets.map((b) => `${b.from}-${b.to}`).join(",")] as const,
+  /** One Overview dashboard; under the `report` prefix, so data changes refresh it too. */
+  dashboard: (range: RangeDto, buckets: readonly RangeDto[], previous: RangeDto | null) =>
+    [
+      "report",
+      "dashboard",
+      range.from,
+      range.to,
+      buckets.map((b) => `${b.from}-${b.to}`).join(","),
+      previous ? `${previous.from}-${previous.to}` : "none",
+    ] as const,
   /** Prefix of every timeline query. */
   timelines: ["timeline"] as const,
   timeline: (range: RangeDto) => ["timeline", range.from, range.to] as const,

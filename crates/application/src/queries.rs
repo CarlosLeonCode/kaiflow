@@ -103,14 +103,15 @@ pub struct TimelineItem {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TitleTotal {
     pub app_id: Option<String>,
+    pub app_name: Option<String>,
     pub window_title: Option<String>,
     pub total_ms: i64,
     pub spans: usize,
 }
 
 pub struct Queries {
-    reports: Arc<dyn ReportRepository>,
-    activities: Arc<dyn ActivityRepository>,
+    pub(crate) reports: Arc<dyn ReportRepository>,
+    pub(crate) activities: Arc<dyn ActivityRepository>,
 }
 
 /// A segment, its clipped span and its resolved activity.
@@ -290,6 +291,7 @@ impl Queries {
             let key = (r.segment.app_id.clone(), r.segment.window_title.clone());
             let entry = groups.entry(key).or_insert_with(|| TitleTotal {
                 app_id: r.segment.app_id.clone(),
+                app_name: r.segment.app_name.clone(),
                 window_title: r.segment.window_title.clone(),
                 total_ms: 0,
                 spans: 0,
@@ -337,11 +339,11 @@ impl Queries {
     }
 }
 
-fn app_label(segment: &Segment) -> String {
+pub(crate) fn app_label(segment: &Segment) -> String {
     segment.app_name.clone().unwrap_or_default()
 }
 
-fn activity_label(id: ActivityId, cats: &[Activity]) -> (String, String) {
+pub(crate) fn activity_label(id: ActivityId, cats: &[Activity]) -> (String, String) {
     cats.iter().find(|c| c.id == id).map_or_else(
         || (UNASSIGNED_NAME.to_owned(), UNASSIGNED_COLOR.to_owned()),
         |c| (c.name.clone(), c.color.clone()),

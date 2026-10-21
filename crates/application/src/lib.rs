@@ -2,6 +2,7 @@
 
 pub mod commands;
 pub mod csv;
+pub mod dashboard;
 pub mod effects_executor;
 pub mod engine;
 #[cfg(any(test, feature = "test-fakes"))]

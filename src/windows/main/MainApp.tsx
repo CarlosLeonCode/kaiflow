@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 
 import { ActivitiesContainer } from "@/features/activities/containers/ActivitiesContainer";
-import { HistoryContainer } from "@/features/history/containers/HistoryContainer";
+import { OverviewContainer } from "@/features/overview/containers/OverviewContainer";
 import { PrivacyContainer } from "@/features/privacy/containers/PrivacyContainer";
 import { Sidebar } from "@/features/shell/components/Sidebar";
 import { useSectionShortcuts } from "@/features/shell/hooks/useSectionShortcuts";
@@ -15,8 +15,8 @@ function SectionView({ section, onNavigate }: { section: SectionId; onNavigate: 
   switch (section) {
     case "today":
       return <TodayContainer />;
-    case "history":
-      return <HistoryContainer />;
+    case "overview":
+      return <OverviewContainer />;
     case "activities":
       return <ActivitiesContainer />;
     case "privacy":

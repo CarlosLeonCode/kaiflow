@@ -2,6 +2,7 @@
 //! surface and owns the tray and windows (design sections 1, 8 and 10).
 
 pub mod api;
+pub mod calendar;
 pub mod composition;
 pub mod error;
 pub mod event_sink;

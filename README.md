@@ -6,7 +6,7 @@ TimeTrack is a local-first menu bar app that records which apps and windows you 
 
 - Menu bar popover with today's total, the current app and a pause/resume shortcut
 - Today view with a timeline colored by activity, totals by app and by activity
-- History by day, week and month, with CSV export
+- Overview by day, week, month and the last 90 days (trend, busiest hours, focus ratio), with CSV export
 - Activities (projects, clients or tasks) with rules by app or by window-title pattern, each flagged productive, neutral or distracting
 - Idle detection: when you come back, choose to discard the time or assign it
 - Privacy controls: excluded apps, hidden titles, delete by range or everything

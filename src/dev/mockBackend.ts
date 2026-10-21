@@ -29,6 +29,7 @@ import type {
   UpdateInfoDto,
 } from "@/shared/ipc";
 
+import { buildDashboard } from "./mockDashboard";
 import { matchPreset, mockPresets } from "./mockPresets";
 import { buildSeed, type MockData, type MockSegment } from "./seed";
 
@@ -43,6 +44,8 @@ export interface MockOptions {
   announceUpdate?: boolean;
   /** Start with only the system activity and no rules (first-run preset choice). */
   emptyActivities?: boolean;
+  /** Start without any tracked time (empty states of Today and Overview). */
+  emptyHistory?: boolean;
   now?: () => number;
 }
 
@@ -78,6 +81,11 @@ export function installMockBackend(options: MockOptions = {}): void {
   if (options.emptyActivities) {
     data.activities = data.activities.filter((a) => a.id === SYSTEM_ACTIVITY);
     data.rules = [];
+  }
+  if (options.emptyHistory) {
+    data.segments = [];
+    data.gaps = [];
+    data.autoDiscarded = [];
   }
   const dismissedSuggestions = new Set<string>();
   let permission: PermissionStateDto = options.permission ?? "granted";
@@ -324,6 +332,17 @@ export function installMockBackend(options: MockOptions = {}): void {
       return status();
     },
     get_report: (args) => report(args.range as RangeDto, (args.buckets as RangeDto[] | undefined) ?? []),
+    get_dashboard: (args) =>
+      buildDashboard({
+        range: args.range as RangeDto,
+        buckets: (args.buckets as RangeDto[] | undefined) ?? [],
+        previous: (args.previous as RangeDto | null | undefined) ?? null,
+        segments: data.segments,
+        activities: data.activities,
+        classify: (segment) => classify(segment, data.rules),
+        title: redact,
+        now: clock(),
+      }),
     get_timeline: (args) => timeline(args.range as RangeDto),
     list_pending_idle_gaps: () => data.gaps,
     resolve_idle_gap: (args) => {
@@ -493,8 +512,13 @@ export function installMockBackend(options: MockOptions = {}): void {
     update_install: () => new Promise(() => {}),
   };
 
+  // E2E tests count data calls through this log (dev and test builds only).
+  const callLog: string[] = [];
+  (globalThis as { __mockIpcCalls?: string[] }).__mockIpcCalls = callLog;
+
   mockIPC(
     (cmd, args) => {
+      callLog.push(cmd);
       const handler = handlers[cmd];
       if (handler) return handler((args ?? {}) as Record<string, unknown>);
       // Window and plugin calls the real app never grants to windows: ignore quietly.

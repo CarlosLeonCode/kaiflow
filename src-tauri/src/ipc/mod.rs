@@ -26,6 +26,7 @@ pub fn builder() -> Builder<Wry> {
             commands::resume,
             commands::stop,
             commands::get_report,
+            commands::get_dashboard,
             commands::get_timeline,
             commands::list_pending_idle_gaps,
             commands::resolve_idle_gap,

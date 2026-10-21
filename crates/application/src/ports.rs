@@ -5,7 +5,8 @@ use std::fmt;
 use crossbeam_channel::Sender;
 use domain::{
     Activity, ActivityId, ActivityRule, AssignedSpan, EndReason, FocusSnapshot, GapId, GapStatus,
-    IdleGap, PermissionState, PrivacyPolicy, Productivity, SeenApp, Segment, SegmentId, UtcMs,
+    HourSlot, IdleGap, PermissionState, PrivacyPolicy, Productivity, SeenApp, Segment, SegmentId,
+    UtcMs,
 };
 
 /// Failure reported by an adapter (storage, OS call...). Carries a readable message only.
@@ -194,6 +195,13 @@ pub trait RetentionRepository: Send + Sync {
     fn purge_older_than(&self, cutoff: UtcMs) -> PortResult<usize>;
     /// Deletes every segment and gap, then compacts the store so nothing lingers on disk.
     fn delete_all(&self) -> PortResult<()>;
+}
+
+/// Local calendar of the user (time zone, DST). The domain and the use cases never read the
+/// system zone themselves, so everything that depends on "local hour" stays testable.
+pub trait Calendar: Send + Sync {
+    /// The local weekday and hour `at` falls in, and where the next local hour begins.
+    fn hour_slot(&self, at: UtcMs) -> HourSlot;
 }
 
 pub trait EventSink: Send {

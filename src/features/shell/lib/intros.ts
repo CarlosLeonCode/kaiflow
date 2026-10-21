@@ -11,9 +11,9 @@ export const INTROS: Record<SectionId, IntroCopy> = {
     title: "Your day at a glance",
     body: "A timeline of what you used today, with totals by activity and by app. Tracking runs in the background; pause or resume it from the menu bar.",
   },
-  history: {
-    title: "Look back over time",
-    body: "Compare days, weeks and months. Time that crosses midnight is shared between both days.",
+  overview: {
+    title: "See the bigger picture",
+    body: "Pick a day, a week, a month or the last 90 days to see where your time went: totals by activity and app, a trend against the period before, the hours you are busiest and how much of your time was productive. Time that crosses midnight is shared between both days.",
   },
   activities: {
     title: "Organize time into activities",

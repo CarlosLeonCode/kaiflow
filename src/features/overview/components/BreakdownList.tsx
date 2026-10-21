@@ -12,7 +12,7 @@ interface Props {
   empty: string;
 }
 
-/** Totals for the period by activity (colored) or by app (accent bar), with the share of the total. */
+/** Totals for the period by activity (colored), app or window title (accent bar), with the share of the total. */
 export function BreakdownList({ rows, label, dark, empty }: Props) {
   if (rows.length === 0) return <p className="py-3 text-xs text-muted-foreground">{empty}</p>;
   return (
@@ -25,8 +25,9 @@ export function BreakdownList({ rows, label, dark, empty }: Props) {
               {color && (
                 <span aria-hidden="true" className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
               )}
-              <span className="min-w-0 flex-1 truncate" title={row.name}>
+              <span className="min-w-0 flex-1 truncate" title={row.detail ? `${row.name} (${row.detail})` : row.name}>
                 {row.name}
+                {row.detail && <span className="ml-1.5 text-xs text-muted-foreground">{row.detail}</span>}
               </span>
               <span className="tabular text-xs text-muted-foreground">{formatDuration(row.totalMs)}</span>
               <span className="tabular w-9 text-right text-xs text-muted-foreground">{formatPercent(row.fraction)}</span>

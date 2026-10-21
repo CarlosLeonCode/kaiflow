@@ -47,6 +47,32 @@ impl SqliteReportRepository {
     }
 }
 
+/// Segments overlapping `[?1, ?2)`, as three index-bounded branches so that a recent range
+/// never walks the whole history (the single-predicate form only bounded `started_at` from
+/// above):
+/// 1. started inside the range (`ix_seg_start`, bounded on both sides);
+/// 2. started before it and ended after its start (`ix_seg_end`, bounded from below);
+/// 3. started before it and still open (`ix_seg_end`, `ended_at IS NULL`).
+///
+/// `INDEXED BY` pins branches 2 and 3: without table statistics the planner may prefer
+/// `ix_seg_start` there, which is the full scan this query exists to avoid.
+const SEGMENTS_IN_RANGE_SQL: &str = "\
+    SELECT id, started_at, ended_at, heartbeat_at, app_id, app_name, window_title,
+           end_reason, source, activity_id
+    FROM segments INDEXED BY ix_seg_start
+    WHERE started_at >= ?1 AND started_at < ?2
+    UNION ALL
+    SELECT id, started_at, ended_at, heartbeat_at, app_id, app_name, window_title,
+           end_reason, source, activity_id
+    FROM segments INDEXED BY ix_seg_end
+    WHERE ended_at > ?1 AND started_at < ?1
+    UNION ALL
+    SELECT id, started_at, ended_at, heartbeat_at, app_id, app_name, window_title,
+           end_reason, source, activity_id
+    FROM segments INDEXED BY ix_seg_end
+    WHERE ended_at IS NULL AND started_at < ?1
+    ORDER BY started_at, id";
+
 fn segment_from_row(r: &Row<'_>) -> rusqlite::Result<Result<Segment, PortError>> {
     let reason: Option<String> = r.get(7)?;
     let source: String = r.get(8)?;
@@ -77,13 +103,7 @@ impl ReportRepository for SqliteReportRepository {
     fn segments_in_range(&self, from: UtcMs, to: UtcMs) -> PortResult<Vec<Segment>> {
         self.with_conn(|conn| {
             let mut stmt = conn
-                .prepare_cached(
-                    "SELECT id, started_at, ended_at, heartbeat_at, app_id, app_name, window_title,
-                            end_reason, source, activity_id
-                     FROM segments
-                     WHERE started_at < ?2 AND (ended_at IS NULL OR ended_at > ?1)
-                     ORDER BY started_at, id",
-                )
+                .prepare_cached(SEGMENTS_IN_RANGE_SQL)
                 .map_err(port_err)?;
             let rows = stmt
                 .query_map([from.0, to.0], segment_from_row)
@@ -289,6 +309,40 @@ mod tests {
             })
             .collect();
         assert!(handles.into_iter().all(|h| h.join().unwrap()));
+    }
+
+    #[test]
+    fn range_query_plan_never_scans_the_segments_table() {
+        // V4: every branch must be an index search, otherwise a recent range reads the
+        // whole history.
+        let (_dir, _w, r) = fixture();
+        let plan: Vec<String> = r
+            .with_conn(|conn| {
+                let mut stmt = conn
+                    .prepare(&format!("EXPLAIN QUERY PLAN {SEGMENTS_IN_RANGE_SQL}"))
+                    .map_err(port_err)?;
+                let rows = stmt
+                    .query_map([0, 1], |row| row.get::<_, String>(3))
+                    .map_err(port_err)?;
+                rows.map(|row| row.map_err(port_err)).collect()
+            })
+            .unwrap();
+        let text = plan.join("\n");
+        assert!(
+            !text.contains("SCAN segments"),
+            "full scan in plan:\n{text}"
+        );
+        assert!(text.contains("ix_seg_end"), "lower bound not used:\n{text}");
+        assert!(
+            text.contains("ix_seg_start"),
+            "upper bound not used:\n{text}"
+        );
+        // Only index searches; the ordering of the union is the one allowed temp b-tree.
+        let searches = plan
+            .iter()
+            .filter(|line| line.starts_with("SEARCH segments USING"))
+            .count();
+        assert_eq!(searches, 3, "plan:\n{text}");
     }
 
     #[test]
