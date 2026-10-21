@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-focus-summary-dismiss"
+description = "Enables the focus_summary_dismiss command without any pre-configured scope."
+commands.allow = ["focus_summary_dismiss"]
+
+[[permission]]
+identifier = "deny-focus-summary-dismiss"
+description = "Denies the focus_summary_dismiss command without any pre-configured scope."
+commands.deny = ["focus_summary_dismiss"]

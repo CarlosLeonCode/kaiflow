@@ -5,10 +5,13 @@ use application::commands::CommandError;
 use application::effects_executor::ResolveError;
 use application::engine::EngineError;
 use application::export::DataError;
+use application::focus::FocusServiceError;
 use application::ports::PortError;
 use application::queries::QueryError;
 use serde::{Deserialize, Serialize};
 use specta::Type;
+
+use crate::ipc::dto::DegradedReasonDto;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type, thiserror::Error)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -32,6 +35,10 @@ pub enum AppError {
     /// design's list so validation failures are not reported as storage failures.
     #[error("{message}")]
     Invalid { message: String },
+    /// A focus session cannot run while tracking is degraded: windows cannot be observed, so
+    /// there is nothing to detect drift with. `reason` says why, so the UI can explain it.
+    #[error("focus sessions are unavailable while tracking is degraded")]
+    FocusUnavailable { reason: DegradedReasonDto },
     /// Infrastructure failure (engine thread gone, dialog or file errors).
     #[error("internal error: {message}")]
     Internal { message: String },
@@ -64,6 +71,20 @@ impl From<DataError> for AppError {
             DataError::Invalid(message) => Self::Invalid { message },
             DataError::ConfirmationRequired => Self::ConfirmationRequired,
             DataError::Storage(e) => e.into(),
+        }
+    }
+}
+
+impl From<FocusServiceError> for AppError {
+    fn from(e: FocusServiceError) -> Self {
+        match e {
+            FocusServiceError::Invalid(e) => Self::Invalid {
+                message: e.to_string(),
+            },
+            FocusServiceError::Unavailable(reason) => Self::FocusUnavailable {
+                reason: reason.into(),
+            },
+            FocusServiceError::Storage(e) => e.into(),
         }
     }
 }
@@ -140,6 +161,30 @@ mod tests {
         assert_eq!(
             AppError::from(QueryError::Port(PortError("disk full".into()))),
             from_port
+        );
+    }
+
+    #[test]
+    fn focus_errors_keep_their_meaning_and_the_degraded_reason() {
+        use application::ports::DegradedReason;
+        assert_eq!(
+            AppError::from(FocusServiceError::Unavailable(
+                DegradedReason::WaylandSession
+            )),
+            AppError::FocusUnavailable {
+                reason: DegradedReasonDto::WaylandSession
+            }
+        );
+        assert!(matches!(
+            AppError::from(FocusServiceError::Invalid(domain::FocusError::EmptyIntent)),
+            AppError::Invalid { .. }
+        ));
+        assert_eq!(
+            serde_json::to_string(&AppError::FocusUnavailable {
+                reason: DegradedReasonDto::NoDisplay
+            })
+            .unwrap(),
+            r#"{"kind":"focus_unavailable","reason":"no_display"}"#
         );
     }
 

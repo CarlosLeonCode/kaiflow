@@ -30,6 +30,8 @@ export function describeError(error: AppError): string {
       return `The shortcut ${error.shortcut} is unavailable: ${error.reason}`;
     case "permission_denied":
       return "Accessibility access is not granted.";
+    case "focus_unavailable":
+      return "Focus sessions need window tracking, which is unavailable right now.";
     case "not_found":
       return "That item no longer exists.";
     case "confirmation_required":

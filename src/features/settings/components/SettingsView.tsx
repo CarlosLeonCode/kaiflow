@@ -16,6 +16,7 @@ import { DegradedBanner } from "@/features/tracking/components/StatusBanners";
 import {
   TRAY_DISPLAY_OPTIONS,
   autoDiscardOptions,
+  focusDriftOptions,
   idleThresholdOptions,
   parseTrayDisplay,
   promptTimeoutOptions,
@@ -179,6 +180,27 @@ export function SettingsView({
                 onChange={(event) => onChange({ idle_prompt_timeout_secs: Number(event.target.value) })}
               >
                 {promptTimeoutOptions(settings.idle_prompt_timeout_secs).map((option) => (
+                  <option key={option.secs} value={option.secs}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </Row>
+          </Panel>
+
+          <Panel title="Focus sessions">
+            <Row
+              label="Nudge me after"
+              description="Time away from what a session allows, in a row, before a gentle alert. Never more than one alert every 5 minutes."
+              controlId="setting-focus-drift"
+            >
+              <Select
+                id="setting-focus-drift"
+                aria-describedby="setting-focus-drift-hint"
+                value={settings.focus_drift_after_secs}
+                onChange={(event) => onChange({ focus_drift_after_secs: Number(event.target.value) })}
+              >
+                {focusDriftOptions(settings.focus_drift_after_secs).map((option) => (
                   <option key={option.secs} value={option.secs}>
                     {option.label}
                   </option>

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { TimelineItemDto } from "@/shared/ipc";
 import { HOUR, MINUTE } from "@/shared/lib/time";
-import { goalStatus, mockBackend, renderWithProviders, report, status } from "@/test/ipc";
+import { focusActive, focusSession, goalStatus, idleFocus, mockBackend, renderWithProviders, report, status } from "@/test/ipc";
 
 import { TodayContainer } from "./TodayContainer";
 
@@ -309,6 +309,72 @@ describe("TodayContainer", () => {
 
       expect(await screen.findByText("Nothing tracked yet today")).toBeInTheDocument();
       expect(screen.queryByRole("button", { name: "Create a goal" })).not.toBeInTheDocument();
+    });
+  });
+
+  describe("focus session", () => {
+    const tracked = {
+      get_status: () => status({ state: "paused", current: null, since: null }),
+      get_report: () => report({ total_ms: HOUR, by_app: [], by_activity: [{ ...work, total_ms: HOUR }] }),
+      get_timeline: () => [item(at(9), at(10))],
+      goals_status: () => [],
+    };
+
+    it("shows the running session above the day, with its countdown", async () => {
+      const now = Date.now();
+      mockBackend({
+        ...tracked,
+        focus_status: () => idleFocus({ active: focusActive({ started_at: now - 10 * MINUTE, planned_end: now + 40 * MINUTE }) }),
+      });
+      renderWithProviders(<TodayContainer onOpenGoals={() => {}} />);
+
+      const card = await screen.findByRole("region", { name: "Focus session" });
+      expect(within(card).getByText("Write report")).toBeInTheDocument();
+      expect(within(card).getByTestId("focus-countdown")).toHaveTextContent("40:00");
+      // On an empty day too.
+    });
+
+    it("shows the session on an empty day as well", async () => {
+      const now = Date.now();
+      mockBackend({
+        get_status: () => status({ state: "running" }),
+        get_report: () => report(),
+        get_timeline: () => [],
+        goals_status: () => [],
+        focus_status: () => idleFocus({ active: focusActive({ started_at: now - MINUTE, planned_end: now + 24 * MINUTE }) }),
+      });
+      renderWithProviders(<TodayContainer onOpenGoals={() => {}} />);
+
+      expect(await screen.findByRole("region", { name: "Focus session" })).toBeInTheDocument();
+      expect(screen.getByText("Nothing tracked yet today")).toBeInTheDocument();
+    });
+
+    it("shows how the last session went until it is dismissed", async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      let unseen: ReturnType<typeof focusSession> | null = focusSession();
+      const { calls } = mockBackend({
+        ...tracked,
+        focus_status: () => idleFocus({ unseen }),
+        focus_summary_dismiss: () => {
+          unseen = null;
+          return idleFocus();
+        },
+      });
+      renderWithProviders(<TodayContainer onOpenGoals={() => {}} />);
+
+      const summary = await screen.findByRole("region", { name: "Session summary" });
+      expect(within(summary).getByTestId("summary-headline")).toHaveTextContent("75%");
+      await user.click(within(summary).getByRole("button", { name: "Done" }));
+      await waitFor(() => expect(screen.queryByRole("region", { name: "Session summary" })).not.toBeInTheDocument());
+      expect(calls.some((c) => c.cmd === "focus_summary_dismiss")).toBe(true);
+    });
+
+    it("shows nothing without a session", async () => {
+      mockBackend(tracked);
+      renderWithProviders(<TodayContainer onOpenGoals={() => {}} />);
+
+      await screen.findByText("Focused time");
+      expect(screen.queryByRole("region", { name: "Focus session" })).not.toBeInTheDocument();
     });
   });
 });

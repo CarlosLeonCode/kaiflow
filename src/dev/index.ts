@@ -8,6 +8,8 @@ import { installMockBackend } from "./mockBackend";
  * - `?update=manual`: an update is only offered when "Check now" is pressed.
  * - `?data=empty`: no tracked time at all (empty states).
  * - `?goals=demo`: four goals with progress, an exceeded limit and streaks.
+ * - `?focus=running`: a focus session is running with the app in front on target;
+ *   `?focus=drift` has the drift alert already showing.
  * - `?backup=failing`: the daily backup cannot write (Settings > Data error state).
  * - `?activities=empty`: only the system activity and no rules (first-run preset choice).
  */
@@ -18,6 +20,7 @@ export function installMockIpc(search: string = window.location.search): void {
     emptyActivities: params.get("activities") === "empty",
     emptyHistory: params.get("data") === "empty",
     demoGoals: params.get("goals") === "demo",
+    demoFocus: params.get("focus") === "drift" ? "drift" : params.get("focus") === "running" ? "running" : undefined,
     backupFails: params.get("backup") === "failing",
     announceUpdate: params.get("update") === "1",
     update: ["1", "manual"].includes(params.get("update") ?? "")

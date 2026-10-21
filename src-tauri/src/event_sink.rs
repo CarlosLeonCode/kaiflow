@@ -7,6 +7,7 @@ use application::ports::DataKind;
 use application::ports::{DomainEvent, EventSink, TrackingKind};
 use tauri::{AppHandle, Manager, Wry};
 
+use crate::focus_watcher::FocusWatcher;
 use crate::goal_watcher::GoalWatcher;
 use crate::ipc::dto::DegradedReasonDto;
 use crate::ipc::events::{SharedShortcut, TauriEventSink};
@@ -25,6 +26,8 @@ pub enum ShellAction {
     RefreshTrayText,
     /// Status or recorded time changed: the goal watcher looks at the goals again.
     RefreshGoals,
+    /// The app in front or the tracking state changed: the focus session looks again.
+    RefreshFocus,
 }
 
 /// Pure mapping from engine events to shell actions.
@@ -35,8 +38,14 @@ pub fn actions_for(event: &DomainEvent) -> Vec<ShellAction> {
             ShellAction::TrackingState(status.kind),
             ShellAction::RefreshTrayText,
             ShellAction::RefreshGoals,
+            ShellAction::RefreshFocus,
         ],
-        DomainEvent::CurrentSegmentChanged(_) | DomainEvent::DataChanged(DataKind::Segments) => {
+        DomainEvent::CurrentSegmentChanged(_) => vec![
+            ShellAction::RefreshTrayText,
+            ShellAction::RefreshGoals,
+            ShellAction::RefreshFocus,
+        ],
+        DomainEvent::DataChanged(DataKind::Segments) => {
             vec![ShellAction::RefreshTrayText, ShellAction::RefreshGoals]
         }
         _ => Vec::new(),
@@ -73,6 +82,11 @@ impl Shell for TauriShell {
             ShellAction::RefreshGoals => {
                 if let Some(goals) = self.app.try_state::<GoalWatcher>() {
                     goals.refresh();
+                }
+            }
+            ShellAction::RefreshFocus => {
+                if let Some(focus) = self.app.try_state::<FocusWatcher>() {
+                    focus.refresh();
                 }
             }
         }
@@ -169,22 +183,30 @@ mod tests {
             vec![
                 ShellAction::TrackingState(TrackingKind::Paused),
                 ShellAction::RefreshTrayText,
-                ShellAction::RefreshGoals
+                ShellAction::RefreshGoals,
+                ShellAction::RefreshFocus
             ]
         );
     }
 
     #[test]
     fn segment_changes_refresh_the_tray_text_and_the_goals() {
-        for event in [
-            DomainEvent::CurrentSegmentChanged(None),
-            DomainEvent::DataChanged(DataKind::Segments),
-        ] {
-            assert_eq!(
-                actions_for(&event),
-                vec![ShellAction::RefreshTrayText, ShellAction::RefreshGoals]
-            );
-        }
+        assert_eq!(
+            actions_for(&DomainEvent::DataChanged(DataKind::Segments)),
+            vec![ShellAction::RefreshTrayText, ShellAction::RefreshGoals]
+        );
+    }
+
+    #[test]
+    fn the_app_in_front_changing_also_wakes_the_focus_session() {
+        assert_eq!(
+            actions_for(&DomainEvent::CurrentSegmentChanged(None)),
+            vec![
+                ShellAction::RefreshTrayText,
+                ShellAction::RefreshGoals,
+                ShellAction::RefreshFocus
+            ]
+        );
     }
 
     #[test]

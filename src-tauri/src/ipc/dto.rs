@@ -8,18 +8,19 @@ use application::commands::{
 };
 use application::dashboard::{Dashboard, DashboardActivity, ProductivityTotals, StackedBucket};
 use application::export::{BackupReport, BackupStatus, RestorePreview, RestoreReport};
+use application::focus::{ActiveSession, FocusState};
 use application::goals::GoalStatus;
-use application::ports::{DegradedReason, PrivacyMode, TrackingKind, TrackingStatus};
+use application::ports::{DegradedReason, PrivacyMode, StoredFocus, TrackingKind, TrackingStatus};
 use application::presets::{ApplyOutcome, SuggestionView};
 use application::queries::{
     ActivityTotal, AppTotal, BucketTotal, Range, Report, TimelineItem, TitleTotal,
 };
 use application::settings_blobs::UiSettings;
 use domain::{
-    Activity, ActivityId, ActivityRule, EndReason, FocusRatio, FocusSnapshot, GapId, Goal,
-    GoalEventKind, GoalKind, GoalScope, GoalState, IdleGap, IdleResolution, Period,
-    PermissionState, Preset, PrivacyPolicy, Productivity, RuleKind, SegmentSource, Streak, Trend,
-    UtcMs,
+    Activity, ActivityId, ActivityRule, EndReason, FocusAllowed, FocusApp, FocusEnd, FocusRatio,
+    FocusSnapshot, GapId, Goal, GoalEventKind, GoalKind, GoalScope, GoalState, IdleGap,
+    IdleResolution, Period, PermissionState, Preset, PrivacyPolicy, Productivity, RuleKind,
+    SegmentSource, Streak, Trend, UtcMs,
 };
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -1058,6 +1059,8 @@ pub struct SettingsDto {
     pub tray_display: TrayDisplayDto,
     /// First day of the week: 0 = Monday .. 6 = Sunday.
     pub week_start: u8,
+    /// Seconds outside a focus session's allowed set before a drift alert.
+    pub focus_drift_after_secs: u32,
     pub ui: UiSettingsDto,
 }
 
@@ -1098,6 +1101,7 @@ impl From<Settings> for SettingsDto {
             onboarding_completed: s.onboarding_completed,
             tray_display: s.tray_display.into(),
             week_start: s.week_start,
+            focus_drift_after_secs: s.focus_drift_after_secs,
             ui: s.ui.into(),
         }
     }
@@ -1125,6 +1129,7 @@ pub struct SettingsPatchDto {
     pub onboarding_completed: Option<bool>,
     pub tray_display: Option<TrayDisplayDto>,
     pub week_start: Option<u8>,
+    pub focus_drift_after_secs: Option<u32>,
     pub ui: Option<UiSettingsDto>,
 }
 
@@ -1145,6 +1150,7 @@ impl From<SettingsPatchDto> for SettingsPatch {
             onboarding_completed: p.onboarding_completed,
             tray_display: p.tray_display.map(Into::into),
             week_start: p.week_start,
+            focus_drift_after_secs: p.focus_drift_after_secs,
             ui: p.ui.map(Into::into),
         }
     }
@@ -1547,5 +1553,183 @@ mod tests {
                 to: UtcMs(2)
             })
         );
+    }
+}
+
+// ---- focus sessions ----
+
+/// What a focus session allows: whole activities and individual apps.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct FocusAllowedDto {
+    pub activity_ids: Vec<i64>,
+    pub app_ids: Vec<String>,
+}
+
+impl From<FocusAllowed> for FocusAllowedDto {
+    fn from(a: FocusAllowed) -> Self {
+        Self {
+            activity_ids: a.activities.into_iter().map(|id| id.0).collect(),
+            app_ids: a.apps,
+        }
+    }
+}
+
+impl From<FocusAllowedDto> for FocusAllowed {
+    fn from(a: FocusAllowedDto) -> Self {
+        Self {
+            activities: a.activity_ids.into_iter().map(ActivityId).collect(),
+            apps: a.app_ids,
+        }
+    }
+}
+
+/// What the user starts a session with.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct FocusStartDto {
+    pub intent: String,
+    pub planned_minutes: u32,
+    pub allowed: FocusAllowedDto,
+}
+
+/// The app in front during a session and the activity it is filed under.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct FocusAppDto {
+    pub app_id: String,
+    pub app_name: String,
+    pub activity_id: i64,
+}
+
+impl From<FocusApp> for FocusAppDto {
+    fn from(a: FocusApp) -> Self {
+        Self {
+            app_id: a.app_id,
+            app_name: a.app_name,
+            activity_id: a.activity.0,
+        }
+    }
+}
+
+/// The running session.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct FocusActiveDto {
+    pub id: i64,
+    pub intent: String,
+    pub started_at: i64,
+    pub planned_end: i64,
+    pub drift_alerts: u32,
+    pub allowed: FocusAllowedDto,
+    /// The app in front; `null` while nothing is observed (tracking paused, idle...).
+    pub current: Option<FocusAppDto>,
+    /// The app an unacknowledged drift alert is about.
+    pub alerting: Option<FocusAppDto>,
+}
+
+impl From<ActiveSession> for FocusActiveDto {
+    fn from(a: ActiveSession) -> Self {
+        Self {
+            id: a.id,
+            intent: a.intent,
+            started_at: a.started_at.0,
+            planned_end: a.planned_end.0,
+            drift_alerts: a.drift_alerts,
+            allowed: a.allowed.into(),
+            current: a.current.map(Into::into),
+            alerting: a.alerting.map(Into::into),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum FocusEndDto {
+    Completed,
+    Cancelled,
+    Recovered,
+}
+
+impl From<FocusEnd> for FocusEndDto {
+    fn from(e: FocusEnd) -> Self {
+        match e {
+            FocusEnd::Completed => Self::Completed,
+            FocusEnd::Cancelled => Self::Cancelled,
+            FocusEnd::Recovered => Self::Recovered,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct FocusDistractionDto {
+    pub app_id: String,
+    pub app_name: String,
+    pub ms: i64,
+}
+
+/// A finished session with its summary.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct FocusSessionDto {
+    pub id: i64,
+    pub intent: String,
+    pub started_at: i64,
+    pub planned_end: i64,
+    pub ended_at: i64,
+    pub end_reason: FocusEndDto,
+    pub drift_alerts: u32,
+    pub allowed: FocusAllowedDto,
+    pub inside_ms: i64,
+    pub outside_ms: i64,
+    /// Share of the tracked time spent inside; `null` when nothing was tracked.
+    pub percent_inside: Option<u32>,
+    pub top_distractions: Vec<FocusDistractionDto>,
+    /// The user acknowledged the end summary.
+    pub seen: bool,
+}
+
+impl From<StoredFocus> for FocusSessionDto {
+    fn from(s: StoredFocus) -> Self {
+        let percent_inside = s.summary.percent_inside();
+        Self {
+            id: s.id,
+            intent: s.intent,
+            started_at: s.started_at.0,
+            planned_end: s.planned_end.0,
+            ended_at: s.ended_at.unwrap_or(s.planned_end).0,
+            end_reason: s.end_reason.unwrap_or(FocusEnd::Completed).into(),
+            drift_alerts: s.drift_alerts,
+            allowed: s.allowed.into(),
+            inside_ms: s.summary.inside_ms,
+            outside_ms: s.summary.outside_ms,
+            percent_inside,
+            top_distractions: s
+                .summary
+                .top_distractions
+                .into_iter()
+                .map(|d| FocusDistractionDto {
+                    app_id: d.app_id,
+                    app_name: d.app_name,
+                    ms: d.ms,
+                })
+                .collect(),
+            seen: s.seen,
+        }
+    }
+}
+
+/// Everything the Focus views need in one call.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct FocusStatusDto {
+    pub active: Option<FocusActiveDto>,
+    /// The latest finished session whose summary the user has not dismissed yet.
+    pub unseen: Option<FocusSessionDto>,
+    /// Why a session cannot start right now (tracking is degraded); `null` when it can.
+    pub unavailable: Option<DegradedReasonDto>,
+}
+
+impl FocusStatusDto {
+    pub fn new(state: FocusState, unavailable: Option<DegradedReasonDto>) -> Self {
+        Self {
+            active: state.active.map(Into::into),
+            unseen: state.unseen.map(Into::into),
+            unavailable,
+        }
     }
 }

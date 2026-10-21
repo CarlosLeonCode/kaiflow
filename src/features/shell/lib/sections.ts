@@ -3,9 +3,10 @@ export const SECTIONS = [
   { id: "today", label: "Today", digit: "1" },
   { id: "overview", label: "Overview", digit: "2" },
   { id: "goals", label: "Goals", digit: "3" },
-  { id: "activities", label: "Activities", digit: "4" },
-  { id: "privacy", label: "Privacy", digit: "5" },
-  { id: "settings", label: "Settings", digit: "6" },
+  { id: "focus", label: "Focus", digit: "4" },
+  { id: "activities", label: "Activities", digit: "5" },
+  { id: "privacy", label: "Privacy", digit: "6" },
+  { id: "settings", label: "Settings", digit: "7" },
 ] as const;
 
 export type SectionId = (typeof SECTIONS)[number]["id"];
@@ -24,7 +25,7 @@ function plainCommand(event: ShortcutEvent): boolean {
   return event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey;
 }
 
-/** ⌘1 to ⌘6 select a section; any other key (or extra modifier) is not ours. */
+/** ⌘1 to ⌘7 select a section; any other key (or extra modifier) is not ours. */
 export function sectionForShortcut(event: ShortcutEvent): SectionId | null {
   if (!plainCommand(event)) return null;
   return SECTIONS.find((section) => section.digit === event.key)?.id ?? null;

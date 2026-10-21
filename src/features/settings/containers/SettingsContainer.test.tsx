@@ -115,6 +115,20 @@ describe("SettingsContainer", () => {
     await waitFor(() => expect(lastUpdate(calls)).toMatchObject({ idle_prompt_timeout_secs: 300 }));
   });
 
+  it("saves how long the user may drift away from a focus session", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockBackend({
+      get_status: () => status(),
+      settings_update: (args) => mergePatch(args.patch),
+    });
+    renderWithProviders(<SettingsContainer />);
+
+    const delay = await screen.findByRole("combobox", { name: "Nudge me after" });
+    expect(delay).toHaveValue("90");
+    await user.selectOptions(delay, "3 min");
+    await waitFor(() => expect(lastUpdate(calls)).toMatchObject({ focus_drift_after_secs: 180 }));
+  });
+
   it("toggles autostart and title storage", async () => {
     const user = userEvent.setup();
     const { calls } = mockBackend({

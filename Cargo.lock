@@ -54,6 +54,7 @@ dependencies = [
  "application",
  "domain",
  "rusqlite",
+ "serde_json",
  "tempfile",
 ]
 

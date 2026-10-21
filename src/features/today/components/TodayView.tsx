@@ -18,6 +18,8 @@ import { DayTimeline } from "./DayTimeline";
 interface Props {
   /** Dismissible section introduction, rendered by `Page`. */
   intro?: ReactNode;
+  /** The running focus session (or the summary of the last one), above everything else. */
+  focus?: ReactNode;
   /** The goals strip, shown above the cards. */
   goals?: ReactNode;
   /** Whether any goal exists: with none, the empty day does not repeat an invitation. */
@@ -60,6 +62,7 @@ function Card({ title, children, label }: { title: string; children: React.React
 /** Today dashboard (presentational): totals, SVG timeline, by app and by activity. */
 export function TodayView({
   intro,
+  focus,
   goals,
   hasGoals = false,
   emptyAction,
@@ -112,6 +115,7 @@ export function TodayView({
         </div>
       ) : empty ? (
         <>
+          <div className="empty:hidden mb-4">{focus}</div>
           {hasGoals && <div className="mb-4">{goals}</div>}
           <EmptyState title="Nothing tracked yet today" action={state === "running" ? undefined : emptyAction}>
             {state === "running"
@@ -121,6 +125,7 @@ export function TodayView({
         </>
       ) : (
         <div className="space-y-4">
+          {focus}
           {goals}
           <Card title="Focused time" label="Focused and away time">
             <div className="flex flex-wrap items-end gap-x-10 gap-y-3">

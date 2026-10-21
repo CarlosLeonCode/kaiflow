@@ -9,6 +9,7 @@ import {
   useStatusQuery,
   useTrackingCommandMutation,
 } from "@/shared/ipc";
+import { FocusSessionContainer } from "@/features/focus/containers/FocusSessionContainer";
 import { localDayRange } from "@/shared/lib/time";
 import { withLiveTime } from "@/features/goals/lib/goals";
 import { Alert, AlertDescription } from "@/shared/ui/alert";
@@ -63,6 +64,7 @@ export function TrackingPopoverContainer({ notice }: { notice?: ReactNode }) {
       )}
       togglePending={toggle.isPending}
       notice={notice}
+      focus={<FocusSessionContainer compact />}
       onToggle={(command) => toggle.mutate(command)}
       onOpenDashboard={() => openMain.mutate()}
       onOpenAccessibilitySettings={() => openSettings.mutate()}

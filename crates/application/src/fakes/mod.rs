@@ -7,9 +7,9 @@ use std::sync::{Arc, Mutex};
 
 use crossbeam_channel::Sender;
 use domain::{
-    Activity, ActivityId, ActivityRule, AssignedSpan, EndReason, FocusSnapshot, GapId, GapStatus,
-    Goal, GoalEventKind, IdleGap, PermissionState, PrivacyPolicy, Productivity, SeenApp, Segment,
-    SegmentId, SegmentSource, UtcMs,
+    Activity, ActivityId, ActivityRule, AssignedSpan, EndReason, FocusAllowed, FocusEnd,
+    FocusSnapshot, FocusSummary, GapId, GapStatus, Goal, GoalEventKind, IdleGap, PermissionState,
+    PrivacyPolicy, Productivity, SeenApp, Segment, SegmentId, SegmentSource, UtcMs,
 };
 
 use crate::ports::*;
@@ -480,6 +480,10 @@ pub struct RecordingNotifier {
     pub revocations: Arc<AtomicUsize>,
     /// `(goal label, kind)` of every goal alert.
     pub goal_alerts: Arc<Mutex<Vec<(String, GoalEventKind)>>>,
+    /// `(intent, app name)` of every focus drift alert.
+    pub focus_drifts: Arc<Mutex<Vec<(String, String)>>>,
+    /// Intent of every finished focus session.
+    pub focus_finishes: Arc<Mutex<Vec<String>>>,
 }
 
 impl Notifier for RecordingNotifier {
@@ -491,6 +495,15 @@ impl Notifier for RecordingNotifier {
     }
     fn goal_crossed(&self, label: &str, kind: GoalEventKind) {
         self.goal_alerts.lock().unwrap().push((label.into(), kind));
+    }
+    fn focus_drift(&self, intent: &str, app_name: &str) {
+        self.focus_drifts
+            .lock()
+            .unwrap()
+            .push((intent.into(), app_name.into()));
+    }
+    fn focus_finished(&self, intent: &str) {
+        self.focus_finishes.lock().unwrap().push(intent.into());
     }
 }
 
@@ -825,6 +838,133 @@ impl GoalRepository for FakeGoals {
         for e in &mut self.0.lock().unwrap().events {
             if e.goal_id == goal_id {
                 e.seen = true;
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Default)]
+struct Focuses {
+    sessions: Vec<StoredFocus>,
+    next_id: i64,
+}
+
+/// In-memory focus sessions.
+#[derive(Clone, Default)]
+pub struct FakeFocus(Arc<Mutex<Focuses>>);
+
+impl FakeFocus {
+    pub fn all(&self) -> Vec<StoredFocus> {
+        self.0.lock().unwrap().sessions.clone()
+    }
+
+    /// Seeds a session as the store would hold it, e.g. one left running by a closed app.
+    pub fn seed(&self, session: StoredFocus) {
+        let mut f = self.0.lock().unwrap();
+        f.next_id = f.next_id.max(session.id);
+        f.sessions.push(session);
+    }
+}
+
+impl FocusRepository for FakeFocus {
+    fn insert(
+        &self,
+        intent: &str,
+        started_at: UtcMs,
+        planned_end: UtcMs,
+        allowed: &FocusAllowed,
+    ) -> PortResult<i64> {
+        let mut f = self.0.lock().unwrap();
+        if f.sessions.iter().any(|s| s.ended_at.is_none()) {
+            return Err(PortError("a focus session is already running".into()));
+        }
+        f.next_id += 1;
+        let id = f.next_id;
+        f.sessions.push(StoredFocus {
+            id,
+            intent: intent.into(),
+            started_at,
+            planned_end,
+            ended_at: None,
+            end_reason: None,
+            drift_alerts: 0,
+            allowed: allowed.clone(),
+            summary: FocusSummary::default(),
+            seen: false,
+        });
+        Ok(id)
+    }
+
+    fn update_running(
+        &self,
+        id: i64,
+        planned_end: UtcMs,
+        allowed: &FocusAllowed,
+        drift_alerts: u32,
+    ) -> PortResult<()> {
+        let mut f = self.0.lock().unwrap();
+        let Some(s) = f.sessions.iter_mut().find(|s| s.id == id) else {
+            return Err(PortError("focus session not found".into()));
+        };
+        s.planned_end = planned_end;
+        s.allowed = allowed.clone();
+        s.drift_alerts = drift_alerts;
+        Ok(())
+    }
+
+    fn close(
+        &self,
+        id: i64,
+        ended_at: UtcMs,
+        reason: FocusEnd,
+        summary: &FocusSummary,
+    ) -> PortResult<()> {
+        let mut f = self.0.lock().unwrap();
+        let Some(s) = f.sessions.iter_mut().find(|s| s.id == id) else {
+            return Err(PortError("focus session not found".into()));
+        };
+        s.ended_at = Some(ended_at);
+        s.end_reason = Some(reason);
+        s.summary = summary.clone();
+        s.seen = false;
+        Ok(())
+    }
+
+    fn running(&self) -> PortResult<Option<StoredFocus>> {
+        Ok(self
+            .0
+            .lock()
+            .unwrap()
+            .sessions
+            .iter()
+            .find(|s| s.ended_at.is_none())
+            .cloned())
+    }
+
+    fn recent(&self, limit: u32) -> PortResult<Vec<StoredFocus>> {
+        let mut closed: Vec<StoredFocus> = self
+            .0
+            .lock()
+            .unwrap()
+            .sessions
+            .iter()
+            .filter(|s| s.ended_at.is_some())
+            .cloned()
+            .collect();
+        closed.sort_by_key(|s| std::cmp::Reverse((s.started_at, s.id)));
+        closed.truncate(limit as usize);
+        Ok(closed)
+    }
+
+    fn unseen(&self) -> PortResult<Option<StoredFocus>> {
+        Ok(self.recent(u32::MAX)?.into_iter().find(|s| !s.seen))
+    }
+
+    fn mark_seen(&self, id: i64) -> PortResult<()> {
+        for s in &mut self.0.lock().unwrap().sessions {
+            if s.id == id {
+                s.seen = true;
             }
         }
         Ok(())

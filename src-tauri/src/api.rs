@@ -7,6 +7,8 @@ use std::sync::PoisonError;
 use application::commands::ConfirmToken;
 use application::engine::{Command, Reply};
 use application::export::ScheduledBackup;
+use application::focus::StartRequest;
+use application::ports::TrackingStatus;
 use domain::{Activity, ActivityId, GapId};
 
 use crate::calendar::timezone_label;
@@ -14,10 +16,11 @@ use crate::composition::AppState;
 use crate::error::AppError;
 use crate::ipc::dto::{
     ActivityDto, ApplyPresetResultDto, BackupReportDto, BackupStatusDto, DashboardDto, DeleteOpDto,
-    GoalDto, GoalStatusDto, IdleGapDto, IdleResolutionDto, PermissionStateDto, PresetDto,
-    PrivacyModeDto, PrivacyRulesDto, ProductivityDto, RangeDto, ReportDto, RestorePreviewDto,
-    RestoreResultDto, RetentionImpactDto, RuleDto, RuleInputDto, SettingsDto, SettingsPatchDto,
-    ShortcutStatusDto, SuggestionDto, TimelineItemDto, TrackingStateDto, TrackingStatusDto,
+    FocusSessionDto, FocusStartDto, FocusStatusDto, GoalDto, GoalStatusDto, IdleGapDto,
+    IdleResolutionDto, PermissionStateDto, PresetDto, PrivacyModeDto, PrivacyRulesDto,
+    ProductivityDto, RangeDto, ReportDto, RestorePreviewDto, RestoreResultDto, RetentionImpactDto,
+    RuleDto, RuleInputDto, SettingsDto, SettingsPatchDto, ShortcutStatusDto, SuggestionDto,
+    TimelineItemDto, TrackingStateDto, TrackingStatusDto,
 };
 
 impl AppState {
@@ -167,10 +170,13 @@ impl AppState {
             settings.idle_prompt_timeout_secs,
             settings.idle_auto_discard_below_secs,
         );
+        // A session left running by the replaced data is gone; the restored ones are closed.
+        let _ = self.focus.reload(None, self.now());
         if let Some(applier) = self.applier() {
             applier.refresh_tray_text();
             // Goals and the week start came with the restored data.
             applier.refresh_goals();
+            applier.refresh_focus();
         }
     }
 
@@ -209,6 +215,92 @@ impl AppState {
     /// The user saw the badge of a goal.
     pub fn goal_events_mark_seen(&self, goal_id: i64) -> Result<(), AppError> {
         Ok(self.goals.mark_seen(goal_id)?)
+    }
+
+    /// The engine's own view, before it is turned into a DTO.
+    fn tracking_status(&self) -> Result<TrackingStatus, AppError> {
+        match self.engine.request(Command::GetStatus)? {
+            Reply::Status(status) => Ok(status),
+            other => Err(AppError::Internal {
+                message: format!("unexpected engine reply: {other:?}"),
+            }),
+        }
+    }
+
+    fn focus_view(&self, status: &TrackingStatus) -> Result<FocusStatusDto, AppError> {
+        let state = self.focus.status(self.now())?;
+        // A degraded tracker cannot observe windows, so a session could never see a drift.
+        let unavailable = status
+            .degraded
+            .then(|| self.permission.degraded_reason().into());
+        Ok(FocusStatusDto::new(state, unavailable))
+    }
+
+    /// The running session (if any), the summary waiting to be dismissed, and whether a new
+    /// session can start.
+    pub fn focus_status(&self) -> Result<FocusStatusDto, AppError> {
+        let status = self.tracking_status()?;
+        self.focus_view(&status)
+    }
+
+    /// Starts a session, unless tracking is degraded (`AppError::FocusUnavailable`).
+    pub fn focus_start(&self, start: FocusStartDto) -> Result<FocusStatusDto, AppError> {
+        let status = self.tracking_status()?;
+        let blocked = status.degraded.then(|| self.permission.degraded_reason());
+        self.focus.start(
+            StartRequest {
+                intent: start.intent,
+                planned_ms: i64::from(start.planned_minutes) * 60_000,
+                allowed: start.allowed.into(),
+            },
+            blocked,
+            crate::focus_watcher::observed(&status),
+            self.now(),
+        )?;
+        self.refresh_focus_views();
+        self.focus_view(&status)
+    }
+
+    /// Ends the session now; its summary waits in `unseen` until dismissed.
+    pub fn focus_stop(&self) -> Result<FocusStatusDto, AppError> {
+        self.focus.stop(self.now())?;
+        self.refresh_focus_views();
+        self.focus_status()
+    }
+
+    pub fn focus_extend(&self, minutes: u32) -> Result<FocusStatusDto, AppError> {
+        self.focus.extend(minutes, self.now())?;
+        self.refresh_focus_views();
+        self.focus_status()
+    }
+
+    /// "Back to it": acknowledges the drift alert and holds the next one back.
+    pub fn focus_snooze(&self, minutes: u32) -> Result<FocusStatusDto, AppError> {
+        self.focus.snooze(minutes, self.now())?;
+        self.refresh_focus_views();
+        self.focus_status()
+    }
+
+    /// "Allow this app" for the rest of the session.
+    pub fn focus_allow_app(&self, app_id: &str) -> Result<FocusStatusDto, AppError> {
+        self.focus.allow_app(app_id, self.now())?;
+        self.refresh_focus_views();
+        self.focus_status()
+    }
+
+    pub fn focus_history(&self) -> Result<Vec<FocusSessionDto>, AppError> {
+        Ok(self.focus.history()?.into_iter().map(Into::into).collect())
+    }
+
+    pub fn focus_summary_dismiss(&self, id: i64) -> Result<FocusStatusDto, AppError> {
+        self.focus.dismiss_summary(id)?;
+        self.focus_status()
+    }
+
+    fn refresh_focus_views(&self) {
+        if let Some(applier) = self.applier() {
+            applier.refresh_focus();
+        }
     }
 
     fn refresh_goal_views(&self) {
@@ -340,6 +432,7 @@ impl AppState {
         let shortcut_changed = patch.shortcut.is_some();
         let tray_changed = patch.tray_display.is_some();
         let week_changed = patch.week_start.is_some();
+        let drift_changed = patch.focus_drift_after_secs.is_some();
         let settings = self.commands.update_settings(&patch.into())?;
         if titles_changed {
             self.engine.request(Command::ReloadPrivacy)?;
@@ -349,6 +442,9 @@ impl AppState {
             settings.idle_prompt_timeout_secs,
             settings.idle_auto_discard_below_secs,
         );
+        if drift_changed {
+            self.focus.refresh_config()?;
+        }
 
         let mut first_error = None;
         if let Some(applier) = self.applier() {
@@ -363,6 +459,9 @@ impl AppState {
             }
             if week_changed {
                 applier.refresh_goals();
+            }
+            if drift_changed {
+                applier.refresh_focus();
             }
         }
         match first_error {
@@ -1282,6 +1381,235 @@ mod tests {
         rig.state.restore_apply(preview.token).unwrap();
         let restored = rig.state.goals_list().unwrap();
         assert_eq!(restored, vec![first]);
+        rig.state.shutdown();
+    }
+
+    fn focus_request(rig: &Rig, minutes: u32) -> FocusStartDto {
+        let first = rig.state.activities_list().unwrap().remove(0);
+        FocusStartDto {
+            intent: "Write report".into(),
+            planned_minutes: minutes,
+            allowed: crate::ipc::dto::FocusAllowedDto {
+                activity_ids: vec![first.id],
+                app_ids: vec!["com.apple.Safari".into()],
+            },
+        }
+    }
+
+    #[test]
+    fn a_focus_session_runs_ends_and_leaves_a_summary_to_dismiss() {
+        let rig = rig();
+        rig.window.set(Some(safari()));
+        rig.state.start().unwrap();
+        let idle = rig.state.focus_status().unwrap();
+        assert!(idle.active.is_none() && idle.unseen.is_none() && idle.unavailable.is_none());
+
+        let started = rig.state.focus_start(focus_request(&rig, 25)).unwrap();
+        let active = started.active.unwrap();
+        assert_eq!(active.intent, "Write report");
+        assert_eq!(active.planned_end - active.started_at, 25 * 60_000);
+        assert_eq!(active.current.unwrap().app_id, "com.apple.Safari");
+        assert!(active.alerting.is_none());
+        // A second session is refused.
+        assert!(matches!(
+            rig.state.focus_start(focus_request(&rig, 25)),
+            Err(AppError::Invalid { .. })
+        ));
+
+        let extended = rig.state.focus_extend(10).unwrap().active.unwrap();
+        assert_eq!(extended.planned_end - extended.started_at, 35 * 60_000);
+        let allowed = rig.state.focus_allow_app("com.slack").unwrap();
+        assert!(
+            allowed
+                .active
+                .unwrap()
+                .allowed
+                .app_ids
+                .contains(&"com.slack".to_owned())
+        );
+        std::thread::sleep(std::time::Duration::from_millis(5));
+
+        let ended = rig.state.focus_stop().unwrap();
+        assert!(ended.active.is_none());
+        let summary = ended.unseen.unwrap();
+        assert_eq!(summary.intent, "Write report");
+        assert_eq!(summary.end_reason, crate::ipc::dto::FocusEndDto::Cancelled);
+        // Safari was allowed and was the only app in front.
+        assert_eq!(summary.percent_inside, Some(100));
+        assert_eq!(summary.outside_ms, 0);
+
+        assert_eq!(rig.state.focus_history().unwrap().len(), 1);
+        assert!(
+            rig.state
+                .focus_summary_dismiss(summary.id)
+                .unwrap()
+                .unseen
+                .is_none()
+        );
+        rig.state.shutdown();
+    }
+
+    #[test]
+    fn a_degraded_tracker_blocks_focus_sessions_with_the_reason() {
+        use application::ports::{DegradedReason, PermissionProvider, SystemSignal};
+
+        use crate::ipc::dto::DegradedReasonDto;
+
+        for (reason, wire) in [
+            (
+                DegradedReason::AccessibilityDenied,
+                DegradedReasonDto::AccessibilityDenied,
+            ),
+            (
+                DegradedReason::WaylandSession,
+                DegradedReasonDto::WaylandSession,
+            ),
+            (DegradedReason::NoDisplay, DegradedReasonDto::NoDisplay),
+        ] {
+            struct Denied(DegradedReason);
+            impl PermissionProvider for Denied {
+                fn accessibility(&self) -> PermissionState {
+                    PermissionState::Denied
+                }
+                fn request(&self) {}
+                fn open_settings(&self) {}
+                fn degraded_reason(&self) -> DegradedReason {
+                    self.0
+                }
+            }
+            let dir = tempfile::tempdir().unwrap();
+            let state = compose(
+                &dir.path().join("timetrack.db"),
+                Box::new(RecordingSink::default()),
+                AppState::default_shortcut(),
+                Providers {
+                    permission: Arc::new(Denied(reason)),
+                    ..Providers::placeholders()
+                },
+            )
+            .unwrap();
+            state
+                .engine
+                .signal(SystemSignal::PermissionChanged(PermissionState::Denied));
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+            while !state.get_status().unwrap().degraded && std::time::Instant::now() < deadline {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+
+            let status = state.focus_status().unwrap();
+            assert_eq!(status.unavailable, Some(wire));
+            let start = FocusStartDto {
+                intent: "Write report".into(),
+                planned_minutes: 25,
+                allowed: crate::ipc::dto::FocusAllowedDto {
+                    activity_ids: vec![],
+                    app_ids: vec!["excel".into()],
+                },
+            };
+            assert_eq!(
+                state.focus_start(start).unwrap_err(),
+                AppError::FocusUnavailable { reason: wire }
+            );
+            assert!(state.focus_status().unwrap().active.is_none());
+            state.shutdown();
+        }
+    }
+
+    #[test]
+    fn a_session_left_running_resumes_or_closes_when_the_app_starts_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = dir.path().join("timetrack.db");
+        let open = || {
+            compose(
+                &db,
+                Box::new(RecordingSink::default()),
+                AppState::default_shortcut(),
+                Providers::placeholders(),
+            )
+            .unwrap()
+        };
+        let state = open();
+        let start = FocusStartDto {
+            intent: "Write report".into(),
+            planned_minutes: 25,
+            allowed: crate::ipc::dto::FocusAllowedDto {
+                activity_ids: vec![],
+                app_ids: vec!["excel".into()],
+            },
+        };
+        let started = state.focus_start(start).unwrap().active.unwrap();
+        state.shutdown();
+        drop(state);
+
+        // Restarted soon after: the session resumes with the same plan.
+        let again = open();
+        let resumed = again.focus_status().unwrap().active.unwrap();
+        assert_eq!(resumed.id, started.id);
+        assert_eq!(resumed.planned_end, started.planned_end);
+        again.shutdown();
+        drop(again);
+
+        // Restarted after the planned end: it is closed as recovered, with a summary.
+        let conn = adapters_sqlite::open(&db).unwrap();
+        conn.execute(
+            "UPDATE focus_sessions SET started_at = 1000, planned_end = 2000",
+            [],
+        )
+        .unwrap();
+        drop(conn);
+        let late = open();
+        let status = late.focus_status().unwrap();
+        assert!(status.active.is_none());
+        let done = status.unseen.unwrap();
+        assert_eq!(done.end_reason, crate::ipc::dto::FocusEndDto::Recovered);
+        assert_eq!(done.ended_at, 2000);
+        late.shutdown();
+    }
+
+    #[test]
+    fn focus_sessions_survive_a_backup_and_restore() {
+        let rig = rig();
+        rig.window.set(Some(safari()));
+        rig.state.focus_start(focus_request(&rig, 25)).unwrap();
+        rig.state.focus_stop().unwrap();
+        let report = rig.state.backup_now().unwrap();
+        // The session is gone after wiping, and back after the restore.
+        let token = rig.state.prepare_delete(DeleteOpDto::All).unwrap();
+        rig.state.delete_all(token).unwrap();
+        assert!(rig.state.focus_history().unwrap().is_empty());
+
+        let preview = rig
+            .state
+            .restore_prepare_file(std::path::Path::new(&report.path))
+            .unwrap();
+        rig.state.restore_apply(preview.token).unwrap();
+        let history = rig.state.focus_history().unwrap();
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].intent, "Write report");
+        assert!(
+            history[0]
+                .allowed
+                .app_ids
+                .contains(&"com.apple.Safari".to_owned())
+        );
+        rig.state.shutdown();
+    }
+
+    #[test]
+    fn the_drift_delay_setting_is_validated_and_applied() {
+        let rig = rig();
+        let patch = |v| SettingsPatchDto {
+            focus_drift_after_secs: Some(v),
+            ..SettingsPatchDto::default()
+        };
+        assert_eq!(
+            rig.state
+                .settings_update(patch(120))
+                .unwrap()
+                .focus_drift_after_secs,
+            120
+        );
+        assert!(rig.state.settings_update(patch(5)).is_err());
         rig.state.shutdown();
     }
 }

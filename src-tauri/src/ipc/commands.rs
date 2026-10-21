@@ -11,12 +11,13 @@ use tauri_specta::Event;
 
 use super::dto::{
     ActivityDto, ApplyPresetResultDto, BackupReportDto, BackupStatusDto, DashboardDto, DeleteOpDto,
-    GoalDto, GoalStatusDto, IdleGapDto, IdleResolutionDto, PermissionStateDto, PresetDto,
-    PrivacyModeDto, PrivacyRulesDto, ProductivityDto, RangeDto, ReportDto, RestorePreviewDto,
-    RestoreResultDto, RetentionImpactDto, RuleDto, RuleInputDto, SettingsDto, SettingsPatchDto,
-    SuggestionDto, TimelineItemDto, TrackingStatusDto, UpdateInfoDto,
+    FocusSessionDto, FocusStartDto, FocusStatusDto, GoalDto, GoalStatusDto, IdleGapDto,
+    IdleResolutionDto, PermissionStateDto, PresetDto, PrivacyModeDto, PrivacyRulesDto,
+    ProductivityDto, RangeDto, ReportDto, RestorePreviewDto, RestoreResultDto, RetentionImpactDto,
+    RuleDto, RuleInputDto, SettingsDto, SettingsPatchDto, SuggestionDto, TimelineItemDto,
+    TrackingStatusDto, UpdateInfoDto,
 };
-use super::events::{DataChanged, DataKindDto};
+use super::events::{DataChanged, DataKindDto, FocusChanged};
 use crate::composition::AppState;
 use crate::error::AppError;
 
@@ -48,6 +49,15 @@ fn announce_data_changed(app: &AppHandle) {
 fn announce_goals_changed(app: &AppHandle) {
     let _ = DataChanged {
         kind: DataKindDto::Goals,
+    }
+    .emit(app);
+}
+
+/// Tells every window the focus session changed; they refetch `focus_status`.
+fn announce_focus(app: &AppHandle, status: &FocusStatusDto) {
+    let _ = FocusChanged {
+        active: status.active.is_some(),
+        drifting: status.active.as_ref().is_some_and(|a| a.alerting.is_some()),
     }
     .emit(app);
 }
@@ -587,6 +597,91 @@ pub async fn goal_events_mark_seen(
     run(state, move |s| s.goal_events_mark_seen(goal_id)).await?;
     announce_goals_changed(&app);
     Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn focus_status(state: Shared<'_>) -> Result<FocusStatusDto, AppError> {
+    run(state, AppState::focus_status).await
+}
+
+/// Fails with `focus_unavailable` while tracking is degraded.
+#[tauri::command]
+#[specta::specta]
+pub async fn focus_start(
+    app: AppHandle,
+    state: Shared<'_>,
+    start: FocusStartDto,
+) -> Result<FocusStatusDto, AppError> {
+    let status = run(state, move |s| s.focus_start(start)).await?;
+    announce_focus(&app, &status);
+    Ok(status)
+}
+
+/// Ends the session now ("End session"); its summary waits until dismissed.
+#[tauri::command]
+#[specta::specta]
+pub async fn focus_stop(app: AppHandle, state: Shared<'_>) -> Result<FocusStatusDto, AppError> {
+    let status = run(state, AppState::focus_stop).await?;
+    announce_focus(&app, &status);
+    Ok(status)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn focus_extend(
+    app: AppHandle,
+    state: Shared<'_>,
+    minutes: u32,
+) -> Result<FocusStatusDto, AppError> {
+    let status = run(state, move |s| s.focus_extend(minutes)).await?;
+    announce_focus(&app, &status);
+    Ok(status)
+}
+
+/// "Back to it": acknowledges the drift alert and holds the next one back for `minutes`.
+#[tauri::command]
+#[specta::specta]
+pub async fn focus_snooze(
+    app: AppHandle,
+    state: Shared<'_>,
+    minutes: u32,
+) -> Result<FocusStatusDto, AppError> {
+    let status = run(state, move |s| s.focus_snooze(minutes)).await?;
+    announce_focus(&app, &status);
+    Ok(status)
+}
+
+/// "Allow this app" for the rest of the session.
+#[tauri::command]
+#[specta::specta]
+pub async fn focus_allow_app(
+    app: AppHandle,
+    state: Shared<'_>,
+    app_id: String,
+) -> Result<FocusStatusDto, AppError> {
+    let status = run(state, move |s| s.focus_allow_app(&app_id)).await?;
+    announce_focus(&app, &status);
+    Ok(status)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn focus_history(state: Shared<'_>) -> Result<Vec<FocusSessionDto>, AppError> {
+    run(state, AppState::focus_history).await
+}
+
+/// The user closed the end summary of a finished session.
+#[tauri::command]
+#[specta::specta]
+pub async fn focus_summary_dismiss(
+    app: AppHandle,
+    state: Shared<'_>,
+    id: i64,
+) -> Result<FocusStatusDto, AppError> {
+    let status = run(state, move |s| s.focus_summary_dismiss(id)).await?;
+    announce_focus(&app, &status);
+    Ok(status)
 }
 
 #[cfg(test)]

@@ -19,6 +19,10 @@ export const INTROS: Record<SectionId, IntroCopy> = {
     title: "Aim for what matters",
     body: "A goal is a target for your time: at least some hours of an activity, or at most some minutes in an app. Pick a period and the days that count, and you will see your progress and a streak of periods in a row. Rest days never break a streak. Goals only keep you informed: nothing is ever blocked.",
   },
+  focus: {
+    title: "Work in focused blocks",
+    body: "Start a session with what you want to get done, how long it should last and which activities or apps belong to it. If you spend a while somewhere else, you get a gentle nudge: no sound, nothing is blocked. When the time is up you see how much of it stayed on target.",
+  },
   activities: {
     title: "Organize time into activities",
     body: "An activity is a label for what you were doing: a project, a client or a kind of task. Rules say which apps and window titles belong to each one, so your time is sorted for you, past time included. Anything without a rule stays Unassigned.",

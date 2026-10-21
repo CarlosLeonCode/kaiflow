@@ -16,6 +16,10 @@ export const queryKeys = {
   goals: ["goals"] as const,
   goalList: ["goals", "list"] as const,
   goalStatus: ["goals", "status"] as const,
+  /** Prefix of every focus query (the status and the history). */
+  focus: ["focus"] as const,
+  focusStatus: ["focus", "status"] as const,
+  focusHistory: ["focus", "history"] as const,
   retentionImpact: (days: number | null) => ["retention-impact", days] as const,
   /** The update the backend announced (written by the `update-available` event, never fetched). */
   update: ["update"] as const,

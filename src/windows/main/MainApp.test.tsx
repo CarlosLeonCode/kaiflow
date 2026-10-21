@@ -22,7 +22,7 @@ function backend() {
 }
 
 describe("MainApp shell", () => {
-  it("opens on Today with the six sections in the sidebar", async () => {
+  it("opens on Today with the seven sections in the sidebar", async () => {
     backend();
     renderWithProviders(<MainApp />);
 
@@ -31,6 +31,7 @@ describe("MainApp shell", () => {
       "Today",
       "Overview",
       "Goals",
+      "Focus",
       "Activities",
       "Privacy",
       "Settings",
@@ -59,7 +60,7 @@ describe("MainApp shell", () => {
     expect(screen.getByRole("button", { name: /Settings/ })).toHaveAttribute("aria-current", "page");
   });
 
-  it("switches sections with ⌘1..⌘6 and reserves ⌘K", async () => {
+  it("switches sections with ⌘1..⌘7 and reserves ⌘K", async () => {
     const user = userEvent.setup();
     backend();
     renderWithProviders(<MainApp />);
@@ -67,8 +68,10 @@ describe("MainApp shell", () => {
     await user.keyboard("{Meta>}3{/Meta}");
     expect(await screen.findByRole("heading", { level: 1, name: "Goals" })).toBeInTheDocument();
     await user.keyboard("{Meta>}4{/Meta}");
+    expect(await screen.findByRole("heading", { level: 1, name: "Focus" })).toBeInTheDocument();
+    await user.keyboard("{Meta>}5{/Meta}");
     expect(await screen.findByRole("heading", { level: 1, name: "Activities" })).toBeInTheDocument();
-    await user.keyboard("{Meta>}6{/Meta}");
+    await user.keyboard("{Meta>}7{/Meta}");
     expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
     await user.keyboard("{Meta>}k{/Meta}");
     expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument();
@@ -86,7 +89,7 @@ describe("MainApp shell", () => {
     const steps: [() => Promise<void>, string][] = [
       [() => user.click(within(nav).getByRole("button", { name: /Activities/ })), "Activities"],
       [() => user.click(within(nav).getByRole("button", { name: /Overview/ })), "Overview"],
-      [() => user.keyboard("{Meta>}4{/Meta}"), "Activities"],
+      [() => user.keyboard("{Meta>}5{/Meta}"), "Activities"],
       [() => user.keyboard("{Meta>}1{/Meta}"), "Today"],
     ];
     for (const [act, name] of steps) {

@@ -33,7 +33,7 @@ fn an_existing_v2_database_keeps_its_data_and_gets_a_backup() {
 
     migrate(&mut conn, MIGRATIONS, Some(&path)).unwrap();
 
-    assert_eq!(current_version(&conn).unwrap(), 3);
+    assert_eq!(current_version(&conn).unwrap(), 4);
     assert_eq!(count(&conn, "SELECT COUNT(*) FROM activities"), 2);
     assert_eq!(count(&conn, "SELECT COUNT(*) FROM settings"), 1);
     assert_eq!(count(&conn, "SELECT COUNT(*) FROM goals"), 0);

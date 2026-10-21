@@ -1,3 +1,4 @@
+import { FocusSessionContainer } from "@/features/focus/containers/FocusSessionContainer";
 import { GoalsStrip } from "@/features/goals/components/GoalsStrip";
 import { withLiveTime } from "@/features/goals/lib/goals";
 import { SectionIntroContainer } from "@/features/shell/containers/SectionIntroContainer";
@@ -67,6 +68,7 @@ export function TodayContainer({ onOpenGoals }: Props) {
   return (
     <TodayView
       intro={<SectionIntroContainer section="today" />}
+      focus={<FocusSessionContainer />}
       goals={
         <GoalsStrip
           goals={liveGoals}

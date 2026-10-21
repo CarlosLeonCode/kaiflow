@@ -80,6 +80,32 @@ impl<T: Toaster> Notifier for SystemNotifier<T> {
         let (title, body) = goal_message(label, kind);
         self.notify(&title, &body);
     }
+
+    fn focus_drift(&self, intent: &str, app_name: &str) {
+        let (title, body) = focus_drift_message(intent, app_name);
+        self.notify(&title, &body);
+    }
+
+    fn focus_finished(&self, intent: &str) {
+        let (title, body) = focus_finished_message(intent);
+        self.notify(&title, &body);
+    }
+}
+
+/// A gentle nudge, never a reprimand. No sound is requested: the toast is informational and
+/// the in-app card and the tray marker carry the same message.
+pub fn focus_drift_message(intent: &str, app_name: &str) -> (String, String) {
+    (
+        "Still on track?".to_owned(),
+        format!("You have been in {app_name} for a while. Your focus: {intent}."),
+    )
+}
+
+pub fn focus_finished_message(intent: &str) -> (String, String) {
+    (
+        "Focus session complete".to_owned(),
+        format!("Time is up for: {intent}. Open the app to see how it went."),
+    )
 }
 
 /// Title and body of a goal alert. Never mentions window titles; a limit alert only informs.
@@ -111,6 +137,14 @@ impl Notifier for WithoutRevocationNotice {
 
     fn goal_crossed(&self, label: &str, kind: GoalEventKind) {
         self.0.goal_crossed(label, kind);
+    }
+
+    fn focus_drift(&self, intent: &str, app_name: &str) {
+        self.0.focus_drift(intent, app_name);
+    }
+
+    fn focus_finished(&self, intent: &str) {
+        self.0.focus_finished(intent);
     }
 }
 
@@ -315,6 +349,23 @@ mod tests {
         WithoutRevocationNotice(Box::new(SystemNotifier::new(wrapped.clone())))
             .goal_crossed("Email", GoalEventKind::Exceeded);
         assert_eq!(wrapped.shown.lock().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn focus_alerts_are_gentle_and_swallowed_when_denied() {
+        let granted = FakeToaster::new(Authorization::Granted, false);
+        let notifier = SystemNotifier::new(granted.clone());
+        notifier.focus_drift("Write report", "Slack");
+        notifier.focus_finished("Write report");
+        let shown = granted.shown.lock().unwrap();
+        assert_eq!(shown.len(), 2);
+        assert!(shown[0].1.contains("Slack") && shown[0].1.contains("Write report"));
+        assert_eq!(shown[1].0, "Focus session complete");
+        drop(shown);
+
+        let denied = FakeToaster::new(Authorization::Denied, false);
+        SystemNotifier::new(denied.clone()).focus_drift("a", "b");
+        assert!(denied.shown.lock().unwrap().is_empty());
     }
 
     #[test]

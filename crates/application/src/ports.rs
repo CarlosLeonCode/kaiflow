@@ -6,9 +6,9 @@ use std::path::Path;
 use crate::backup::BackupData;
 use crossbeam_channel::Sender;
 use domain::{
-    Activity, ActivityId, ActivityRule, AssignedSpan, EndReason, FocusSnapshot, GapId, GapStatus,
-    Goal, GoalEventKind, HourSlot, IdleGap, PermissionState, PrivacyPolicy, Productivity, SeenApp,
-    Segment, SegmentId, UtcMs,
+    Activity, ActivityId, ActivityRule, AssignedSpan, EndReason, FocusAllowed, FocusEnd,
+    FocusSnapshot, FocusSummary, GapId, GapStatus, Goal, GoalEventKind, HourSlot, IdleGap,
+    PermissionState, PrivacyPolicy, Productivity, SeenApp, Segment, SegmentId, UtcMs,
 };
 
 /// Failure reported by an adapter (storage, OS call...). Carries a readable message only.
@@ -62,6 +62,7 @@ pub enum DataKind {
     Segments,
     Gaps,
     Goals,
+    Focus,
 }
 
 /// Facts the UI shell turns into frontend events.
@@ -277,6 +278,59 @@ pub trait GoalRepository: Send + Sync {
     fn mark_seen(&self, goal_id: i64) -> PortResult<()>;
 }
 
+/// A focus session as stored. While it runs only the plan is known; the summary fills in when
+/// it closes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoredFocus {
+    pub id: i64,
+    pub intent: String,
+    pub started_at: UtcMs,
+    pub planned_end: UtcMs,
+    pub ended_at: Option<UtcMs>,
+    pub end_reason: Option<FocusEnd>,
+    pub drift_alerts: u32,
+    pub allowed: FocusAllowed,
+    /// Zeroes until the session closes.
+    pub summary: FocusSummary,
+    /// The user acknowledged the end summary.
+    pub seen: bool,
+}
+
+/// Focus sessions and what they allowed (migration 0004). At most one runs at a time.
+pub trait FocusRepository: Send + Sync {
+    /// Stores a new running session and returns its id.
+    fn insert(
+        &self,
+        intent: &str,
+        started_at: UtcMs,
+        planned_end: UtcMs,
+        allowed: &FocusAllowed,
+    ) -> PortResult<i64>;
+    /// Stores what can change while a session runs.
+    fn update_running(
+        &self,
+        id: i64,
+        planned_end: UtcMs,
+        allowed: &FocusAllowed,
+        drift_alerts: u32,
+    ) -> PortResult<()>;
+    /// Closes the session with its summary; it then waits, unseen, for the user.
+    fn close(
+        &self,
+        id: i64,
+        ended_at: UtcMs,
+        reason: FocusEnd,
+        summary: &FocusSummary,
+    ) -> PortResult<()>;
+    /// The session without an end, if any.
+    fn running(&self) -> PortResult<Option<StoredFocus>>;
+    /// Closed sessions, newest first.
+    fn recent(&self, limit: u32) -> PortResult<Vec<StoredFocus>>;
+    /// The newest closed session whose summary the user has not acknowledged.
+    fn unseen(&self) -> PortResult<Option<StoredFocus>>;
+    fn mark_seen(&self, id: i64) -> PortResult<()>;
+}
+
 pub trait EventSink: Send {
     fn emit(&self, event: DomainEvent);
 }
@@ -288,4 +342,9 @@ pub trait Notifier: Send {
     /// A goal crossed its threshold (reached a minimum, exceeded a maximum). Never blocks
     /// anything; the in-app badge exists whether or not this shows.
     fn goal_crossed(&self, _label: &str, _kind: GoalEventKind) {}
+    /// The user has been outside a focus session's allowed set for a while. Silent by
+    /// design: it never makes a sound or opens a window.
+    fn focus_drift(&self, _intent: &str, _app_name: &str) {}
+    /// A focus session ran its course.
+    fn focus_finished(&self, _intent: &str) {}
 }

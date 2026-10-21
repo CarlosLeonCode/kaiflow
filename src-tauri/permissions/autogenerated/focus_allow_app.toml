@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-focus-allow-app"
+description = "Enables the focus_allow_app command without any pre-configured scope."
+commands.allow = ["focus_allow_app"]
+
+[[permission]]
+identifier = "deny-focus-allow-app"
+description = "Denies the focus_allow_app command without any pre-configured scope."
+commands.deny = ["focus_allow_app"]

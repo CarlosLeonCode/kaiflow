@@ -11,13 +11,14 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use adapters_common::files::FsFileSink;
 use adapters_common::idle::IdleThreshold;
 use adapters_sqlite::{
-    DbError, SqliteActivityRepository, SqliteBackupStore, SqliteGoalRepository,
-    SqlitePrivacyRepository, SqliteReportRepository, SqliteRetentionRepository,
-    SqliteSessionRepository, SqliteSettingsRepository,
+    DbError, SqliteActivityRepository, SqliteBackupStore, SqliteFocusRepository,
+    SqliteGoalRepository, SqlitePrivacyRepository, SqliteReportRepository,
+    SqliteRetentionRepository, SqliteSessionRepository, SqliteSettingsRepository,
 };
 use application::commands::Commands;
 use application::engine::{Command, Engine, EngineHandle, Ports};
 use application::export::DataService;
+use application::focus::FocusService;
 use application::goals::GoalService;
 use application::idle_policy::IdlePolicy;
 use application::ports::{
@@ -97,6 +98,9 @@ pub trait SettingsApplier: Send + Sync {
     fn refresh_tray_text(&self);
     /// Goals or the week start changed: the goal watcher re-evaluates. Never blocks.
     fn refresh_goals(&self) {}
+    /// A focus session changed or its drift setting did: the focus watcher re-evaluates and
+    /// the tray text follows. Never blocks.
+    fn refresh_focus(&self) {}
 }
 
 #[derive(Debug)]
@@ -135,6 +139,8 @@ pub struct AppState {
     pub data: DataService,
     /// Goals, their progress and streaks (shared by the popover, Today and Overview).
     pub goals: Arc<GoalService>,
+    /// Focus sessions: start, drift detection, summary and recovery.
+    pub focus: Arc<FocusService>,
     /// Read-only listing of activities and rules (writes go through `commands`).
     pub activities: Arc<dyn ActivityRepository>,
     pub permission: Arc<dyn PermissionProvider>,
@@ -196,6 +202,12 @@ pub fn compose(
         settings.clone(),
         Arc::new(ChronoLocalCalendar),
     ));
+    let focus = Arc::new(FocusService::new(
+        Arc::new(SqliteFocusRepository::new(adapters_sqlite::open(db_path)?)),
+        reports.clone(),
+        activities.clone(),
+        settings.clone(),
+    ));
     let presets = PresetService::new(activities.clone(), reports, settings.clone());
     let commands = Arc::new(
         Commands::new(activities.clone(), privacy.clone(), settings, retention)
@@ -232,6 +244,7 @@ pub fn compose(
         presets,
         data,
         goals,
+        focus,
         activities,
         permission: providers.permission,
         shortcut,
@@ -243,6 +256,10 @@ pub fn compose(
         sampler: Mutex::new(providers.sampler),
     };
     state.start_background(engine_thread)?;
+    // A session left running by the previous run resumes (or closes with its summary).
+    if let Err(error) = state.focus.recover(None, SystemClock.now()) {
+        eprintln!("could not recover the focus session: {error}");
+    }
     Ok(state)
 }
 

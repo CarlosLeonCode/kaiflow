@@ -80,3 +80,10 @@ export function promptTimeoutOptions(current: number): ThresholdOption[] {
     current,
   ).map((secs) => ({ secs, label: formatThreshold(secs) }));
 }
+
+const FOCUS_DRIFT_SECS = [30, 60, 90, 120, 180, 300] as const;
+
+/** How long off-task before a focus session nudges; the stored value is always selectable. */
+export function focusDriftOptions(current: number): ThresholdOption[] {
+  return withCurrent(FOCUS_DRIFT_SECS, current).map((secs) => ({ secs, label: formatThreshold(secs) }));
+}

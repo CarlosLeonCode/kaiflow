@@ -59,6 +59,14 @@
     "allow-goals-delete",
     "allow-goals-status",
     "allow-goal-events-mark-seen",
+    "allow-focus-status",
+    "allow-focus-start",
+    "allow-focus-stop",
+    "allow-focus-extend",
+    "allow-focus-snooze",
+    "allow-focus-allow-app",
+    "allow-focus-history",
+    "allow-focus-summary-dismiss",
     "allow-update-check",
     "allow-update-install"
   ]

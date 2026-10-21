@@ -24,6 +24,7 @@ pub enum DataKindDto {
     Segments,
     Gaps,
     Goals,
+    Focus,
 }
 
 impl From<DataKind> for DataKindDto {
@@ -32,6 +33,7 @@ impl From<DataKind> for DataKindDto {
             DataKind::Segments => Self::Segments,
             DataKind::Gaps => Self::Gaps,
             DataKind::Goals => Self::Goals,
+            DataKind::Focus => Self::Focus,
         }
     }
 }
@@ -117,6 +119,15 @@ pub struct GoalCrossed {
     pub goal_id: i64,
     pub label: String,
     pub kind: GoalEventKindDto,
+}
+
+/// The focus session changed: it started, ended, was extended, or a drift alert was raised
+/// or cleared. The windows refetch `focus_status`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type, Event)]
+pub struct FocusChanged {
+    pub active: bool,
+    /// An unacknowledged drift alert is showing.
+    pub drifting: bool,
 }
 
 /// Everything the backend can push, as one value so translation is testable.

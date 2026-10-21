@@ -43,6 +43,10 @@ const FIGURE_SPACE: char = '\u{2007}';
 /// U+23F8 followed by VS15 so it renders as a monochrome glyph, not a color emoji.
 const PAUSED_MARKER: &str = "\u{23F8}\u{FE0E}";
 const SEPARATOR: &str = " · ";
+/// Quarter-filled circle: a countdown in progress.
+const FOCUS_MARKER: &str = "◔";
+/// Replaces the separator while a drift alert is showing.
+const DRIFT_SEPARATOR: &str = " ! ";
 const APP_NAME: &str = "Time Track Copilot";
 
 const MINUTE_MS: i64 = 60_000;
@@ -70,6 +74,16 @@ pub struct GoalTray {
     pub target_ms: i64,
 }
 
+/// A focus session in progress; while one runs it takes over the text (unless the tray text
+/// is off): the countdown matters more than the day total.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FocusTray<'a> {
+    pub intent: &'a str,
+    pub remaining_ms: i64,
+    /// A drift alert is showing: the separator turns into `!`.
+    pub drifting: bool,
+}
+
 /// Everything the text depends on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TraySnapshot<'a> {
@@ -78,6 +92,8 @@ pub struct TraySnapshot<'a> {
     pub current: Option<AppToday<'a>>,
     /// The top goal; only read by `TrayDisplay::GoalProgress`.
     pub goal: Option<GoalTray>,
+    /// The running focus session, if any.
+    pub focus: Option<FocusTray<'a>>,
 }
 
 /// Minute resolution, two digit columns for the minutes (see the module docs).
@@ -113,6 +129,33 @@ fn goal_text(goal: GoalTray) -> String {
     )
 }
 
+/// Whole minutes left, rounded up: `◔ 1m` stays until the session ends.
+fn remaining_minutes_ms(remaining_ms: i64) -> i64 {
+    minutes_left(remaining_ms) * MINUTE_MS
+}
+
+/// Minutes left, rounded up.
+fn minutes_left(remaining_ms: i64) -> i64 {
+    (remaining_ms.max(0) + MINUTE_MS - 1) / MINUTE_MS
+}
+
+/// `◔ 23m · Write report`, the intent shortened to keep the label within the limit.
+fn focus_text(focus: FocusTray<'_>) -> String {
+    let separator = if focus.drifting {
+        DRIFT_SEPARATOR
+    } else {
+        SEPARATOR
+    };
+    let prefix = format!(
+        "{FOCUS_MARKER} {}{separator}",
+        format_duration(remaining_minutes_ms(focus.remaining_ms))
+    );
+    let budget = MAX_LABEL_CHARS
+        .saturating_sub(prefix.chars().count())
+        .max(MIN_NAME_CHARS);
+    format!("{prefix}{}", truncate(focus.intent, budget))
+}
+
 /// Trims `text` and shortens it to at most `max_chars` characters, ending with `…` when cut.
 pub fn truncate(text: &str, max_chars: usize) -> String {
     let text = text.trim();
@@ -134,6 +177,10 @@ fn with_name(prefix: &str, name: &str, sep: &str, tail: &str) -> String {
 pub fn tray_text(display: TrayDisplay, snap: &TraySnapshot<'_>) -> String {
     if display == TrayDisplay::Off {
         return String::new();
+    }
+    // A session runs independently of tracking, so it shows in every tracking state.
+    if let Some(focus) = snap.focus {
+        return focus_text(focus);
     }
     // The goal variant replaces the day total; without a goal it falls back to the total.
     let total = match (display, snap.goal) {
@@ -178,6 +225,14 @@ pub fn next_refresh(
 ) -> Option<Duration> {
     let as_wait = |ms: i64| Duration::from_millis(ms.max(MIN_WAIT_MS).unsigned_abs());
     let midnight = until_midnight_ms.max(0) + SLACK_MS;
+    if display != TrayDisplay::Off
+        && let Some(focus) = snap.focus
+    {
+        // The countdown changes when the minutes left (rounded up) drop by one.
+        let left = focus.remaining_ms.max(1);
+        let minutes = minutes_left(left);
+        return Some(as_wait(left - (minutes - 1) * MINUTE_MS + SLACK_MS));
+    }
     match snap.kind {
         _ if display == TrayDisplay::Off => None,
         TrackingKind::Stopped => None,
@@ -354,6 +409,7 @@ fn compute(state: &AppState) -> Result<(String, Option<Duration>), String> {
         });
         (report.total_ms, app)
     };
+    let session = state.focus.tray(now);
     let goal = if display == TrayDisplay::GoalProgress {
         state
             .goals
@@ -374,6 +430,11 @@ fn compute(state: &AppState) -> Result<(String, Option<Duration>), String> {
             today_ms: *today_ms,
         }),
         goal,
+        focus: session.as_ref().map(|s| FocusTray {
+            intent: &s.intent,
+            remaining_ms: s.remaining_ms,
+            drifting: s.drifting,
+        }),
     };
     Ok((
         tray_text(display, &snap),
@@ -409,6 +470,7 @@ mod tests {
             today_ms,
             current,
             goal: None,
+            focus: None,
         }
     }
 
@@ -464,6 +526,7 @@ mod tests {
                 today_ms: HOUR,
                 current: xcode(MIN),
                 goal: None,
+                focus: None,
             };
             assert_eq!(tray_text(TrayDisplay::Off, &snap), "");
         }
@@ -532,6 +595,7 @@ mod tests {
                 today_ms: 3 * HOUR + 12 * MIN,
                 current: xcode(40 * MIN),
                 goal: None,
+                focus: None,
             };
             assert_eq!(
                 tray_text(display, &at(TrackingKind::Paused)),
@@ -552,6 +616,7 @@ mod tests {
                 actual_ms,
                 target_ms,
             }),
+            focus: None,
         }
     }
 
@@ -616,6 +681,147 @@ mod tests {
         );
     }
 
+    fn with_focus(
+        kind: TrackingKind,
+        intent: &'static str,
+        remaining_ms: i64,
+        drifting: bool,
+    ) -> TraySnapshot<'static> {
+        TraySnapshot {
+            kind,
+            today_ms: 5 * HOUR,
+            current: xcode(40 * MIN),
+            goal: None,
+            focus: Some(FocusTray {
+                intent,
+                remaining_ms,
+                drifting,
+            }),
+        }
+    }
+
+    #[test]
+    fn a_running_session_shows_the_countdown_and_the_intent() {
+        let snap = with_focus(TrackingKind::Running, "Write report", 23 * MIN, false);
+        for display in [
+            TrayDisplay::TodayTotal,
+            TrayDisplay::CurrentApp,
+            TrayDisplay::TodayAndCurrent,
+            TrayDisplay::GoalProgress,
+        ] {
+            assert_eq!(tray_text(display, &snap), "◔ 23m · Write report");
+        }
+        // Minutes are rounded up and keep their two columns.
+        assert_eq!(
+            tray_text(
+                TrayDisplay::TodayTotal,
+                &with_focus(TrackingKind::Running, "Write report", 4 * MIN + 1, false)
+            ),
+            "◔ \u{2007}5m · Write report"
+        );
+        assert_eq!(
+            tray_text(
+                TrayDisplay::TodayTotal,
+                &with_focus(TrackingKind::Running, "Write report", HOUR + 5 * MIN, false)
+            ),
+            "◔ 1h 05m · Write report"
+        );
+    }
+
+    #[test]
+    fn a_session_shows_whatever_the_tracking_state_is_unless_the_tray_is_off() {
+        for kind in [
+            TrackingKind::Running,
+            TrackingKind::Paused,
+            TrackingKind::Idle,
+            TrackingKind::Asleep,
+            TrackingKind::Stopped,
+        ] {
+            let snap = with_focus(kind, "Write report", 10 * MIN, false);
+            assert_eq!(
+                tray_text(TrayDisplay::TodayTotal, &snap),
+                "◔ 10m · Write report"
+            );
+            assert_eq!(tray_text(TrayDisplay::Off, &snap), "");
+        }
+    }
+
+    #[test]
+    fn a_drift_swaps_the_separator_for_a_marker() {
+        let snap = with_focus(TrackingKind::Running, "Write report", 23 * MIN, true);
+        assert_eq!(
+            tray_text(TrayDisplay::TodayTotal, &snap),
+            "◔ 23m ! Write report"
+        );
+    }
+
+    #[test]
+    fn a_long_intent_is_cut_to_the_label_limit() {
+        for (intent, remaining) in [
+            (
+                "Prepare the quarterly planning review for the board",
+                23 * MIN,
+            ),
+            (
+                "Prepare the quarterly planning review for the board",
+                10 * HOUR + 5 * MIN,
+            ),
+            ("ÄÖÜ漢字テスト漢字テスト漢字テスト漢字テスト", 59 * MIN),
+        ] {
+            for drifting in [false, true] {
+                let text = tray_text(
+                    TrayDisplay::TodayTotal,
+                    &with_focus(TrackingKind::Running, intent, remaining, drifting),
+                );
+                assert!(text.chars().count() <= MAX_LABEL_CHARS, "{text}");
+                assert!(text.contains('…'), "{text}");
+            }
+        }
+        assert_eq!(
+            tray_text(
+                TrayDisplay::TodayTotal,
+                &with_focus(
+                    TrackingKind::Running,
+                    "Prepare the quarterly planning review",
+                    23 * MIN,
+                    false
+                )
+            ),
+            "◔ 23m · Prepare the qua…"
+        );
+    }
+
+    #[test]
+    fn the_countdown_wakes_when_the_minutes_left_change() {
+        let wake = |remaining| {
+            next_refresh(
+                TrayDisplay::TodayTotal,
+                &with_focus(TrackingKind::Paused, "x", remaining, false),
+                10 * HOUR,
+            )
+        };
+        // 23 min 20 s left shows 24m until 23 min are left: 20 s away.
+        assert_eq!(
+            wake(23 * MIN + 20_000),
+            Some(Duration::from_millis(20_000 + 2_500))
+        );
+        assert_eq!(
+            wake(5 * MIN),
+            Some(Duration::from_millis(MIN as u64 + 2_500))
+        );
+        // The last minute counts down to the end.
+        assert_eq!(wake(30_000), Some(Duration::from_millis(30_000 + 2_500)));
+        // Off never wakes.
+        assert_eq!(
+            next_refresh(
+                TrayDisplay::Off,
+                &with_focus(TrackingKind::Running, "x", MIN, false),
+                HOUR
+            ),
+            None
+        );
+    }
+
     #[test]
     fn tooltip_names_the_app_and_carries_the_text() {
         assert_eq!(tooltip(""), "Time Track Copilot");
@@ -661,6 +867,7 @@ mod tests {
             today_ms: HOUR,
             current: None,
             goal: None,
+            focus: None,
         };
         for kind in [
             TrackingKind::Paused,

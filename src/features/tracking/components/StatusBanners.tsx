@@ -4,7 +4,8 @@ import type { DegradedReasonDto } from "@/shared/ipc";
 import { Alert, AlertDescription, AlertTitle } from "@/shared/ui/alert";
 import { Button } from "@/shared/ui/button";
 
-const DEGRADED_COPY: Record<DegradedReasonDto, { title: string; description: string }> = {
+/** What each degraded reason means, shared with the places that depend on window tracking. */
+export const DEGRADED_COPY: Record<DegradedReasonDto, { title: string; description: string }> = {
   accessibility_denied: {
     title: "Window titles are off",
     description: "Accessibility access is not granted, so only app names are recorded.",

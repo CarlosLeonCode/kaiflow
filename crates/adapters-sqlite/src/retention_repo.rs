@@ -22,6 +22,13 @@ impl SqliteRetentionRepository {
 impl RetentionRepository for SqliteRetentionRepository {
     fn delete_range(&self, from: UtcMs, to: UtcMs) -> PortResult<usize> {
         let conn = lock(&self.conn, "retention")?;
+        // Focus sessions are derived from tracked time and go with it (a running one stays).
+        conn.execute(
+            "DELETE FROM focus_sessions
+             WHERE ended_at IS NOT NULL AND started_at >= ?1 AND started_at < ?2",
+            [from.0, to.0],
+        )
+        .map_err(port_err)?;
         conn.execute(
             "DELETE FROM segments
              WHERE ended_at IS NOT NULL AND started_at >= ?1 AND started_at < ?2",
@@ -51,6 +58,11 @@ impl RetentionRepository for SqliteRetentionRepository {
                 [cutoff.0],
             )
             .map_err(port_err)?;
+        tx.execute(
+            "DELETE FROM focus_sessions WHERE ended_at IS NOT NULL AND ended_at < ?1",
+            [cutoff.0],
+        )
+        .map_err(port_err)?;
         // Pending gaps still wait for an answer; everything else is history.
         tx.execute(
             "DELETE FROM idle_gaps WHERE status <> 'pending' AND ended_at < ?1",
@@ -66,6 +78,8 @@ impl RetentionRepository for SqliteRetentionRepository {
         let tx = conn.transaction().map_err(port_err)?;
         tx.execute("DELETE FROM segments", []).map_err(port_err)?;
         tx.execute("DELETE FROM idle_gaps", []).map_err(port_err)?;
+        tx.execute("DELETE FROM focus_sessions WHERE ended_at IS NOT NULL", [])
+            .map_err(port_err)?;
         tx.commit().map_err(port_err)?;
         // VACUUM cannot run inside a transaction. It rewrites the file so deleted rows do not
         // linger in free pages; the checkpoint then drops them from the WAL as well.
@@ -144,6 +158,51 @@ mod tests {
         assert_eq!(count(&path, "idle_gaps"), 2);
         assert_eq!(r.purge_older_than(UtcMs(1_000_000)).unwrap(), 1);
         assert_eq!(count(&path, "segments"), 1, "open segment is never purged");
+    }
+
+    fn seed_sessions(path: &std::path::Path) {
+        open(path)
+            .unwrap()
+            .execute_batch(
+                "INSERT INTO focus_sessions(id, intent, started_at, planned_end, ended_at, end_reason)
+                   VALUES (1, 'old', 10, 20, 15, 'completed'), (2, 'new', 100, 200, 150, 'cancelled');
+                 INSERT INTO focus_sessions(id, intent, started_at, planned_end) VALUES (3, 'running', 300, 400);",
+            )
+            .unwrap();
+    }
+
+    #[test]
+    fn focus_sessions_follow_the_tracked_data_but_a_running_one_stays() {
+        let (_d, path, _w, r) = fixture();
+        seed_sessions(&path);
+        r.delete_range(UtcMs(0), UtcMs(50)).unwrap();
+        assert_eq!(count(&path, "focus_sessions"), 2);
+        r.purge_older_than(UtcMs(120)).unwrap();
+        assert_eq!(
+            count(&path, "focus_sessions"),
+            2,
+            "ended at 150, after the cutoff"
+        );
+        r.purge_older_than(UtcMs(1_000)).unwrap();
+        assert_eq!(count(&path, "focus_sessions"), 1);
+        seed_sessions_again(&path);
+        r.delete_all().unwrap();
+        assert_eq!(
+            count(&path, "focus_sessions"),
+            1,
+            "the running session survives"
+        );
+    }
+
+    fn seed_sessions_again(path: &std::path::Path) {
+        open(path)
+            .unwrap()
+            .execute(
+                "INSERT INTO focus_sessions(id, intent, started_at, planned_end, ended_at, end_reason)
+                 VALUES (9, 'again', 1, 5, 4, 'completed')",
+                [],
+            )
+            .unwrap();
     }
 
     #[test]

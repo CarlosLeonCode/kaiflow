@@ -9,7 +9,7 @@ use tauri::Wry;
 use tauri_specta::{Builder, collect_commands, collect_events};
 
 use self::events::{
-    BackupFinished, CurrentSegmentChanged, DataChanged, GoalCrossed, IdleGapPending,
+    BackupFinished, CurrentSegmentChanged, DataChanged, FocusChanged, GoalCrossed, IdleGapPending,
     IdleGapResolved, PermissionChanged, ShortcutStatusChanged, StorageFailed,
     TrackingStatusChanged, UpdateAvailable,
 };
@@ -72,6 +72,14 @@ pub fn builder() -> Builder<Wry> {
             commands::goals_delete,
             commands::goals_status,
             commands::goal_events_mark_seen,
+            commands::focus_status,
+            commands::focus_start,
+            commands::focus_stop,
+            commands::focus_extend,
+            commands::focus_snooze,
+            commands::focus_allow_app,
+            commands::focus_history,
+            commands::focus_summary_dismiss,
             commands::update_check,
             commands::update_install,
         ])
@@ -87,6 +95,7 @@ pub fn builder() -> Builder<Wry> {
             UpdateAvailable,
             BackupFinished,
             GoalCrossed,
+            FocusChanged,
         ])
         // Timestamps are UTC milliseconds (about 1.8e12), far below 2^53.
         .dangerously_cast_bigints_to_number()

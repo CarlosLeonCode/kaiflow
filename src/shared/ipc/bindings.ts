@@ -117,6 +117,19 @@ export const commands = {
 	goalsDelete: (id: number) => typedError<null, AppError>(__TAURI_INVOKE("goals_delete", { id })),
 	goalsStatus: () => typedError<GoalStatusDto[], AppError>(__TAURI_INVOKE("goals_status")),
 	goalEventsMarkSeen: (goalId: number) => typedError<null, AppError>(__TAURI_INVOKE("goal_events_mark_seen", { goalId })),
+	focusStatus: () => typedError<FocusStatusDto, AppError>(__TAURI_INVOKE("focus_status")),
+	/**  Fails with `focus_unavailable` while tracking is degraded. */
+	focusStart: (start: FocusStartDto) => typedError<FocusStatusDto, AppError>(__TAURI_INVOKE("focus_start", { start })),
+	/**  Ends the session now ("End session"); its summary waits until dismissed. */
+	focusStop: () => typedError<FocusStatusDto, AppError>(__TAURI_INVOKE("focus_stop")),
+	focusExtend: (minutes: number) => typedError<FocusStatusDto, AppError>(__TAURI_INVOKE("focus_extend", { minutes })),
+	/**  "Back to it": acknowledges the drift alert and holds the next one back for `minutes`. */
+	focusSnooze: (minutes: number) => typedError<FocusStatusDto, AppError>(__TAURI_INVOKE("focus_snooze", { minutes })),
+	/**  "Allow this app" for the rest of the session. */
+	focusAllowApp: (appId: string) => typedError<FocusStatusDto, AppError>(__TAURI_INVOKE("focus_allow_app", { appId })),
+	focusHistory: () => typedError<FocusSessionDto[], AppError>(__TAURI_INVOKE("focus_history")),
+	/**  The user closed the end summary of a finished session. */
+	focusSummaryDismiss: (id: number) => typedError<FocusStatusDto, AppError>(__TAURI_INVOKE("focus_summary_dismiss", { id })),
 	/**
 	 *  Asks the update server for a newer signed release. Returns it (and announces it with
 	 *  `update-available`), or `null` when the app is current or updates are not configured.
@@ -136,6 +149,7 @@ export const events = {
 	backupFinished: makeEvent<BackupFinished>("backup-finished"),
 	currentSegmentChanged: makeEvent<CurrentSegmentChanged>("current-segment-changed"),
 	dataChanged: makeEvent<DataChanged>("data-changed"),
+	focusChanged: makeEvent<FocusChanged>("focus-changed"),
 	goalCrossed: makeEvent<GoalCrossed>("goal-crossed"),
 	idleGapPending: makeEvent<IdleGapPending>("idle-gap-pending"),
 	idleGapResolved: makeEvent<IdleGapResolved>("idle-gap-resolved"),
@@ -175,6 +189,11 @@ export type AppError =
  *  design's list so validation failures are not reported as storage failures.
  */
 { kind: "invalid"; message: string } | 
+/**
+ *  A focus session cannot run while tracking is degraded: windows cannot be observed, so
+ *  there is nothing to detect drift with. `reason` says why, so the UI can explain it.
+ */
+{ kind: "focus_unavailable"; reason: DegradedReasonDto } | 
 /**  Infrastructure failure (engine thread gone, dialog or file errors). */
 { kind: "internal"; message: string };
 
@@ -264,7 +283,7 @@ export type DataChanged = {
 	kind: DataKindDto,
 };
 
-export type DataKindDto = "segments" | "gaps" | "goals";
+export type DataKindDto = "segments" | "gaps" | "goals" | "focus";
 
 /**
  *  Why tracking runs degraded, so the UI can explain it (and only offer System Settings
@@ -285,14 +304,94 @@ export type DocumentKindDto = "backup" | "export";
 
 export type EndReasonDto = "focus_change" | "idle" | "sleep" | "lock" | "pause" | "stop" | "shutdown" | "recovered";
 
+/**  The running session. */
+export type FocusActiveDto = {
+	id: number,
+	intent: string,
+	started_at: number,
+	planned_end: number,
+	drift_alerts: number,
+	allowed: FocusAllowedDto,
+	/**  The app in front; `null` while nothing is observed (tracking paused, idle...). */
+	current: FocusAppDto | null,
+	/**  The app an unacknowledged drift alert is about. */
+	alerting: FocusAppDto | null,
+};
+
+/**  What a focus session allows: whole activities and individual apps. */
+export type FocusAllowedDto = {
+	activity_ids: number[],
+	app_ids: string[],
+};
+
+/**  The app in front during a session and the activity it is filed under. */
+export type FocusAppDto = {
+	app_id: string,
+	app_name: string,
+	activity_id: number,
+};
+
+/**
+ *  The focus session changed: it started, ended, was extended, or a drift alert was raised
+ *  or cleared. The windows refetch `focus_status`.
+ */
+export type FocusChanged = {
+	active: boolean,
+	/**  An unacknowledged drift alert is showing. */
+	drifting: boolean,
+};
+
+export type FocusDistractionDto = {
+	app_id: string,
+	app_name: string,
+	ms: number,
+};
+
 export type FocusDto = {
 	app_id: string,
 	app_name: string,
 	window_title: string | null,
 };
 
+export type FocusEndDto = "completed" | "cancelled" | "recovered";
+
 /**  Productive share of productive plus distracting time; `no_signal` when both are zero. */
 export type FocusRatioDto = { kind: "no_signal" } | { kind: "ratio"; ratio: number | null };
+
+/**  A finished session with its summary. */
+export type FocusSessionDto = {
+	id: number,
+	intent: string,
+	started_at: number,
+	planned_end: number,
+	ended_at: number,
+	end_reason: FocusEndDto,
+	drift_alerts: number,
+	allowed: FocusAllowedDto,
+	inside_ms: number,
+	outside_ms: number,
+	/**  Share of the tracked time spent inside; `null` when nothing was tracked. */
+	percent_inside: number | null,
+	top_distractions: FocusDistractionDto[],
+	/**  The user acknowledged the end summary. */
+	seen: boolean,
+};
+
+/**  What the user starts a session with. */
+export type FocusStartDto = {
+	intent: string,
+	planned_minutes: number,
+	allowed: FocusAllowedDto,
+};
+
+/**  Everything the Focus views need in one call. */
+export type FocusStatusDto = {
+	active: FocusActiveDto | null,
+	/**  The latest finished session whose summary the user has not dismissed yet. */
+	unseen: FocusSessionDto | null,
+	/**  Why a session cannot start right now (tracking is degraded); `null` when it can. */
+	unavailable: DegradedReasonDto | null,
+};
 
 export type GapStatusDto = { kind: "pending" } | { kind: "resolved"; resolution: IdleResolutionDto } | { kind: "expired" };
 
@@ -488,6 +587,8 @@ export type SettingsDto = {
 	tray_display: TrayDisplayDto,
 	/**  First day of the week: 0 = Monday .. 6 = Sunday. */
 	week_start: number,
+	/**  Seconds outside a focus session's allowed set before a drift alert. */
+	focus_drift_after_secs: number,
 	ui: UiSettingsDto,
 };
 
@@ -504,6 +605,7 @@ export type SettingsPatchDto = {
 	onboarding_completed: boolean | null,
 	tray_display: TrayDisplayDto | null,
 	week_start: number | null,
+	focus_drift_after_secs: number | null,
 	ui: UiSettingsDto | null,
 };
 

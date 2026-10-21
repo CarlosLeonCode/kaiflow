@@ -4,8 +4,9 @@ use std::path::Path;
 use std::sync::Mutex;
 
 use application::backup::{
-    ActivityRecord, BackupData, DEVICE_SETTINGS, GapRecord, GoalEventRecord, GoalRecord,
-    PrivacyRuleRecord, RuleRecord, SegmentRecord, SettingRecord,
+    ActivityRecord, BackupData, DEVICE_SETTINGS, FocusDistractionRecord, FocusSessionRecord,
+    GapRecord, GoalEventRecord, GoalRecord, PrivacyRuleRecord, RuleRecord, SegmentRecord,
+    SettingRecord,
 };
 use application::ports::{BackupStore, PortError, PortResult};
 use domain::UtcMs;
@@ -44,6 +45,7 @@ impl BackupStore for SqliteBackupStore {
             idle_gaps: read_gaps(&tx, from, to)?,
             goals: read_goals(&tx)?,
             goal_events: read_goal_events(&tx, from, to)?,
+            focus_sessions: read_focus_sessions(&tx, from, to)?,
         };
         tx.finish().map_err(port_err)?;
         Ok(data)
@@ -73,8 +75,10 @@ impl BackupStore for SqliteBackupStore {
 }
 
 fn replace_in(tx: &rusqlite::Transaction<'_>, data: &BackupData) -> PortResult<()> {
-    // Goals first: they reference activities (the events go with them).
+    // Goals and focus sessions first: they reference activities (their events and allowed
+    // sets go with them).
     for table in [
+        "focus_sessions",
         "goal_events",
         "goals",
         "segments",
@@ -170,6 +174,45 @@ fn replace_in(tx: &rusqlite::Transaction<'_>, data: &BackupData) -> PortResult<(
             params![e.goal_id, e.period_start, e.kind, e.at, e.notified, e.seen],
         )
         .map_err(port_err)?;
+    }
+    for f in &data.focus_sessions {
+        // Only closed sessions are exported; one without an end cannot be restored.
+        let (Some(ended_at), Some(end_reason)) = (f.ended_at, f.end_reason.as_deref()) else {
+            continue;
+        };
+        tx.execute(
+            "INSERT INTO focus_sessions(id, intent, started_at, planned_end, ended_at, end_reason,
+               drift_alerts, inside_ms, outside_ms, distractions, seen)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            params![
+                f.id,
+                f.intent,
+                f.started_at,
+                f.planned_end,
+                ended_at,
+                end_reason,
+                f.drift_alerts,
+                f.inside_ms,
+                f.outside_ms,
+                distractions_json(&f.distractions),
+                f.seen
+            ],
+        )
+        .map_err(port_err)?;
+        for app in &f.allowed_apps {
+            tx.execute(
+                "INSERT OR IGNORE INTO focus_allowed(session_id, app_id) VALUES (?1, ?2)",
+                params![f.id, app],
+            )
+            .map_err(port_err)?;
+        }
+        for activity in &f.allowed_activities {
+            tx.execute(
+                "INSERT OR IGNORE INTO focus_allowed(session_id, activity_id) VALUES (?1, ?2)",
+                params![f.id, activity],
+            )
+            .map_err(port_err)?;
+        }
     }
     for s in &data.segments {
         tx.execute(
@@ -339,6 +382,83 @@ fn read_goal_events(c: &Connection, from: i64, to: i64) -> PortResult<Vec<GoalEv
     .map_err(port_err)
 }
 
+fn distractions_json(list: &[FocusDistractionRecord]) -> String {
+    serde_json::to_string(
+        &list
+            .iter()
+            .map(|d| serde_json::json!({"app_id": d.app_id, "app_name": d.app_name, "ms": d.ms}))
+            .collect::<Vec<_>>(),
+    )
+    .unwrap_or_else(|_| "[]".into())
+}
+
+/// Closed focus sessions overlapping `[from, to)`; one still running is left out.
+fn read_focus_sessions(c: &Connection, from: i64, to: i64) -> PortResult<Vec<FocusSessionRecord>> {
+    let mut stmt = c
+        .prepare(
+            "SELECT id, intent, started_at, planned_end, ended_at, end_reason, drift_alerts,
+                    inside_ms, outside_ms, distractions, seen
+             FROM focus_sessions
+             WHERE ended_at IS NOT NULL AND started_at < ?2 AND ended_at >= ?1
+             ORDER BY started_at, id",
+        )
+        .map_err(port_err)?;
+    let rows = stmt
+        .query_map([from, to], |r| {
+            Ok((
+                FocusSessionRecord {
+                    id: r.get(0)?,
+                    intent: r.get(1)?,
+                    started_at: r.get(2)?,
+                    planned_end: r.get(3)?,
+                    ended_at: r.get(4)?,
+                    end_reason: r.get(5)?,
+                    drift_alerts: r.get(6)?,
+                    inside_ms: r.get(7)?,
+                    outside_ms: r.get(8)?,
+                    distractions: Vec::new(),
+                    seen: r.get::<_, i64>(10)? != 0,
+                    allowed_apps: Vec::new(),
+                    allowed_activities: Vec::new(),
+                },
+                r.get::<_, String>(9)?,
+            ))
+        })
+        .map_err(port_err)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(port_err)?;
+    let mut out = Vec::with_capacity(rows.len());
+    for (mut record, distractions) in rows {
+        record.distractions = crate::focus_repo::distractions_from_json(&distractions)?
+            .into_iter()
+            .map(|d| FocusDistractionRecord {
+                app_id: d.app_id,
+                app_name: d.app_name,
+                ms: d.ms,
+            })
+            .collect();
+        let mut allowed = c
+            .prepare(
+                "SELECT app_id, activity_id FROM focus_allowed WHERE session_id = ?1
+                 ORDER BY app_id, activity_id",
+            )
+            .map_err(port_err)?;
+        let pairs = allowed
+            .query_map([record.id], |r| {
+                Ok((r.get::<_, Option<String>>(0)?, r.get::<_, Option<i64>>(1)?))
+            })
+            .map_err(port_err)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(port_err)?;
+        for (app, activity) in pairs {
+            record.allowed_apps.extend(app);
+            record.allowed_activities.extend(activity);
+        }
+        out.push(record);
+    }
+    Ok(out)
+}
+
 /// Segments overlapping `[from, to)`. A segment still open is returned closed at its
 /// heartbeat (`recovered`), which is what the app itself would do after a crash.
 fn read_segments(c: &Connection, from: i64, to: i64) -> PortResult<Vec<SegmentRecord>> {
@@ -431,7 +551,14 @@ mod tests {
                VALUES (1, 'Deep work', 'activity', 2, NULL, 'daily', 'minimum', 7200000, 31, 0, 500),
                       (2, 'Less mail', 'app', NULL, 'com.mail', 'weekly', 'maximum', 3600000, 127, 1, 600);
              INSERT INTO goal_events(goal_id, period_start, kind, at, notified, seen)
-               VALUES (1, 19000, 'reached', 2500, 1, 0), (2, 19000, 'exceeded', 6000, 0, 1);",
+               VALUES (1, 19000, 'reached', 2500, 1, 0), (2, 19000, 'exceeded', 6000, 0, 1);
+             INSERT INTO focus_sessions(id, intent, started_at, planned_end, ended_at, end_reason,
+               drift_alerts, inside_ms, outside_ms, distractions, seen)
+               VALUES (1, 'Write report', 1000, 3000, 3000, 'completed', 2, 1500, 500,
+                       '[{\"app_id\":\"slack\",\"app_name\":\"Slack\",\"ms\":500}]', 1),
+                      (2, 'Running now', 9000, 99000, NULL, NULL, 0, 0, 0, '[]', 0);
+             INSERT INTO focus_allowed(session_id, app_id, activity_id)
+               VALUES (1, 'excel', NULL), (1, NULL, 2), (2, 'excel', NULL);",
         )
         .unwrap();
         SqliteBackupStore::new(conn)
@@ -456,6 +583,14 @@ mod tests {
         assert_eq!(data.idle_gaps.len(), 1);
         assert_eq!((data.goals.len(), data.goal_events.len()), (2, 2));
         assert!(data.goals[1].archived && data.goal_events[0].notified);
+        // Only the closed session is exported, with its allowed set and distractions.
+        assert_eq!(data.focus_sessions.len(), 1);
+        let session = &data.focus_sessions[0];
+        assert_eq!(session.intent, "Write report");
+        assert_eq!(session.allowed_apps, ["excel"]);
+        assert_eq!(session.allowed_activities, [2]);
+        assert_eq!(session.distractions[0].app_name, "Slack");
+        assert!(session.seen);
         let keys: Vec<&str> = data.settings.iter().map(|s| s.key.as_str()).collect();
         assert_eq!(keys, ["theme"]);
     }
@@ -507,6 +642,7 @@ mod tests {
         assert_eq!(again.idle_gaps, data.idle_gaps);
         assert_eq!(again.goals, data.goals);
         assert_eq!(again.goal_events, data.goal_events);
+        assert_eq!(again.focus_sessions, data.focus_sessions);
         assert_eq!(again.settings, data.settings, "stale setting replaced");
         let conn = open(&other_path).unwrap();
         let shortcut: String = conn

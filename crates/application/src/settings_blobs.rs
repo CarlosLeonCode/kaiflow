@@ -33,6 +33,33 @@ pub fn read_week_start(repo: &dyn SettingsRepository) -> PortResult<u8> {
     }
 }
 
+/// Flat setting holding how long (seconds) the user may be outside a focus session's allowed
+/// set before a drift alert.
+pub const KEY_FOCUS_DRIFT_AFTER: &str = "focus_drift_after_secs";
+pub const DEFAULT_FOCUS_DRIFT_AFTER_SECS: u32 = 90;
+pub const FOCUS_DRIFT_AFTER_RANGE_SECS: std::ops::RangeInclusive<u32> = 30..=900;
+
+/// The configured drift threshold in seconds; the default when unset.
+pub fn read_focus_drift_after_secs(repo: &dyn SettingsRepository) -> PortResult<u32> {
+    match repo.get(KEY_FOCUS_DRIFT_AFTER)? {
+        None => Ok(DEFAULT_FOCUS_DRIFT_AFTER_SECS),
+        Some(raw) => raw
+            .trim()
+            .parse::<u32>()
+            .map(|v| {
+                v.clamp(
+                    *FOCUS_DRIFT_AFTER_RANGE_SECS.start(),
+                    *FOCUS_DRIFT_AFTER_RANGE_SECS.end(),
+                )
+            })
+            .map_err(|_| {
+                PortError(format!(
+                    "invalid value for setting {KEY_FOCUS_DRIFT_AFTER}: {raw}"
+                ))
+            }),
+    }
+}
+
 /// Most dismissed apps remembered; the oldest fall off first.
 pub const MAX_DISMISSED_APPS: usize = 500;
 

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-focus-stop"
+description = "Enables the focus_stop command without any pre-configured scope."
+commands.allow = ["focus_stop"]
+
+[[permission]]
+identifier = "deny-focus-stop"
+description = "Denies the focus_stop command without any pre-configured scope."
+commands.deny = ["focus_stop"]

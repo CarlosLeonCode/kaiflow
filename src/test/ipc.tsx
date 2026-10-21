@@ -5,7 +5,10 @@ import type { ReactElement } from "react";
 import type {
   BackupStatusDto,
   DashboardDto,
+  FocusActiveDto,
   FocusDto,
+  FocusSessionDto,
+  FocusStatusDto,
   GoalDto,
   GoalStatusDto,
   ReportDto,
@@ -99,9 +102,15 @@ export function settings(overrides: Partial<SettingsDto> = {}): SettingsDto {
     onboarding_completed: true,
     tray_display: "today_total",
     week_start: 0,
+    focus_drift_after_secs: 90,
     ui: { dismissed_intros: [] },
     ...overrides,
   };
+}
+
+/** No session running and nothing waiting; override what the test needs. */
+export function idleFocus(overrides: Partial<FocusStatusDto> = {}): FocusStatusDto {
+  return { active: null, unseen: null, unavailable: null, ...overrides };
 }
 
 export function backupStatus(overrides: Partial<BackupStatusDto> = {}): BackupStatusDto {
@@ -148,9 +157,11 @@ export function mockBackend(handlers: Handlers): { calls: Call[] } {
           ? () => settings()
           : cmd === "backup_status"
             ? () => backupStatus()
-            : cmd === "goals_status" || cmd === "goals_list"
+            : cmd === "goals_status" || cmd === "goals_list" || cmd === "focus_history"
               ? () => []
-              : undefined);
+              : cmd === "focus_status"
+                ? () => idleFocus()
+                : undefined);
       if (!handler) throw new Error(`unmocked command: ${cmd}`);
       return handler(payload);
     },
@@ -164,4 +175,41 @@ export function renderWithProviders(ui: ReactElement) {
   const client = createQueryClient();
   client.setDefaultOptions({ queries: { retry: false, staleTime: 0 } });
   return { client, ...render(<AppProviders client={client}>{ui}</AppProviders>) };
+}
+
+const MIN = 60_000;
+
+/** A running session, 10 minutes in, 40 to go, nothing alerting; override what the test needs. */
+export function focusActive(overrides: Partial<FocusActiveDto> = {}): FocusActiveDto {
+  return {
+    id: 7,
+    intent: "Write report",
+    started_at: FIXED_NOW - 10 * MIN,
+    planned_end: FIXED_NOW + 40 * MIN,
+    drift_alerts: 0,
+    allowed: { activity_ids: [2], app_ids: ["com.microsoft.Excel"] },
+    current: { app_id: "com.apple.dt.Xcode", app_name: "Xcode", activity_id: 2 },
+    alerting: null,
+    ...overrides,
+  };
+}
+
+/** A finished session with a summary; override what the test needs. */
+export function focusSession(overrides: Partial<FocusSessionDto> = {}): FocusSessionDto {
+  return {
+    id: 3,
+    intent: "Write report",
+    started_at: FIXED_NOW - 2 * 3_600_000,
+    planned_end: FIXED_NOW - 3_600_000,
+    ended_at: FIXED_NOW - 3_600_000,
+    end_reason: "completed",
+    drift_alerts: 2,
+    allowed: { activity_ids: [2], app_ids: [] },
+    inside_ms: 45 * MIN,
+    outside_ms: 15 * MIN,
+    percent_inside: 75,
+    top_distractions: [{ app_id: "com.tinyspeck.slackmacgap", app_name: "Slack", ms: 12 * MIN }],
+    seen: false,
+    ...overrides,
+  };
 }

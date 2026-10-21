@@ -13,7 +13,11 @@ import type {
   ActivityDto,
   ActivityTotalDto,
   BackupStatusDto,
+  FocusAppDto,
   FocusDto,
+  FocusSessionDto,
+  FocusStartDto,
+  FocusStatusDto,
   GoalDto,
   IdleResolutionDto,
   PermissionStateDto,
@@ -41,6 +45,7 @@ import {
   type MockGoal,
   type MockGoalEvent,
 } from "./mockGoals";
+import { closed, observe, startProblem, summarize, type MockSession } from "./mockFocus";
 import { matchPreset, mockPresets } from "./mockPresets";
 import { buildSeed, type MockData, type MockSegment } from "./seed";
 
@@ -59,6 +64,11 @@ export interface MockOptions {
   emptyHistory?: boolean;
   /** Start with a handful of goals (progress bars, an exceeded limit, streaks). */
   demoGoals?: boolean;
+  /**
+   * Start with a focus session running: `running` has the app in front on target, `drift` has
+   * the drift alert already showing (the e2e clock is fixed, so time never passes by itself).
+   */
+  demoFocus?: "running" | "drift";
   /** The automatic backup has failed (Settings > Data shows the error, "Back up now" fails). */
   backupFails?: boolean;
   now?: () => number;
@@ -117,6 +127,7 @@ export function installMockBackend(options: MockOptions = {}): void {
     onboarding_completed: true,
     tray_display: "today_total",
     week_start: 0,
+    focus_drift_after_secs: 90,
     ui: { dismissed_intros: [] },
   };
   const goals: MockGoal[] = [];
@@ -144,6 +155,9 @@ export function installMockBackend(options: MockOptions = {}): void {
     evaluateCrossings(goals, context, goalEvents);
     return goals.filter((g) => !g.archived).map((g) => goalStatus(g, context, goalEvents));
   };
+  let session: MockSession | null = null;
+  const history: FocusSessionDto[] = [];
+  let nextSessionId = 1;
   const MOCK_BACKUP_DIR = "/Users/demo/Library/Application Support/Time Track Copilot/backups";
   let backup: BackupStatusDto = {
     enabled: true,
@@ -198,6 +212,70 @@ export function installMockBackend(options: MockOptions = {}): void {
       shortcut: { kind: "registered", shortcut: settings.shortcut },
     };
   };
+
+  /** What a focus session can see: the app in front, only while tracking runs and is healthy. */
+  const observedApp = (): FocusAppDto | null => {
+    const current = status().current;
+    if (tracking !== "running" || permission === "denied" || !current) return null;
+    const segment = open();
+    return {
+      app_id: current.app_id,
+      app_name: current.app_name,
+      activity_id: segment ? classify(segment, data.rules) : SYSTEM_ACTIVITY,
+    };
+  };
+  const driftAfterMs = () => settings.focus_drift_after_secs * 1000;
+  const finishSession = (at: number, reason: FocusSessionDto["end_reason"]) => {
+    const done = session;
+    if (!done) return;
+    const summary = summarize(data.segments, done.allowed, (s) => classify(s, data.rules), done.started_at, at, clock());
+    history.unshift(closed(done, at, reason, summary));
+    session = null;
+  };
+  /** Like the focus watcher: end the session on time, then look at what is in front. */
+  const lookAtSession = () => {
+    if (!session) return;
+    if (clock() >= session.planned_end) finishSession(session.planned_end, "completed");
+    else observe(session, observedApp(), clock(), driftAfterMs());
+  };
+  const focusStatus = (): FocusStatusDto => {
+    lookAtSession();
+    const running = session;
+    return {
+      active: running
+        ? {
+            id: running.id,
+            intent: running.intent,
+            started_at: running.started_at,
+            planned_end: running.planned_end,
+            drift_alerts: running.drift_alerts,
+            allowed: running.allowed,
+            current: observedApp(),
+            alerting: running.alerting ? observedApp() : null,
+          }
+        : null,
+      unseen: history.find((h) => !h.seen) ?? null,
+      unavailable: permission === "denied" ? "accessibility_denied" : null,
+    };
+  };
+  const runningSession = (): MockSession => session ?? fail({ kind: "invalid", message: "no focus session is running" });
+  if (options.demoFocus) {
+    const now = clock();
+    const drifting = options.demoFocus === "drift";
+    session = {
+      id: nextSessionId++,
+      intent: "Write report",
+      started_at: now - 10 * 60_000,
+      planned_end: now + 40 * 60_000,
+      // The app in front is Xcode (Development): allowed in `running`, not in `drift`.
+      allowed: drifting ? { activity_ids: [3], app_ids: [] } : { activity_ids: [2], app_ids: [] },
+      drift_alerts: drifting ? 1 : 0,
+      outside_since: drifting ? now - 2 * 60_000 : null,
+      last_alert: drifting ? now - 30_000 : null,
+      snoozed_until: null,
+      alerting: drifting,
+    };
+  }
 
   const clip = (range: RangeDto) =>
     data.segments
@@ -652,6 +730,62 @@ export function installMockBackend(options: MockOptions = {}): void {
         if (event.goal_id === args.goalId) event.seen = true;
       }
       return null;
+    },
+    focus_status: () => focusStatus(),
+    focus_start: (args) => {
+      const start = args.start as FocusStartDto;
+      if (permission === "denied") fail({ kind: "focus_unavailable", reason: "accessibility_denied" });
+      if (session) fail({ kind: "invalid", message: "a focus session is already running" });
+      const problem = startProblem(start);
+      if (problem) fail({ kind: "invalid", message: problem });
+      const now = clock();
+      session = {
+        id: nextSessionId++,
+        intent: start.intent.trim(),
+        started_at: now,
+        planned_end: now + start.planned_minutes * 60_000,
+        allowed: { activity_ids: [...start.allowed.activity_ids], app_ids: [...start.allowed.app_ids] },
+        drift_alerts: 0,
+        outside_since: null,
+        last_alert: null,
+        snoozed_until: null,
+        alerting: false,
+      };
+      return focusStatus();
+    },
+    focus_stop: () => {
+      runningSession();
+      finishSession(clock(), "cancelled");
+      return focusStatus();
+    },
+    focus_extend: (args) => {
+      const running = runningSession();
+      const minutes = args.minutes as number;
+      if (minutes <= 0 || running.planned_end - running.started_at + minutes * 60_000 > 12 * 3_600_000) {
+        fail({ kind: "invalid", message: "a session lasts between 1 minute and 12 hours" });
+      }
+      running.planned_end += minutes * 60_000;
+      return focusStatus();
+    },
+    focus_snooze: (args) => {
+      const running = runningSession();
+      const minutes = Math.min(240, Math.max(1, args.minutes as number));
+      running.snoozed_until = clock() + minutes * 60_000;
+      running.alerting = false;
+      return focusStatus();
+    },
+    focus_allow_app: (args) => {
+      const running = runningSession();
+      const appId = String(args.appId);
+      if (!running.allowed.app_ids.includes(appId)) running.allowed.app_ids.push(appId);
+      observe(running, observedApp(), clock(), driftAfterMs());
+      return focusStatus();
+    },
+    focus_history: () => history,
+    focus_summary_dismiss: (args) => {
+      const done = history.find((h) => h.id === args.id);
+      if (done) done.seen = true;
+      return focusStatus();
     },
     update_check: () => offeredUpdate,
     // The real app downloads and relaunches: the UI stays on "Installing..." until it exits.

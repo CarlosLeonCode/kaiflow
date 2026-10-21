@@ -18,7 +18,9 @@ use crate::ports::{
 };
 use crate::queries::Range;
 use crate::settings_blobs::{
-    KEY_UI, KEY_WEEK_START, UiSettings, read_blob, read_week_start, write_blob,
+    DEFAULT_FOCUS_DRIFT_AFTER_SECS, FOCUS_DRIFT_AFTER_RANGE_SECS, KEY_FOCUS_DRIFT_AFTER, KEY_UI,
+    KEY_WEEK_START, UiSettings, read_blob, read_focus_drift_after_secs, read_week_start,
+    write_blob,
 };
 
 /// How long a confirmation token stays valid.
@@ -168,6 +170,8 @@ pub struct Settings {
     pub tray_display: TrayDisplay,
     /// First day of the week for goals and the Overview: 0 = Monday .. 6 = Sunday.
     pub week_start: u8,
+    /// Seconds outside a focus session's allowed set before a drift alert.
+    pub focus_drift_after_secs: u32,
     /// Interface state kept across restarts (`ui` blob).
     pub ui: UiSettings,
 }
@@ -186,6 +190,7 @@ impl Default for Settings {
             onboarding_completed: false,
             tray_display: TrayDisplay::default(),
             week_start: 0,
+            focus_drift_after_secs: DEFAULT_FOCUS_DRIFT_AFTER_SECS,
             ui: UiSettings::default(),
         }
     }
@@ -206,6 +211,7 @@ pub struct SettingsPatch {
     pub onboarding_completed: Option<bool>,
     pub tray_display: Option<TrayDisplay>,
     pub week_start: Option<u8>,
+    pub focus_drift_after_secs: Option<u32>,
     /// Replaces the whole `ui` blob.
     pub ui: Option<UiSettings>,
 }
@@ -358,6 +364,7 @@ impl Commands {
             onboarding_completed: self.read(KEY_ONBOARDING, parse_bool, d.onboarding_completed)?,
             tray_display: self.read(KEY_TRAY_DISPLAY, parse_tray_display, d.tray_display)?,
             week_start: read_week_start(self.settings.as_ref())?,
+            focus_drift_after_secs: read_focus_drift_after_secs(self.settings.as_ref())?,
             ui: read_blob(self.settings.as_ref(), KEY_UI)?,
         })
     }
@@ -401,6 +408,9 @@ impl Commands {
         }
         if let Some(v) = patch.week_start {
             set(KEY_WEEK_START, v.to_string())?;
+        }
+        if let Some(v) = patch.focus_drift_after_secs {
+            set(KEY_FOCUS_DRIFT_AFTER, v.to_string())?;
         }
         if let Some(v) = &patch.ui {
             write_blob(self.settings.as_ref(), KEY_UI, &v.clone().normalized())?;
@@ -568,6 +578,11 @@ fn validate_patch(p: &SettingsPatch) -> Result<(), CommandError> {
     }
     if p.shortcut.as_deref().is_some_and(|s| s.trim().is_empty()) {
         return bad("shortcut must not be empty");
+    }
+    if p.focus_drift_after_secs
+        .is_some_and(|v| !FOCUS_DRIFT_AFTER_RANGE_SECS.contains(&v))
+    {
+        return bad("the drift alert delay must be between 30 and 900 seconds");
     }
     if p.week_start.is_some_and(|v| v > 6) {
         return bad("the week must start on a day from Monday (0) to Sunday (6)");
@@ -1199,6 +1214,30 @@ mod tests {
             Err(CommandError::Invalid(_))
         ));
         assert_eq!(f.cmd.get_settings().unwrap().week_start, 6);
+    }
+
+    #[test]
+    fn the_focus_drift_delay_defaults_to_90_seconds_and_stays_in_range() {
+        let f = fixture();
+        assert_eq!(f.cmd.get_settings().unwrap().focus_drift_after_secs, 90);
+        let patch = |v| SettingsPatch {
+            focus_drift_after_secs: Some(v),
+            ..SettingsPatch::default()
+        };
+        assert_eq!(
+            f.cmd
+                .update_settings(&patch(120))
+                .unwrap()
+                .focus_drift_after_secs,
+            120
+        );
+        for bad in [29, 901] {
+            assert!(matches!(
+                f.cmd.update_settings(&patch(bad)),
+                Err(CommandError::Invalid(_))
+            ));
+        }
+        assert_eq!(f.cmd.get_settings().unwrap().focus_drift_after_secs, 120);
     }
 
     #[test]

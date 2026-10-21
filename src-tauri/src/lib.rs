@@ -7,6 +7,7 @@ pub mod calendar;
 pub mod composition;
 pub mod error;
 pub mod event_sink;
+pub mod focus_watcher;
 pub mod goal_watcher;
 pub mod ipc;
 pub mod notifications;
@@ -100,6 +101,8 @@ pub fn run() {
             app.manage(backup_worker::BackupWorker::spawn(&handle, state.clone()));
             let goal_watcher = goal_watcher::GoalWatcher::spawn(&handle);
             app.manage(goal_watcher.clone());
+            let focus_watcher = focus_watcher::FocusWatcher::spawn(&handle);
+            app.manage(focus_watcher.clone());
             apply_outside_settings(
                 &handle,
                 &state,
@@ -107,6 +110,7 @@ pub fn run() {
                 &settings,
                 tray_text,
                 goal_watcher,
+                focus_watcher,
             );
             updater::spawn_schedule(&handle);
 
@@ -134,6 +138,9 @@ pub fn run() {
             if let Some(goals) = handle.try_state::<goal_watcher::GoalWatcher>() {
                 goals.stop();
             }
+            if let Some(focus) = handle.try_state::<focus_watcher::FocusWatcher>() {
+                focus.stop();
+            }
             if let Some(worker) = handle.try_state::<backup_worker::BackupWorker>() {
                 worker.stop();
             }
@@ -155,6 +162,7 @@ fn apply_outside_settings(
     settings: &application::commands::Settings,
     tray_text: tray_text::TrayText,
     goal_watcher: goal_watcher::GoalWatcher,
+    focus_watcher: focus_watcher::FocusWatcher,
 ) {
     let press_handle = handle.clone();
     let shortcuts = Arc::new(ShortcutManager::new(
@@ -176,6 +184,7 @@ fn apply_outside_settings(
         shortcuts,
         tray_text,
         goal_watcher,
+        focus_watcher,
     )));
 }
 

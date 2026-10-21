@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { emit } from "@tauri-apps/api/event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { focus, goalStatus, mockBackend, renderWithProviders, report, status } from "@/test/ipc";
+import { focus, focusActive, focusSession, goalStatus, idleFocus, mockBackend, renderWithProviders, report, status } from "@/test/ipc";
 
 import { TrackingPopoverContainer } from "./TrackingPopoverContainer";
 
@@ -224,6 +224,86 @@ describe("TrackingPopoverContainer", () => {
       });
 
       expect(screen.getByTestId("today-total")).toHaveTextContent("0:01:00");
+    });
+  });
+
+  describe("focus session", () => {
+    const slack = { app_id: "com.tinyspeck.slackmacgap", app_name: "Slack", activity_id: 3 };
+
+    it("shows the running session with its countdown and no extras", async () => {
+      const now = Date.now();
+      mockBackend({
+        get_status: () => status(),
+        get_report: () => report(),
+        focus_status: () => idleFocus({ active: focusActive({ started_at: now - 10 * 60_000, planned_end: now + 23 * 60_000 }) }),
+      });
+      renderWithProviders(<TrackingPopoverContainer />);
+
+      const card = await screen.findByRole("region", { name: "Focus session" });
+      expect(within(card).getByText("Write report")).toBeInTheDocument();
+      expect(within(card).getByTestId("focus-countdown")).toHaveTextContent(/^(22|23):\d\d$/);
+      expect(within(card).queryByRole("button", { name: /\+10 min/ })).not.toBeInTheDocument();
+      expect(within(card).queryByText(/Allowed:/)).not.toBeInTheDocument();
+    });
+
+    it("shows the drift card with the three actions, and acts on them", async () => {
+      const user = userEvent.setup();
+      const now = Date.now();
+      const { calls } = mockBackend({
+        get_status: () => status(),
+        get_report: () => report(),
+        focus_status: () =>
+          idleFocus({ active: focusActive({ started_at: now - 600_000, planned_end: now + 600_000, current: slack, alerting: slack }) }),
+        focus_allow_app: () => idleFocus(),
+        focus_snooze: () => idleFocus(),
+        focus_stop: () => idleFocus(),
+      });
+      renderWithProviders(<TrackingPopoverContainer />);
+
+      const alert = await screen.findByRole("status", { name: "Drift alert" });
+      await user.click(within(alert).getByRole("button", { name: "Allow this app" }));
+      await waitFor(() => expect(calls.some((c) => c.cmd === "focus_allow_app" && c.args.appId === slack.app_id)).toBe(true));
+    });
+
+    it("ends the session from the popover", async () => {
+      const user = userEvent.setup();
+      const now = Date.now();
+      const { calls } = mockBackend({
+        get_status: () => status(),
+        get_report: () => report(),
+        focus_status: () => idleFocus({ active: focusActive({ started_at: now - 600_000, planned_end: now + 600_000 }) }),
+        focus_stop: () => idleFocus(),
+      });
+      renderWithProviders(<TrackingPopoverContainer />);
+
+      await user.click(await screen.findByRole("button", { name: "End session" }));
+      await waitFor(() => expect(calls.some((c) => c.cmd === "focus_stop")).toBe(true));
+    });
+
+    it("does not show the end summary (Today and Focus do)", async () => {
+      mockBackend({
+        get_status: () => status(),
+        get_report: () => report(),
+        focus_status: () => idleFocus({ unseen: focusSession() }),
+      });
+      renderWithProviders(<TrackingPopoverContainer />);
+
+      await screen.findByRole("region", { name: "Top apps today" });
+      expect(screen.queryByRole("region", { name: "Session summary" })).not.toBeInTheDocument();
+    });
+
+    it("keeps working when the focus status cannot be read", async () => {
+      mockBackend({
+        get_status: () => status(),
+        get_report: () => report(),
+        focus_status: () => {
+          throw { kind: "internal", message: "boom" };
+        },
+      });
+      renderWithProviders(<TrackingPopoverContainer />);
+
+      await screen.findByRole("region", { name: "Top apps today" });
+      expect(screen.queryByRole("region", { name: "Focus session" })).not.toBeInTheDocument();
     });
   });
 });

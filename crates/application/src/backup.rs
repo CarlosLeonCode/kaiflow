@@ -164,6 +164,42 @@ pub struct GoalEventRecord {
     pub seen: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FocusDistractionRecord {
+    pub app_id: String,
+    pub app_name: String,
+    pub ms: i64,
+}
+
+/// A closed focus session with what it allowed. A session still running is never exported.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FocusSessionRecord {
+    pub id: i64,
+    pub intent: String,
+    pub started_at: i64,
+    pub planned_end: i64,
+    /// Sessions without an end are dropped when a document is read.
+    #[serde(default)]
+    pub ended_at: Option<i64>,
+    /// `completed`, `cancelled` or `recovered`.
+    #[serde(default)]
+    pub end_reason: Option<String>,
+    #[serde(default)]
+    pub drift_alerts: u32,
+    #[serde(default)]
+    pub inside_ms: i64,
+    #[serde(default)]
+    pub outside_ms: i64,
+    #[serde(default)]
+    pub distractions: Vec<FocusDistractionRecord>,
+    #[serde(default)]
+    pub seen: bool,
+    #[serde(default)]
+    pub allowed_apps: Vec<String>,
+    #[serde(default)]
+    pub allowed_activities: Vec<i64>,
+}
+
 /// The data a snapshot carries and a restore replaces.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -177,6 +213,8 @@ pub struct BackupData {
     /// Added with goals; documents written before them simply lack the array.
     pub goals: Vec<GoalRecord>,
     pub goal_events: Vec<GoalEventRecord>,
+    /// Added with focus sessions; documents written before them simply lack the array.
+    pub focus_sessions: Vec<FocusSessionRecord>,
 }
 
 impl BackupData {
@@ -211,9 +249,7 @@ pub struct Document {
     pub range: Option<RangeDoc>,
     #[serde(flatten)]
     pub data: BackupData,
-    /// Reserved for later features; empty today and tolerated by every reader.
-    #[serde(default)]
-    pub focus_sessions: Vec<serde_json::Value>,
+    /// Reserved for a later feature; empty today and tolerated by every reader.
     #[serde(default)]
     pub ai_reviews: Vec<serde_json::Value>,
 }
@@ -265,7 +301,6 @@ impl Document {
                 to: to.0,
             }),
             data,
-            focus_sessions: Vec::new(),
             ai_reviews: Vec::new(),
         }
     }
@@ -372,6 +407,31 @@ impl Document {
             .any(|e| !goal_ids.contains(&e.goal_id))
         {
             return bad("a goal event points to an unknown goal");
+        }
+        // A session that never ended cannot be resumed from a file: drop it, then check the rest.
+        self.data.focus_sessions.retain(|s| s.ended_at.is_some());
+        let mut session_ids = std::collections::HashSet::new();
+        for session in &mut self.data.focus_sessions {
+            if !session_ids.insert(session.id) {
+                return bad("duplicate focus session ids");
+            }
+            let end = session.ended_at.unwrap_or(session.started_at);
+            if session.planned_end <= session.started_at || end < session.started_at {
+                return bad("a focus session ends before it starts");
+            }
+            let known_reason = session
+                .end_reason
+                .as_deref()
+                .and_then(domain::FocusEnd::parse);
+            if known_reason.is_none() {
+                session.end_reason = Some("recovered".into());
+            }
+            if session.intent.trim().is_empty() || session.intent.chars().count() > 80 {
+                return bad("a focus session has an invalid intent");
+            }
+            if session.allowed_activities.iter().any(|id| !known(*id)) {
+                return bad("a focus session allows an unknown activity");
+            }
         }
         // Only one open segment can exist; documents close them, but never trust a file.
         for segment in &mut self.data.segments {
@@ -509,6 +569,25 @@ mod tests {
                 notified: true,
                 seen: false,
             }],
+            focus_sessions: vec![FocusSessionRecord {
+                id: 3,
+                intent: "Write report".into(),
+                started_at: 1_000,
+                planned_end: 3_001_000,
+                ended_at: Some(3_001_000),
+                end_reason: Some("completed".into()),
+                drift_alerts: 1,
+                inside_ms: 2_000_000,
+                outside_ms: 1_000_000,
+                distractions: vec![FocusDistractionRecord {
+                    app_id: "slack".into(),
+                    app_name: "Slack".into(),
+                    ms: 900_000,
+                }],
+                seen: true,
+                allowed_apps: vec!["excel".into()],
+                allowed_activities: vec![2],
+            }],
         }
     }
 
@@ -623,6 +702,43 @@ mod tests {
             parsed.data.segments[0].end_reason.as_deref(),
             Some("recovered")
         );
+    }
+
+    #[test]
+    fn focus_sessions_round_trip_and_old_files_without_them_still_restore() {
+        let parsed = Document::parse(&doc().to_json()).unwrap();
+        assert_eq!(parsed.data.focus_sessions, data().focus_sessions);
+
+        let mut value: serde_json::Value = serde_json::from_slice(&doc().to_json()).unwrap();
+        value.as_object_mut().unwrap().remove("focus_sessions");
+        let parsed = Document::parse(&serde_json::to_vec(&value).unwrap()).unwrap();
+        assert!(parsed.data.focus_sessions.is_empty());
+    }
+
+    #[test]
+    fn unfinished_or_inconsistent_focus_sessions_are_dropped_or_rejected() {
+        let mut running = doc();
+        running.data.focus_sessions[0].ended_at = None;
+        running.data.focus_sessions[0].end_reason = None;
+        let parsed = Document::parse(&running.to_json()).unwrap();
+        assert!(
+            parsed.data.focus_sessions.is_empty(),
+            "nothing to resume from a file"
+        );
+
+        let mut backwards = doc();
+        backwards.data.focus_sessions[0].ended_at = Some(10);
+        let mut unknown = doc();
+        unknown.data.focus_sessions[0].allowed_activities = vec![99];
+        let mut twice = doc();
+        let copy = twice.data.focus_sessions[0].clone();
+        twice.data.focus_sessions.push(copy);
+        for bad in [backwards, unknown, twice] {
+            assert!(matches!(
+                Document::parse(&bad.to_json()),
+                Err(DocumentError::Inconsistent(_))
+            ));
+        }
     }
 
     #[test]

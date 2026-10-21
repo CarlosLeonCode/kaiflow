@@ -5,6 +5,8 @@ import type {
   ActivityDto,
   BackupStatusDto,
   DeleteOpDto,
+  FocusStartDto,
+  FocusStatusDto,
   GoalDto,
   IdleResolutionDto,
   ProductivityDto,
@@ -146,6 +148,7 @@ export function settingsPatch(changes: Partial<SettingsPatchDto>): SettingsPatch
     onboarding_completed: null,
     tray_display: null,
     week_start: null,
+    focus_drift_after_secs: null,
     ui: null,
     ...changes,
   };
@@ -340,6 +343,8 @@ export function useDeleteDataMutation() {
       Promise.all([
         client.invalidateQueries({ queryKey: queryKeys.reports }),
         client.invalidateQueries({ queryKey: queryKeys.timelines }),
+        // Finished focus sessions are deleted with the time they were measured on.
+        client.invalidateQueries({ queryKey: queryKeys.focus }),
         client.invalidateQueries({ queryKey: queryKeys.idleGaps }),
         // Deleting tracked time changes progress and streaks.
         client.invalidateQueries({ queryKey: queryKeys.goals }),
@@ -485,4 +490,64 @@ export function useMarkGoalSeenMutation() {
     mutationFn: (goalId: number) => unwrap(commands.goalEventsMarkSeen(goalId)),
     onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.goals }),
   });
+}
+
+/**
+ * The running focus session, the finished one waiting to be dismissed, and whether a session
+ * can start. Refreshed by `focus-changed`; the countdown is computed on screen from the end
+ * time, so no polling is needed.
+ */
+export function useFocusStatusQuery() {
+  return useQuery({
+    queryKey: queryKeys.focusStatus,
+    queryFn: () => unwrap(commands.focusStatus()),
+  });
+}
+
+/** Finished sessions, newest first. */
+export function useFocusHistoryQuery() {
+  return useQuery({
+    queryKey: queryKeys.focusHistory,
+    queryFn: () => unwrap(commands.focusHistory()),
+  });
+}
+
+/** Every focus command answers with the new status: cache it right away, refresh the history. */
+function useFocusCommand<Input>(run: (input: Input) => Promise<FocusStatusDto>) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: run,
+    onSuccess: (status) => {
+      client.setQueryData(queryKeys.focusStatus, status);
+      void client.invalidateQueries({ queryKey: queryKeys.focusHistory });
+    },
+  });
+}
+
+export function useStartFocusMutation() {
+  return useFocusCommand((start: FocusStartDto) => unwrap(commands.focusStart(start)));
+}
+
+/** "End session". */
+export function useStopFocusMutation() {
+  return useFocusCommand(() => unwrap(commands.focusStop()));
+}
+
+export function useExtendFocusMutation() {
+  return useFocusCommand((minutes: number) => unwrap(commands.focusExtend(minutes)));
+}
+
+/** "Back to it": acknowledges the drift alert and holds the next one back for `minutes`. */
+export function useSnoozeFocusMutation() {
+  return useFocusCommand((minutes: number) => unwrap(commands.focusSnooze(minutes)));
+}
+
+/** "Allow this app" for the rest of the session. */
+export function useAllowFocusAppMutation() {
+  return useFocusCommand((appId: string) => unwrap(commands.focusAllowApp(appId)));
+}
+
+/** The user closed the end summary of a finished session. */
+export function useDismissFocusSummaryMutation() {
+  return useFocusCommand((id: number) => unwrap(commands.focusSummaryDismiss(id)));
 }

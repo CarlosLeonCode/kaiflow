@@ -27,6 +27,8 @@ export interface TrackingPopoverProps {
   togglePending: boolean;
   /** Slot above the totals, used for the idle-return card. */
   notice?: ReactNode;
+  /** The running focus session, with its drift card when one is due. */
+  focus?: ReactNode;
   onToggle: (command: ToggleCommand) => void;
   onOpenDashboard: () => void;
   onOpenAccessibilitySettings: () => void;
@@ -50,6 +52,7 @@ export function TrackingPopover(props: TrackingPopoverProps) {
             <ShortcutBanner shortcut={shortcut.shortcut} reason={shortcut.reason} />
           )}
           {props.notice}
+          {props.focus}
         </div>
         <TodayTotal totalMs={props.totalMs} live={props.state === "running"} />
         <CurrentActivity state={props.state} current={props.current} elapsedMs={props.currentElapsedMs} />
