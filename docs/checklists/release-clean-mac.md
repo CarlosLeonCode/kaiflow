@@ -2,7 +2,7 @@
 
 Quien la ejecuta: el usuario, con el DMG **publicado** por `release.yml` (no una compilacion
 local) en un Mac donde la app nunca se haya instalado, o tras borrar:
-`/Applications/Time Track Copilot.app`, `~/Library/Application Support/com.carlosleon.timetrack/`
+`/Applications/Kaiflow.app`, `~/Library/Application Support/com.carlosleon.kaiflow/`
 y la entrada de la app en Ajustes del Sistema > Privacidad y seguridad > Accesibilidad.
 
 Marcar cada punto con `[x]` y anotar fecha, version de macOS y observaciones. Requisitos que
@@ -24,9 +24,9 @@ job (ad-hoc, autofirmado o notarizado).
         igualmente".
   - [ ] macOS 13 o 14: clic derecho > Abrir > Abrir.
 - [ ] Notarizada (solo modo notarizado): no aparece el aviso del desarrollador y
-      `spctl --assess --type execute --verbose=4 "/Applications/Time Track Copilot.app"`
+      `spctl --assess --type execute --verbose=4 "/Applications/Kaiflow.app"`
       responde `accepted` con `source=Notarized Developer ID`.
-- [ ] `codesign --verify --deep --strict --verbose=2 "/Applications/Time Track Copilot.app"` no
+- [ ] `codesign --verify --deep --strict --verbose=2 "/Applications/Kaiflow.app"` no
       muestra errores.
 - [ ] Las notas de la release describen bien el modo de firma (aviso de Accesibilidad en
       ad-hoc) y si hay actualizaciones automaticas.

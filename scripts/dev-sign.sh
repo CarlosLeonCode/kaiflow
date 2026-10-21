@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Builds Time Track Copilot (debug) as a .app, signs it with the stable self-signed identity
-# "TimeTrack Dev" and installs it to ~/Applications.
+# Builds Kaiflow (debug) as a .app, signs it with the stable self-signed identity
+# "Kaiflow Dev" and installs it to ~/Applications.
 #
 # Why: macOS ties the Accessibility (TCC) grant to the code signature. An ad-hoc or changing
 # signature loses the grant on every build; a stable identity keeps it. `tauri dev` cannot be
@@ -11,7 +11,7 @@
 # Usage: scripts/dev-sign.sh [--release]
 set -euo pipefail
 
-IDENTITY="${TIMETRACK_SIGNING_IDENTITY:-TimeTrack Dev}"
+IDENTITY="${KAIFLOW_SIGNING_IDENTITY:-Kaiflow Dev}"
 INSTALL_DIR="${HOME}/Applications"
 PROFILE_ARGS=(--debug)
 PROFILE_DIR="debug"
@@ -58,7 +58,7 @@ echo "==> Installing to ${INSTALL_DIR}"
 mkdir -p "$INSTALL_DIR"
 TARGET="$INSTALL_DIR/$(basename "$APP")"
 # Quit a running instance so the bundle can be replaced.
-osascript -e 'tell application id "com.carlosleon.timetrack" to quit' >/dev/null 2>&1 || true
+osascript -e 'tell application id "com.carlosleon.kaiflow" to quit' >/dev/null 2>&1 || true
 rm -rf "$TARGET"
 ditto "$APP" "$TARGET"
 codesign --verify --deep --strict "$TARGET"

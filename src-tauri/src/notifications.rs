@@ -70,7 +70,7 @@ impl<T: Toaster> Notifier for SystemNotifier<T> {
         if !self.revocation_sent.swap(true, Ordering::SeqCst) {
             self.notify(
                 "Accessibility access was turned off",
-                "Time Track keeps recording app names but not window titles. \
+                "Kaiflow keeps recording app names but not window titles. \
                  Open the app to restore access.",
             );
         }

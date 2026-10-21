@@ -88,7 +88,7 @@ const ICON: &[u8] = include_bytes!("../icons/tray-template.png");
 pub fn install(app: &AppHandle<Wry>) -> tauri::Result<()> {
     let (text, enabled) = toggle_label(TrackingKind::Stopped);
     let toggle = MenuItem::with_id(app, MENU_TOGGLE, text, enabled, None::<&str>)?;
-    let open = MenuItem::with_id(app, MENU_OPEN, "Open Time Track", true, None::<&str>)?;
+    let open = MenuItem::with_id(app, MENU_OPEN, "Open Kaiflow", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, MENU_QUIT, "Quit", true, None::<&str>)?;
     let menu = Menu::with_items(
         app,
@@ -99,7 +99,7 @@ pub fn install(app: &AppHandle<Wry>) -> tauri::Result<()> {
     TrayIconBuilder::with_id(TRAY_ID)
         .icon(Image::from_bytes(ICON)?)
         .icon_as_template(true)
-        .tooltip("Time Track Copilot")
+        .tooltip("Kaiflow")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(on_menu_event)

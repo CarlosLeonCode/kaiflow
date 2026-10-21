@@ -135,7 +135,7 @@ function WelcomeStep() {
   return (
     <div className="space-y-5">
       <p className="text-muted-foreground">
-        Time Track Copilot lives in your menu bar and keeps a private log of which apps you use.
+        Kaiflow lives in your menu bar and keeps a private log of which apps you use.
         Here is exactly what it reads and why.
       </p>
       <ul className="divide-y divide-border rounded-lg border border-border">
@@ -217,7 +217,7 @@ function AccessStep({
               ? "Window titles will be recorded."
               : "Granted. Window titles stay off while the switch above is off."
             : storeTitles
-              ? "Without it, only app names are recorded. In System Settings, open Privacy & Security, then Accessibility, and switch on Time Track Copilot. This page updates by itself."
+              ? "Without it, only app names are recorded. In System Settings, open Privacy & Security, then Accessibility, and switch on Kaiflow. This page updates by itself."
               : "Not needed while window titles are off."}
         </p>
         {!granted && (
@@ -232,7 +232,7 @@ function AccessStep({
               <AlertTitle>Restart to apply</AlertTitle>
               <AlertDescription>
                 macOS sometimes only applies the permission to apps that start after it. If titles
-                do not show up, restart Time Track Copilot.
+                do not show up, restart Kaiflow.
               </AlertDescription>
               <Button size="sm" variant="secondary" className="mt-1" onClick={onRestart}>
                 Restart now
@@ -264,7 +264,7 @@ function ReadyStep({ storeTitles, permission }: Props) {
       </dl>
       <p className="flex items-start gap-2 text-xs text-muted-foreground">
         <Clock className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-        Find Time Track Copilot in the menu bar: click it for today's total, or open the dashboard
+        Find Kaiflow in the menu bar: click it for today's total, or open the dashboard
         for the full picture.
       </p>
     </div>

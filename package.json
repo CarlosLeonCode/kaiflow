@@ -1,5 +1,5 @@
 {
-  "name": "time-track-copilot",
+  "name": "kaiflow",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -23,9 +23,9 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/CarlosLeonCode/time-track-copilot.git"
+    "url": "git+https://github.com/CarlosLeonCode/kaiflow.git"
   },
-  "homepage": "https://github.com/CarlosLeonCode/time-track-copilot#readme",
+  "homepage": "https://github.com/CarlosLeonCode/kaiflow#readme",
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",
     "@eslint/js": "^10.0.1",

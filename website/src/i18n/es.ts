@@ -2,16 +2,16 @@ import type { Content } from "./types";
 
 export const es: Content = {
   meta: {
-    title: "TimeTrack: descubre en qué se va tu día",
+    title: "Kaiflow: descubre en qué se va tu día",
     description:
       "Un registro de tiempo privado y local que vive en la barra de menús de macOS, con Windows y Linux próximamente. Seguimiento automático por app y ventana, objetivos, sesiones de enfoque y revisión semanal. Gratis, de código abierto (MIT) y fácil de adaptar con agentes de programación con IA.",
-    ogAlt: "TimeTrack: un registro de tiempo privado que vive en la barra de menús.",
+    ogAlt: "Kaiflow: mejora tu enfoque, un día a la vez. Un registro de tiempo privado que vive en la barra de menús.",
   },
   a11y: {
     skip: "Saltar al contenido",
     primaryNav: "Principal",
     languageNav: "Idioma",
-    home: "Inicio de TimeTrack",
+    home: "Inicio de Kaiflow",
     opensNewTab: "se abre en GitHub",
     yes: "Compatible",
     partial: "Compatible en parte",
@@ -23,7 +23,7 @@ export const es: Content = {
     eyebrow: "Gratis y de código abierto · Privado por diseño",
     title: "Descubre en qué se va tu día.",
     lead:
-      "TimeTrack registra en segundo plano qué app y qué ventana estás usando y te muestra el día en una línea de tiempo clara. Sin cronómetros que iniciar, sin cuentas que crear y sin que nada salga de tu equipo.",
+      "Kaiflow registra en segundo plano qué app y qué ventana estás usando y te muestra el día en una línea de tiempo clara. Sin cronómetros que iniciar, sin cuentas que crear y sin que nada salga de tu equipo.",
     primary: "Descargar para macOS",
     secondaryLabel: "Próximamente:",
     secondary: [
@@ -34,17 +34,17 @@ export const es: Content = {
     notice: "Gratis. Sin notarización de Apple: la primera vez, ábrela desde Ajustes del Sistema → Privacidad y seguridad.",
     noticeLink: "Ver los pasos de instalación",
     shotAlt:
-      "La vista Hoy de TimeTrack: 4 horas y 25 minutos de tiempo enfocado, una línea de tiempo de colores de 9:00 a 14:00 y totales por app y por actividad.",
+      "La vista Hoy de Kaiflow: 4 horas y 25 minutos de tiempo enfocado, una línea de tiempo de colores de 9:00 a 14:00 y totales por app y por actividad.",
     popoverAlt:
-      "El panel de la barra de menús de TimeTrack con el total de hoy, la app en uso y las apps más usadas del día.",
+      "El panel de la barra de menús de Kaiflow con el total de hoy, la app en uso y las apps más usadas del día.",
   },
   how: {
     title: "Configúralo una vez. Después, olvídate.",
-    lead: "No hay cronómetro que recordar. TimeTrack trabaja en segundo plano desde la barra de menús.",
+    lead: "No hay cronómetro que recordar. Kaiflow trabaja en segundo plano desde la barra de menús.",
     steps: [
       {
         title: "Instala y permite los títulos de ventana",
-        body: "Abre la app y concede el permiso de Accesibilidad una sola vez para que pueda leer el título de la ventana activa. Si no lo concedes, TimeTrack registra igualmente el nombre de las apps.",
+        body: "Abre la app y concede el permiso de Accesibilidad una sola vez para que pueda leer el título de la ventana activa. Si no lo concedes, Kaiflow registra igualmente el nombre de las apps.",
       },
       {
         title: "Trabaja como siempre",
@@ -120,7 +120,7 @@ export const es: Content = {
   },
   personas: {
     title: "Pensado para cualquier tipo de trabajo",
-    lead: "Si tu trabajo pasa por un ordenador, TimeTrack te ayuda a verlo con claridad.",
+    lead: "Si tu trabajo pasa por un ordenador, Kaiflow te ayuda a verlo con claridad.",
     items: [
       {
         role: "Marketing",
@@ -162,7 +162,7 @@ export const es: Content = {
   },
   privacy: {
     title: "Tu tiempo es tuyo. Tus datos, también.",
-    lead: "TimeTrack está diseñado para que lo más seguro sea lo predeterminado. Sin cuentas, sin nube y sin rastrearte.",
+    lead: "Kaiflow está diseñado para que lo más seguro sea lo predeterminado. Sin cuentas, sin nube y sin rastrearte.",
     readTitle: "Qué lee",
     read: [
       "El nombre de la app activa",
@@ -246,16 +246,16 @@ export const es: Content = {
     title: "Preguntas frecuentes",
     items: [
       {
-        q: "¿Por qué TimeTrack pide el permiso de Accesibilidad?",
-        a: "En macOS, Accesibilidad es la forma en que una app lee el título de la ventana activa, lo que permite a TimeTrack distinguir un documento o una web de otra. Solo se usa para eso. Sin él, TimeTrack sigue registrando el nombre de las apps. Nunca pide permiso de grabación de pantalla.",
+        q: "¿Por qué Kaiflow pide el permiso de Accesibilidad?",
+        a: "En macOS, Accesibilidad es la forma en que una app lee el título de la ventana activa, lo que permite a Kaiflow distinguir un documento o una web de otra. Solo se usa para eso. Sin él, Kaiflow sigue registrando el nombre de las apps. Nunca pide permiso de grabación de pantalla.",
       },
       {
         q: "¿Funciona en Linux con Wayland?",
-        a: "En parte. Wayland no permite que una app vea qué ventana tiene activa otra app, así que en Wayland TimeTrack registra la inactividad, el bloqueo y el reposo, pero no apps ni títulos. Elige una sesión X11 al iniciar sesión para un seguimiento completo.",
+        a: "En parte. Wayland no permite que una app vea qué ventana tiene activa otra app, así que en Wayland Kaiflow registra la inactividad, el bloqueo y el reposo, pero no apps ni títulos. Elige una sesión X11 al iniciar sesión para un seguimiento completo.",
       },
       {
         q: "¿Dónde se guardan mis datos?",
-        a: "En una base de datos local en tu equipo. En macOS está en ~/Library/Application Support/com.carlosleon.timetrack/. Puedes exportarla en JSON, restaurar una copia diaria o borrar cualquier periodo en cualquier momento.",
+        a: "En una base de datos local en tu equipo. En macOS está en ~/Library/Application Support/com.carlosleon.kaiflow/. Puedes exportarla en JSON, restaurar una copia diaria o borrar cualquier periodo en cualquier momento.",
       },
       {
         q: "¿Sale algo de mi equipo?",
@@ -263,11 +263,11 @@ export const es: Content = {
       },
       {
         q: "¿Por qué macOS muestra un aviso al abrirla?",
-        a: "TimeTrack es gratuita y no está notarizada por Apple, algo que requiere una cuenta de desarrollador de pago. macOS muestra ese aviso con cualquier app que no ha revisado. El código es público y, la primera vez que la abres desde Ajustes del Sistema → Privacidad y seguridad (o con clic derecho → Abrir en macOS 14 y anteriores), macOS recuerda tu decisión.",
+        a: "Kaiflow es gratuita y no está notarizada por Apple, algo que requiere una cuenta de desarrollador de pago. macOS muestra ese aviso con cualquier app que no ha revisado. El código es público y, la primera vez que la abres desde Ajustes del Sistema → Privacidad y seguridad (o con clic derecho → Abrir en macOS 14 y anteriores), macOS recuerda tu decisión.",
       },
       {
         q: "¿Es gratis?",
-        a: "Sí. TimeTrack es gratuita y de código abierto con licencia MIT. Sin cuentas, sin suscripciones y sin versiones de pago.",
+        a: "Sí. Kaiflow es gratuita y de código abierto con licencia MIT. Sin cuentas, sin suscripciones y sin versiones de pago.",
       },
       {
         q: "¿Puedo usarla para trabajo comercial?",
@@ -289,7 +289,7 @@ export const es: Content = {
       },
       {
         title: "Muévela a Aplicaciones",
-        body: "Abre el .dmg y arrastra TimeTrack a la carpeta Aplicaciones.",
+        body: "Abre el .dmg y arrastra Kaiflow a la carpeta Aplicaciones.",
       },
       {
         title: "Ábrela por primera vez",
@@ -297,14 +297,14 @@ export const es: Content = {
       },
     ],
     firstOpenTitle: "Primera apertura",
-    firstOpenLead: "Solo hay que hacerlo una vez. Después, TimeTrack se abre como cualquier otra app.",
+    firstOpenLead: "Solo hay que hacerlo una vez. Después, Kaiflow se abre como cualquier otra app.",
     variants: [
       {
         title: "macOS 15 Sequoia o posterior",
         steps: [
-          "Intenta abrir TimeTrack desde Aplicaciones y pulsa Listo en el aviso.",
+          "Intenta abrir Kaiflow desde Aplicaciones y pulsa Listo en el aviso.",
           "Abre Ajustes del Sistema → Privacidad y seguridad.",
-          "Baja hasta Seguridad y pulsa Abrir igualmente junto al mensaje sobre TimeTrack.",
+          "Baja hasta Seguridad y pulsa Abrir igualmente junto al mensaje sobre Kaiflow.",
           "Pulsa de nuevo Abrir igualmente e introduce tu contraseña.",
         ],
       },
@@ -312,7 +312,7 @@ export const es: Content = {
         title: "macOS 13 Ventura y 14 Sonoma",
         steps: [
           "En Finder, abre la carpeta Aplicaciones.",
-          "Haz clic derecho (o Control + clic) en TimeTrack y elige Abrir.",
+          "Haz clic derecho (o Control + clic) en Kaiflow y elige Abrir.",
           "Pulsa Abrir en el diálogo.",
         ],
       },
@@ -320,7 +320,7 @@ export const es: Content = {
     advancedTitle: "Avanzado: usar Terminal",
     advancedBody: "Solo si confías en la descarga. Este comando quita la marca de cuarentena, lo que omite la comprobación de Gatekeeper para esta app:",
     permissionTitle: "Después, permite los títulos de ventana",
-    permissionBody: "Cuando TimeTrack lo pida, actívala en Ajustes del Sistema → Privacidad y seguridad → Accesibilidad. Sin ese permiso, TimeTrack registra igualmente el nombre de las apps.",
+    permissionBody: "Cuando Kaiflow lo pida, actívala en Ajustes del Sistema → Privacidad y seguridad → Accesibilidad. Sin ese permiso, Kaiflow registra igualmente el nombre de las apps.",
   },
   availability: {
     title: "Disponibilidad",
@@ -337,7 +337,7 @@ export const es: Content = {
   fork: {
     eyebrow: "Código abierto · MIT",
     title: "Hazla tuya",
-    lead: "TimeTrack está pensada para bifurcarse (fork). Modifícala a mano o deja que un agente de programación con IA haga el trabajo: el proyecto incluye una guía escrita para agentes.",
+    lead: "Kaiflow está pensada para bifurcarse (fork). Modifícala a mano o deja que un agente de programación con IA haga el trabajo: el proyecto incluye una guía escrita para agentes.",
     points: [
       {
         title: "Una base limpia sobre la que construir",
@@ -362,7 +362,7 @@ export const es: Content = {
   },
   support: {
     title: "Apoya el proyecto",
-    lead: "TimeTrack es gratuita y seguirá siéndolo. Si te resulta útil, una estrella en GitHub ayuda a que otras personas la encuentren.",
+    lead: "Kaiflow es gratuita y seguirá siéndolo. Si te resulta útil, una estrella en GitHub ayuda a que otras personas la encuentren.",
     star: "Dar una estrella en GitHub",
     sponsor: "Patrocinar en GitHub",
   },
@@ -373,7 +373,8 @@ export const es: Content = {
     secondary: "Ver el código en GitHub",
   },
   footer: {
-    tagline: "Un registro de tiempo privado para tu barra de menús.",
+    tagline: "Mejora tu enfoque, un día a la vez.",
+    nameNote: "El nombre une kaizen, el hábito de mejorar un poco cada día, y flow, el estado de concentración profunda.",
     license: "Licencia MIT",
     source: "Código fuente",
     releases: "Versiones",

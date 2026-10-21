@@ -1,4 +1,4 @@
-const REPO = "https://github.com/CarlosLeonCode/time-track-copilot";
+const REPO = "https://github.com/CarlosLeonCode/kaiflow";
 
 /**
  * Shows the "Sponsor" button in the Support section. Set to `false` to hide it.

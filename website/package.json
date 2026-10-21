@@ -1,9 +1,9 @@
 {
-  "name": "timetrack-website",
+  "name": "kaiflow-website",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Marketing landing page for TimeTrack.",
+  "description": "Marketing landing page for Kaiflow.",
   "license": "MIT",
   "engines": {
     "node": ">=22.23.4"

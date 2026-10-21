@@ -73,7 +73,7 @@ fn run() -> windows::core::Result<()> {
     // that owns the window and the hook; every pointer passed lives for the call.
     unsafe {
         let instance: HINSTANCE = GetModuleHandleW(PCWSTR::null())?.into();
-        let class_name = w!("TimeTrackCopilotEventWindow");
+        let class_name = w!("KaiflowEventWindow");
         let class = WNDCLASSW {
             lpfnWndProc: Some(window_proc),
             hInstance: instance,
@@ -86,7 +86,7 @@ fn run() -> windows::core::Result<()> {
         let hwnd = CreateWindowExW(
             WS_EX_TOOLWINDOW,
             class_name,
-            w!("Time Track Copilot events"),
+            w!("Kaiflow events"),
             WS_OVERLAPPED,
             0,
             0,

@@ -174,7 +174,7 @@ export function installMockBackend(options: MockOptions = {}): void {
   let session: MockSession | null = null;
   const history: FocusSessionDto[] = [];
   let nextSessionId = 1;
-  const MOCK_BACKUP_DIR = "/Users/demo/Library/Application Support/Time Track Copilot/backups";
+  const MOCK_BACKUP_DIR = "/Users/demo/Library/Application Support/Kaiflow/backups";
   let backup: BackupStatusDto = {
     enabled: true,
     custom_dir: null,
@@ -700,7 +700,7 @@ export function installMockBackend(options: MockOptions = {}): void {
       data.segments = data.segments.filter((s) => s.ended_at === null);
       return null;
     },
-    export_json: () => "/Users/demo/Downloads/time-track-export.json",
+    export_json: () => "/Users/demo/Downloads/kaiflow-export.json",
     backup_status: () => backup,
     backup_set_enabled: (args) => {
       backup = { ...backup, enabled: Boolean(args.enabled) };
@@ -708,7 +708,7 @@ export function installMockBackend(options: MockOptions = {}): void {
     },
     // The real command opens a native folder picker; the mock "picks" a fixed folder.
     backup_choose_dir: () => {
-      backup = { ...backup, custom_dir: "/Volumes/Backups/Time Track", dir: "/Volumes/Backups/Time Track", last_error: null };
+      backup = { ...backup, custom_dir: "/Volumes/Backups/Kaiflow", dir: "/Volumes/Backups/Kaiflow", last_error: null };
       return backup;
     },
     backup_reset_dir: () => {
@@ -721,14 +721,14 @@ export function installMockBackend(options: MockOptions = {}): void {
         fail({ kind: "storage", message: "could not write the backup: permission denied." });
       }
       backup = { ...backup, last_backup_at: clock(), last_error: null, stored: backup.stored + 1 };
-      return { path: `${backup.dir}/timetrack-backup-today.json.gz`, removed: 0 };
+      return { path: `${backup.dir}/kaiflow-backup-today.json.gz`, removed: 0 };
     },
     // The real command opens a native file picker and previews the chosen file.
     restore_prepare: () => {
       const starts = data.segments.map((s) => s.started_at);
       return {
         token: issueToken(),
-        file_name: "timetrack-backup-yesterday.json.gz",
+        file_name: "kaiflow-backup-yesterday.json.gz",
         kind: "backup",
         app_version: "0.1.0",
         exported_at: new Date(clock() - 86_400_000).toISOString().replace(/\.\d+Z$/, "Z"),
@@ -744,7 +744,7 @@ export function installMockBackend(options: MockOptions = {}): void {
     restore_apply: (args) => {
       consumeToken(String(args.token));
       Object.assign(data, buildSeed(clock()));
-      return { safety_copy: "/Users/demo/Library/Application Support/Time Track Copilot/timetrack.db.pre-restore-1" };
+      return { safety_copy: "/Users/demo/Library/Application Support/Kaiflow/kaiflow.db.pre-restore-1" };
     },
     retention_impact: (args) => {
       const cutoff = clock() - (args.days as number) * 86_400_000;

@@ -73,14 +73,14 @@ fn table_exists(conn: &Connection, name: &str) -> bool {
 #[test]
 fn migration_keeps_a_v1_backup_and_all_rows_as_neutral_activities() {
     let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("timetrack.db");
+    let path = dir.path().join("kaiflow.db");
     let mut conn = v1_database(&path);
 
     migrate(&mut conn, MIGRATIONS, Some(&path)).unwrap();
 
     // `VACUUM INTO` copy, still v1 and untouched.
     let backup = backup_path(&path, 1);
-    assert!(backup.ends_with("timetrack.db.bak-v1"));
+    assert!(backup.ends_with("kaiflow.db.bak-v1"));
     let copy = Connection::open(&backup).unwrap();
     assert_eq!(current_version(&copy).unwrap(), 1);
     assert_eq!(count(&copy, "SELECT COUNT(*) FROM categories"), 3);
@@ -128,7 +128,7 @@ fn migration_keeps_a_v1_backup_and_all_rows_as_neutral_activities() {
 #[test]
 fn rename_column_rewrites_check_and_foreign_keys() {
     let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("timetrack.db");
+    let path = dir.path().join("kaiflow.db");
     let mut conn = v1_database(&path);
     migrate(&mut conn, MIGRATIONS, Some(&path)).unwrap();
 
@@ -224,7 +224,7 @@ fn rename_column_rewrites_check_and_foreign_keys() {
 #[test]
 fn idle_gaps_are_rebuilt_with_the_new_status_literal() {
     let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("timetrack.db");
+    let path = dir.path().join("kaiflow.db");
     let mut conn = v1_database(&path);
     migrate(&mut conn, MIGRATIONS, Some(&path)).unwrap();
 
@@ -266,7 +266,7 @@ fn idle_gaps_are_rebuilt_with_the_new_status_literal() {
 #[test]
 fn existing_rules_classify_segments_exactly_as_before() {
     let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("timetrack.db");
+    let path = dir.path().join("kaiflow.db");
     let mut conn = v1_database(&path);
     migrate(&mut conn, MIGRATIONS, Some(&path)).unwrap();
     drop(conn);
@@ -316,7 +316,7 @@ fn existing_rules_classify_segments_exactly_as_before() {
 #[test]
 fn system_trigger_is_recreated_and_still_protects_id_1() {
     let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("timetrack.db");
+    let path = dir.path().join("kaiflow.db");
     let mut conn = v1_database(&path);
     migrate(&mut conn, MIGRATIONS, Some(&path)).unwrap();
 
@@ -358,7 +358,7 @@ fn system_trigger_is_recreated_and_still_protects_id_1() {
 fn system_row_is_renamed_only_when_it_still_has_the_default_name() {
     // A user-renamed system row keeps its name.
     let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("timetrack.db");
+    let path = dir.path().join("kaiflow.db");
     let mut conn = v1_database(&path);
     conn.execute("UPDATE categories SET name = 'Inbox' WHERE id = 1", [])
         .unwrap();
@@ -370,7 +370,7 @@ fn system_row_is_renamed_only_when_it_still_has_the_default_name() {
 
     // A name collision keeps the default name instead of failing the migration.
     let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("timetrack.db");
+    let path = dir.path().join("kaiflow.db");
     let mut conn = v1_database(&path);
     conn.execute("UPDATE categories SET name = 'Unassigned' WHERE id = 2", [])
         .unwrap();
@@ -392,7 +392,7 @@ fn failed_0002_leaves_the_v1_database_intact() {
         ),
     };
     let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("timetrack.db");
+    let path = dir.path().join("kaiflow.db");
     let mut conn = v1_database(&path);
 
     assert!(migrate(&mut conn, &[MIGRATIONS[0], BROKEN_0002], Some(&path)).is_err());

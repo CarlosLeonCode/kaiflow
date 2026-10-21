@@ -182,7 +182,7 @@ mod tests {
         assert!(!is_configured(updater["pubkey"].as_str()));
         assert_eq!(
             updater["endpoints"][0],
-            "https://github.com/CarlosLeonCode/time-track-copilot/releases/latest/download/latest.json"
+            "https://github.com/CarlosLeonCode/kaiflow/releases/latest/download/latest.json"
         );
         assert_eq!(conf["bundle"]["createUpdaterArtifacts"], true);
     }

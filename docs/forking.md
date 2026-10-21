@@ -1,6 +1,6 @@
 # Fork and customize
 
-Time Track Copilot is meant to be a base you can fork: a working, private, local-first time
+Kaiflow is meant to be a base you can fork: a working, private, local-first time
 tracker with a clean architecture, so you (or an AI coding agent) can bend it to your own
 workflow. It is MIT licensed: you can use, modify and redistribute it, including for
 commercial work, as long as you keep the copyright and license notice.
@@ -8,8 +8,8 @@ commercial work, as long as you keep the copyright and license notice.
 ## 1. Fork and run it
 
 ```bash
-gh repo fork CarlosLeonCode/time-track-copilot --clone   # or use the Fork button
-cd time-track-copilot
+gh repo fork CarlosLeonCode/kaiflow --clone   # or use the Fork button
+cd kaiflow
 npm install
 npm run dev:mock          # UI only, in-memory backend: fastest way to explore
 npm run tauri dev         # the real app
@@ -26,20 +26,21 @@ Do these before you distribute your own build, so it does not collide with the o
 
 | What | Where |
 |---|---|
-| Bundle identifier `com.carlosleon.timetrack` | `src-tauri/tauri.conf.json` (`identifier`), `scripts/dev-sign.sh` (`osascript ... application id`). It also names the data folder (`~/Library/Application Support/<identifier>/`). |
-| App name "Time Track Copilot" | `src-tauri/tauri.conf.json` (`productName`), `src-tauri/src/windows.rs` (window titles), `src-tauri/src/tray.rs` and `src-tauri/src/tray_text.rs` (tooltip, with its tests), `main.html` / `popover.html` / `onboarding.html` (`<title>`), `src/features/onboarding/components/OnboardingView.tsx`, `crates/adapters-windows/src/message_loop.rs` |
-| Keychain service for AI keys `com.timetrack.copilot.ai` | `crates/application/src/ai.rs` (`KEYCHAIN_SERVICE`) |
+| Bundle identifier `com.carlosleon.kaiflow` | `src-tauri/tauri.conf.json` (`identifier`), `scripts/dev-sign.sh` (`osascript ... application id`). It also names the data folder (`~/Library/Application Support/<identifier>/`). |
+| App name "Kaiflow" | `src-tauri/tauri.conf.json` (`productName`), `src-tauri/src/windows.rs` (window titles), `src-tauri/src/tray.rs` and `src-tauri/src/tray_text.rs` (tooltip, with its tests), `main.html` / `popover.html` / `onboarding.html` (`<title>`), `src/features/onboarding/components/OnboardingView.tsx`, `crates/adapters-windows/src/message_loop.rs` |
+| Keychain service for AI keys `com.carlosleon.kaiflow` | `crates/application/src/ai.rs` (`KEYCHAIN_SERVICE`; `LEGACY_KEYCHAIN_SERVICE` is the pre-rename name, kept only to move old keys) |
+| Data carried over from the old identity | `src-tauri/src/data_migration.rs` (`LEGACY_IDENTIFIER`, `LEGACY_DB_FILE`). A fork with its own identifier can delete this module and its call in `src-tauri/src/lib.rs`. |
 | Icons | `src-tauri/icons/`. Regenerate all sizes from one 1024x1024 PNG with `npx tauri icon path/to/icon.png`. Keep `tray-template.png` a monochrome template image for the macOS menu bar. |
 | Updater endpoint and public key | `src-tauri/tauri.conf.json` (`plugins.updater`), and the test in `src-tauri/src/updater.rs` that asserts the endpoint. Generate your own key: see [release.md](release.md). Never reuse someone else's endpoint. |
 | Repository links | `README.md`, `website/src/lib/links.ts`, `.github/` templates, `src/features/settings` (About block), `package.json` (`author`) |
 | Landing page | `website/` (Astro). Copy in `website/src/i18n/en.ts` and `es.ts`, site URL in `website/astro.config.mjs`, screenshots in `website/src/assets/screenshots/` (`npm --prefix website run screenshots` regenerates them from the mock UI). |
-| Release signing identity | `.github/workflows/release.yml` signs with a self-signed identity named "TimeTrack Release" when you provide it; see [release.md](release.md). Pick your own name and certificate. |
+| Release signing identity | `.github/workflows/release.yml` signs with a self-signed identity named "Kaiflow Release" when you provide it; see [release.md](release.md). Pick your own name and certificate. |
 | License notice | Keep the original copyright line in `LICENSE`; add your own line below it if you like. |
 
 A quick way to find leftovers:
 
 ```bash
-git grep -n -e 'com.carlosleon.timetrack' -e 'Time Track Copilot' -e 'CarlosLeonCode'
+git grep -n -e 'com.carlosleon.kaiflow' -e 'Kaiflow' -e 'CarlosLeonCode'
 ```
 
 ## 3. Customization ideas
@@ -86,5 +87,5 @@ network) before you ship it.
   without a paid Apple Developer account; see [release.md](release.md).
 - Landing: `.github/workflows/website.yml` checks and builds `website/`; publish
   `website/dist/` on any static host (GitHub Pages, Netlify...) after updating the site URL.
-- Staying in sync: `git remote add upstream https://github.com/CarlosLeonCode/time-track-copilot.git`
+- Staying in sync: `git remote add upstream https://github.com/CarlosLeonCode/kaiflow.git`
   and merge `upstream/main` from time to time.

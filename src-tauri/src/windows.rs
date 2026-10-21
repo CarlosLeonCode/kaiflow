@@ -27,7 +27,7 @@ pub struct WindowSpec {
 pub const POPOVER_SPEC: WindowSpec = WindowSpec {
     label: POPOVER,
     page: "popover.html",
-    title: "Time Track Copilot",
+    title: "Kaiflow",
     width: 360.0,
     height: 480.0,
     decorations: false,
@@ -38,7 +38,7 @@ pub const POPOVER_SPEC: WindowSpec = WindowSpec {
 pub const MAIN_SPEC: WindowSpec = WindowSpec {
     label: MAIN,
     page: "main.html",
-    title: "Time Track Copilot",
+    title: "Kaiflow",
     width: 1040.0,
     height: 720.0,
     decorations: true,
@@ -52,7 +52,7 @@ pub const MAIN_MIN_SIZE: (f64, f64) = (760.0, 520.0);
 pub const ONBOARDING_SPEC: WindowSpec = WindowSpec {
     label: ONBOARDING,
     page: "onboarding.html",
-    title: "Welcome to Time Track Copilot",
+    title: "Welcome to Kaiflow",
     width: 560.0,
     height: 640.0,
     decorations: true,

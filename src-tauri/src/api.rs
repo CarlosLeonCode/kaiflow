@@ -576,7 +576,7 @@ mod tests {
         let sink = RecordingSink::default();
         let permission = FakePermission::new(PermissionState::Granted);
         let state = compose(
-            &dir.path().join("timetrack.db"),
+            &dir.path().join("kaiflow.db"),
             Box::new(sink.clone()),
             AppState::default_shortcut(),
             Providers {
@@ -1117,7 +1117,7 @@ mod tests {
 
         let dir = tempfile::tempdir().unwrap();
         let state = compose(
-            &dir.path().join("timetrack.db"),
+            &dir.path().join("kaiflow.db"),
             Box::new(RecordingSink::default()),
             AppState::default_shortcut(),
             Providers {
@@ -1558,7 +1558,7 @@ mod tests {
             }
             let dir = tempfile::tempdir().unwrap();
             let state = compose(
-                &dir.path().join("timetrack.db"),
+                &dir.path().join("kaiflow.db"),
                 Box::new(RecordingSink::default()),
                 AppState::default_shortcut(),
                 Providers {
@@ -1598,7 +1598,7 @@ mod tests {
     #[test]
     fn a_session_left_running_resumes_or_closes_when_the_app_starts_again() {
         let dir = tempfile::tempdir().unwrap();
-        let db = dir.path().join("timetrack.db");
+        let db = dir.path().join("kaiflow.db");
         let open = || {
             compose(
                 &db,

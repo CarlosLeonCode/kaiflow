@@ -13,7 +13,7 @@
 - [ ] `cargo test --workspace`
 - [ ] `npx tsc --noEmit`, `npm run lint`, `npm test`, `npm run build`
 - [ ] `npm run e2e` (UI changes)
-- [ ] Bindings regenerated (`UPDATE_BINDINGS=1 cargo test -p time-track-app generated_bindings`) if IPC changed
+- [ ] Bindings regenerated (`UPDATE_BINDINGS=1 cargo test -p kaiflow generated_bindings`) if IPC changed
 - [ ] Tests added or updated
 - [ ] Docs updated (README, AGENTS.md, docs/) if behavior or setup changed
 - [ ] No new data leaves the device (or it is opt-in and documented)

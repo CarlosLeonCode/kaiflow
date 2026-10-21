@@ -1,6 +1,6 @@
 # Publicar una versión (gratis, sin cuenta de Apple de pago)
 
-Este documento describe cómo se publica Time Track Copilot y qué hay que configurar una sola
+Este documento describe cómo se publica Kaiflow y qué hay que configurar una sola
 vez. El flujo está en `.github/workflows/release.yml`; la lógica de actualización de la app
 está en `src-tauri/src/updater.rs`.
 
@@ -40,8 +40,8 @@ versiones.
 
 ## Certificado autofirmado de release (una sola vez, gratis)
 
-Se crea un certificado de firma de código llamado **TimeTrack Release** y se guarda como
-secreto del repositorio. Es distinto de la identidad de desarrollo "TimeTrack Dev"
+Se crea un certificado de firma de código llamado **Kaiflow Release** y se guarda como
+secreto del repositorio. Es distinto de la identidad de desarrollo "Kaiflow Dev"
 (`scripts/create-dev-identity.md`), que solo se usa en tu Mac.
 
 > **Nunca subas el `.p12` ni la clave privada al repositorio.** Guarda una copia cifrada fuera
@@ -52,11 +52,11 @@ secreto del repositorio. Es distinto de la identidad de desarrollo "TimeTrack De
 
 1. Abre **Acceso a Llaveros** > menú **Acceso a Llaveros > Asistente de certificados > Crear un
    certificado...**
-2. **Nombre**: `TimeTrack Release` (si usas otro, crea la variable del repositorio
+2. **Nombre**: `Kaiflow Release` (si usas otro, crea la variable del repositorio
    `MACOS_SELF_SIGNED_IDENTITY` con ese nombre). **Tipo de identidad**: Raíz autofirmada.
    **Tipo de certificado**: Firma de código. Marca **Permitirme anular los valores por
    omisión** y pon una validez larga (por ejemplo, 3650 días).
-3. En **Mis certificados**, haz clic derecho en `TimeTrack Release` > **Exportar...**, formato
+3. En **Mis certificados**, haz clic derecho en `Kaiflow Release` > **Exportar...**, formato
    **Intercambio de información personal (.p12)**, y elige una contraseña.
 
 ### Opción B: OpenSSL
@@ -64,13 +64,13 @@ secreto del repositorio. Es distinto de la identidad de desarrollo "TimeTrack De
 ```sh
 openssl req -x509 -newkey rsa:2048 -sha256 -days 3650 -nodes \
   -keyout release.key -out release.crt \
-  -subj "/CN=TimeTrack Release" \
+  -subj "/CN=Kaiflow Release" \
   -addext "basicConstraints=critical,CA:false" \
   -addext "keyUsage=critical,digitalSignature" \
   -addext "extendedKeyUsage=critical,codeSigning"
 
 openssl pkcs12 -export -inkey release.key -in release.crt \
-  -name "TimeTrack Release" -out release.p12
+  -name "Kaiflow Release" -out release.p12
 ```
 
 Con OpenSSL 3 (por ejemplo, el de Homebrew) añade `-legacy` al segundo comando: el
@@ -106,12 +106,12 @@ actualización. Los usuarios descargan las nuevas versiones desde Releases.
 Para activarlo:
 
 ```sh
-npx tauri signer generate -w ~/.tauri/time-track-copilot.key
+npx tauri signer generate -w ~/.tauri/kaiflow.key
 ```
 
 1. Elige una contraseña cuando la pida (o déjala vacía).
 2. Copia la **clave pública** que imprime el comando (también queda en
-   `~/.tauri/time-track-copilot.key.pub`) en `src-tauri/tauri.conf.json`, en lugar del marcador
+   `~/.tauri/kaiflow.key.pub`) en `src-tauri/tauri.conf.json`, en lugar del marcador
    `REPLACE_WITH_UPDATER_PUBLIC_KEY`:
 
    ```json
@@ -120,7 +120,7 @@ npx tauri signer generate -w ~/.tauri/time-track-copilot.key
 
    El test `the_committed_config_ships_the_placeholder_and_the_release_endpoint` de
    `src-tauri/src/updater.rs` comprueba el marcador: actualízalo en el mismo cambio.
-3. Guarda el contenido de `~/.tauri/time-track-copilot.key` en el secreto
+3. Guarda el contenido de `~/.tauri/kaiflow.key` en el secreto
    `TAURI_SIGNING_PRIVATE_KEY` y la contraseña en `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
 4. Guarda una copia de la clave privada fuera de línea.
 
@@ -158,21 +158,21 @@ Accesibilidad una vez más.
 
 Las notas de cada release y la web incluyen estos pasos:
 
-1. Abrir el DMG y arrastrar **Time Track Copilot** a **Aplicaciones**.
+1. Abrir el DMG y arrastrar **Kaiflow** a **Aplicaciones**.
 2. Abrir la app una vez. macOS avisa de que no puede verificar al desarrollador. Pulsar
    **Listo** (o **Cancelar**) y luego:
    - **macOS 15 (Sequoia) o posterior**: **Ajustes del Sistema > Privacidad y seguridad**,
-     bajar hasta **Seguridad**, pulsar **Abrir igualmente** junto al mensaje sobre Time Track
+     bajar hasta **Seguridad**, pulsar **Abrir igualmente** junto al mensaje sobre Kaiflow
      Copilot y confirmar con **Abrir igualmente** y la contraseña.
    - **macOS 13 y 14**: en Finder, **Aplicaciones**, clic derecho (o Control + clic) en
-     **Time Track Copilot** > **Abrir**, y de nuevo **Abrir** en el diálogo.
+     **Kaiflow** > **Abrir**, y de nuevo **Abrir** en el diálogo.
 3. Conceder **Accesibilidad** cuando la app lo pida.
 
 Alternativa **avanzada**, solo si se confía en la descarga (omite la comprobación de
 Gatekeeper para esta app):
 
 ```sh
-xattr -dr com.apple.quarantine "/Applications/Time Track Copilot.app"
+xattr -dr com.apple.quarantine "/Applications/Kaiflow.app"
 ```
 
 ## Publicar una versión
@@ -238,7 +238,7 @@ release siga en borrador hasta que terminen todos:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: Time Track Copilot ${{ github.ref_name }}
+          releaseName: Kaiflow ${{ github.ref_name }}
           releaseDraft: true
           includeUpdaterJson: true
 ```
@@ -260,6 +260,31 @@ versión para la que se firmó y evita que un `latest.json` manipulado fuerce un
 pero legítima. Activarlo tras la primera release con actualizador y comprobar que la
 actualización de N a N+1 sigue funcionando.
 
+## Cambio de nombre a Kaiflow (identificador `com.carlosleon.kaiflow`)
+
+La app se llamaba Time Track Copilot, con el identificador `com.carlosleon.timetrack`. Al
+cambiar el identificador:
+
+- **Accesibilidad se pierde una vez en macOS.** macOS asocia el permiso al identificador, así
+  que la primera versión de Kaiflow lo vuelve a pedir. Conviene quitar la entrada antigua de
+  Ajustes del Sistema > Privacidad y seguridad > Accesibilidad.
+- **Los datos se copian solos.** Al arrancar, antes de abrir SQLite, si la carpeta nueva
+  (`~/Library/Application Support/com.carlosleon.kaiflow/` en macOS, `%APPDATA%` en Windows,
+  `$XDG_DATA_HOME` en Linux) no tiene base de datos y existe la antigua
+  (`com.carlosleon.timetrack/`), se copia su contenido (base de datos, WAL/SHM, copias
+  `.bak-v*`, copias previas a restaurar y `backups/`), renombrando `timetrack.db*` a
+  `kaiflow.db*`. La carpeta antigua no se toca y queda como respaldo (ver
+  `src-tauri/src/data_migration.rs`).
+- **Las claves de IA se mueven al leerlas.** Si no hay clave en el servicio del llavero
+  `com.carlosleon.kaiflow` pero sí en el antiguo (`com.timetrack.copilot.ai`), se copia y la
+  antigua se borra solo después de escribir la nueva. macOS puede pedir una vez permiso para
+  leer la entrada antigua.
+- **Las copias y exportaciones antiguas se siguen restaurando**: se acepta el `format`
+  `timetrack` además de `kaiflow`, y las copias diarias `timetrack-backup-*.json.gz` cuentan
+  para la retención igual que las nuevas `kaiflow-backup-*`.
+- El elemento de inicio de sesión antiguo (si estaba activado) puede quedar en Ajustes del
+  Sistema > General > Ítems de inicio; se puede quitar a mano.
+
 ## Notas
 
 - Los permisos del actualizador no se conceden a ninguna ventana: la interfaz solo usa los
@@ -269,5 +294,5 @@ actualización de N a N+1 sigue funcionando.
 - La salida de compilación está en `target/` en la raíz (espacio de trabajo de Cargo), no en
   `src-tauri/target/`.
 - Endpoint del actualizador:
-  `https://github.com/CarlosLeonCode/time-track-copilot/releases/latest/download/latest.json`.
+  `https://github.com/CarlosLeonCode/kaiflow/releases/latest/download/latest.json`.
   En un fork, cámbialo en `src-tauri/tauri.conf.json` (ver `docs/forking.md`).

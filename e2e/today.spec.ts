@@ -28,7 +28,7 @@ test.describe("Today", () => {
 
     await page.getByRole("list", { name: "Time by app" }).getByRole("button", { name: /Xcode/ }).click();
 
-    await expect(page.getByRole("list", { name: "Window titles in Xcode" })).toContainText("TimeTrackApp.swift");
+    await expect(page.getByRole("list", { name: "Window titles in Xcode" })).toContainText("KaiflowApp.swift");
   });
 
   test("has no accessibility violations", async ({ page }) => {

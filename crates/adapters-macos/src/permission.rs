@@ -107,21 +107,17 @@ mod tests {
 
     #[test]
     fn bundle_path_is_found_for_an_app_executable() {
-        let exe = Path::new(
-            "/Users/me/Applications/Time Track Copilot.app/Contents/MacOS/time-track-app",
-        );
+        let exe = Path::new("/Users/me/Applications/Kaiflow.app/Contents/MacOS/kaiflow");
         assert_eq!(
             bundle_path_from_exe(exe),
-            Some(PathBuf::from(
-                "/Users/me/Applications/Time Track Copilot.app"
-            ))
+            Some(PathBuf::from("/Users/me/Applications/Kaiflow.app"))
         );
     }
 
     #[test]
     fn bundle_path_is_none_for_a_plain_binary() {
         assert_eq!(
-            bundle_path_from_exe(Path::new("/repo/target/debug/time-track-app")),
+            bundle_path_from_exe(Path::new("/repo/target/debug/kaiflow")),
             None
         );
         assert_eq!(

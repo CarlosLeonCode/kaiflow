@@ -1,6 +1,6 @@
 # Soporte por sistema operativo
 
-Time Track Copilot rastrea la aplicacion y la ventana en primer plano en macOS, Windows y Linux.
+Kaiflow rastrea la aplicacion y la ventana en primer plano en macOS, Windows y Linux.
 La logica de decision (cuando cambia el foco, cuando empieza y termina la inactividad, el pulso
 de 2 s) es la misma en los tres sistemas y vive en `crates/adapters-common`; cada sistema solo
 aporta como leer la ventana activa, su titulo, el contador de inactividad y los avisos de
@@ -121,5 +121,5 @@ AppIndicator). GNOME sin esa extension no muestra iconos de bandeja.
 - Las pruebas que necesitan una sesion grafica real estan marcadas con `#[ignore]`. En CI,
   Linux ejecuta la prueba X11 bajo Xvfb:
   `xvfb-run --auto-servernum cargo test -p adapters-linux -- --ignored`.
-- CI (`.github/workflows/ci.yml`) ejecuta clippy, pruebas y `cargo build -p time-track-app` en
+- CI (`.github/workflows/ci.yml`) ejecuta clippy, pruebas y `cargo build -p kaiflow` en
   macOS, Ubuntu 22.04 y Windows.

@@ -16,8 +16,11 @@ use serde::{Deserialize, Serialize};
 use crate::ai::KEY_AI;
 use crate::settings_blobs::KEY_BACKUP;
 
-/// Value of `format`.
-pub const FORMAT: &str = "timetrack";
+/// Value of `format` this build writes.
+pub const FORMAT: &str = "kaiflow";
+/// Values of `format` written before the rename to Kaiflow; still accepted on restore so
+/// older backups and exports keep working.
+pub const LEGACY_FORMATS: [&str; 1] = ["timetrack"];
 /// Highest `schema_version` this build writes and understands.
 pub const SCHEMA_VERSION: u32 = 1;
 /// Largest uncompressed document accepted on restore (zip-bomb guard).
@@ -281,11 +284,11 @@ pub struct Document {
     pub data: BackupData,
 }
 
-/// Why a file cannot be read as a Time Track document.
+/// Why a file cannot be read as a Kaiflow document.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DocumentError {
     NotJson(String),
-    NotATimeTrackFile,
+    NotAKaiflowFile,
     /// Written by a newer app version.
     FutureVersion(u32),
     TooLarge,
@@ -296,7 +299,7 @@ impl std::fmt::Display for DocumentError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::NotJson(e) => write!(f, "the file is not a valid backup or export: {e}"),
-            Self::NotATimeTrackFile => f.write_str("the file is not a Time Track backup or export"),
+            Self::NotAKaiflowFile => f.write_str("the file is not a Kaiflow backup or export"),
             Self::FutureVersion(v) => write!(
                 f,
                 "the file uses format version {v}, which this app version cannot read; update the app first"
@@ -361,20 +364,21 @@ impl Document {
         };
         let value: serde_json::Value =
             serde_json::from_slice(&json).map_err(|e| DocumentError::NotJson(e.to_string()))?;
-        if value.get("format").and_then(|f| f.as_str()) != Some(FORMAT) {
-            return Err(DocumentError::NotATimeTrackFile);
+        let format = value.get("format").and_then(|f| f.as_str());
+        if !format.is_some_and(is_known_format) {
+            return Err(DocumentError::NotAKaiflowFile);
         }
         // Checked before the full parse so a future file never fails on its new fields.
         let version = value
             .get("schema_version")
             .and_then(serde_json::Value::as_u64)
-            .ok_or(DocumentError::NotATimeTrackFile)?;
+            .ok_or(DocumentError::NotAKaiflowFile)?;
         let version = u32::try_from(version).unwrap_or(u32::MAX);
         if version > SCHEMA_VERSION {
             return Err(DocumentError::FutureVersion(version));
         }
         if version == 0 {
-            return Err(DocumentError::NotATimeTrackFile);
+            return Err(DocumentError::NotAKaiflowFile);
         }
         let mut doc: Document =
             serde_json::from_value(value).map_err(|e| DocumentError::NotJson(e.to_string()))?;
@@ -522,6 +526,11 @@ impl Document {
     }
 }
 
+/// Whether `format` names a document this app reads: the current one or a legacy one.
+fn is_known_format(format: &str) -> bool {
+    format == FORMAT || LEGACY_FORMATS.contains(&format)
+}
+
 /// `YYYY-MM-DDTHH:MM:SSZ`.
 pub fn iso_utc(t: UtcMs) -> String {
     let secs = t.0.div_euclid(1000);
@@ -664,6 +673,23 @@ mod tests {
     }
 
     #[test]
+    fn new_documents_use_the_kaiflow_format() {
+        let value: serde_json::Value = serde_json::from_slice(&doc().to_json()).unwrap();
+        assert_eq!(value["format"], "kaiflow");
+    }
+
+    #[test]
+    fn files_written_before_the_rename_still_parse() {
+        for legacy in LEGACY_FORMATS {
+            let mut value: serde_json::Value = serde_json::from_slice(&doc().to_json()).unwrap();
+            value["format"] = legacy.into();
+            let bytes = serde_json::to_vec(&value).unwrap();
+            let parsed = Document::parse(&bytes).unwrap();
+            assert_eq!(parsed.data, doc().data, "{legacy}");
+        }
+    }
+
+    #[test]
     fn the_document_has_the_published_top_level_fields() {
         let value: serde_json::Value = serde_json::from_slice(&doc().to_json()).unwrap();
         for key in [
@@ -711,7 +737,7 @@ mod tests {
         );
         assert_eq!(
             Document::parse(br#"{"format":"other","schema_version":1}"#),
-            Err(DocumentError::NotATimeTrackFile)
+            Err(DocumentError::NotAKaiflowFile)
         );
         assert!(matches!(
             Document::parse(b"not json at all"),

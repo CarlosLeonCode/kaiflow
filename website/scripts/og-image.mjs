@@ -42,9 +42,9 @@ const background = `
   <rect width="100%" height="100%" fill="#f5f5f7"/>
   <text x="72" y="250" font-family="${FONT}" font-size="60" font-weight="700" fill="#1d1d1f" letter-spacing="-1.5">See where your</text>
   <text x="72" y="320" font-family="${FONT}" font-size="60" font-weight="700" fill="#1d1d1f" letter-spacing="-1.5">day actually goes.</text>
-  <text x="72" y="388" font-family="${FONT}" font-size="26" fill="#57575c">A private time tracker for your menu bar.</text>
-  <text x="72" y="428" font-family="${FONT}" font-size="26" fill="#57575c">Free, open source and fully local.</text>
-  <text x="168" y="148" font-family="${FONT}" font-size="34" font-weight="600" fill="#1d1d1f">TimeTrack</text>
+  <text x="72" y="388" font-family="${FONT}" font-size="26" fill="#57575c">Improve your focus, one day at a time.</text>
+  <text x="72" y="428" font-family="${FONT}" font-size="26" fill="#57575c">A private, open source time tracker.</text>
+  <text x="168" y="148" font-family="${FONT}" font-size="34" font-weight="600" fill="#1d1d1f">Kaiflow</text>
   <rect x="${WIDTH - SHOT_W + 59}" y="${(HEIGHT - SHOT_H) / 2 + 49}" width="${SHOT_W + 2}" height="${SHOT_H + 2}" rx="${RADIUS + 1}" fill="#e3e3e8"/>
 </svg>`;
 

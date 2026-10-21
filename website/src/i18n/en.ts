@@ -2,16 +2,16 @@ import type { Content } from "./types";
 
 export const en: Content = {
   meta: {
-    title: "TimeTrack: see where your day actually goes",
+    title: "Kaiflow: see where your day actually goes",
     description:
       "A private, local-first menu bar time tracker for macOS, with Windows and Linux coming soon. Automatic tracking by app and window, goals, focus sessions and a weekly review. Free, open source (MIT) and easy to fork and customize with AI coding agents.",
-    ogAlt: "TimeTrack: a private time tracker that lives in your menu bar.",
+    ogAlt: "Kaiflow: improve your focus, one day at a time. A private time tracker that lives in your menu bar.",
   },
   a11y: {
     skip: "Skip to content",
     primaryNav: "Primary",
     languageNav: "Language",
-    home: "TimeTrack home",
+    home: "Kaiflow home",
     opensNewTab: "opens on GitHub",
     yes: "Supported",
     partial: "Partly supported",
@@ -23,7 +23,7 @@ export const en: Content = {
     eyebrow: "Free and open source · Private by design",
     title: "See where your day actually goes.",
     lead:
-      "TimeTrack quietly records which app and window you are using, then shows your day as a clear timeline. No timers to start, no account to create, and nothing leaves your computer.",
+      "Kaiflow quietly records which app and window you are using, then shows your day as a clear timeline. No timers to start, no account to create, and nothing leaves your computer.",
     primary: "Download for macOS",
     secondaryLabel: "Coming soon:",
     secondary: [
@@ -34,17 +34,17 @@ export const en: Content = {
     notice: "Free. Not notarized by Apple — the first time, open it from System Settings → Privacy & Security.",
     noticeLink: "See the install steps",
     shotAlt:
-      "The TimeTrack Today view: 4 hours 25 minutes of focused time, a colored timeline from 9 AM to 2 PM, and totals by app and by activity.",
+      "The Kaiflow Today view: 4 hours 25 minutes of focused time, a colored timeline from 9 AM to 2 PM, and totals by app and by activity.",
     popoverAlt:
-      "The TimeTrack menu bar popover showing today's total, the app in use right now and the top apps of the day.",
+      "The Kaiflow menu bar popover showing today's total, the app in use right now and the top apps of the day.",
   },
   how: {
     title: "Set it up once. Then forget about it.",
-    lead: "There is no timer to remember. TimeTrack works in the background from the menu bar.",
+    lead: "There is no timer to remember. Kaiflow works in the background from the menu bar.",
     steps: [
       {
         title: "Install and allow window titles",
-        body: "Open the app and grant Accessibility once, so it can read the title of the window in front. Skip it and TimeTrack still records app names.",
+        body: "Open the app and grant Accessibility once, so it can read the title of the window in front. Skip it and Kaiflow still records app names.",
       },
       {
         title: "Work as usual",
@@ -120,7 +120,7 @@ export const en: Content = {
   },
   personas: {
     title: "Made for any kind of work",
-    lead: "If your work happens on a computer, TimeTrack helps you see it clearly.",
+    lead: "If your work happens on a computer, Kaiflow helps you see it clearly.",
     items: [
       {
         role: "Marketers",
@@ -162,7 +162,7 @@ export const en: Content = {
   },
   privacy: {
     title: "Your time is yours. So is the data.",
-    lead: "TimeTrack is built so that the safest behavior is the default. There is no account, no cloud and no tracking of you.",
+    lead: "Kaiflow is built so that the safest behavior is the default. There is no account, no cloud and no tracking of you.",
     readTitle: "What it reads",
     read: [
       "The name of the app in front",
@@ -246,16 +246,16 @@ export const en: Content = {
     title: "Questions and answers",
     items: [
       {
-        q: "Why does TimeTrack ask for Accessibility permission?",
-        a: "On macOS, Accessibility is how an app reads the title of the window in front, which lets TimeTrack tell one document or website from another. It is only used for that. Without it, TimeTrack still records app names. It never asks for Screen Recording.",
+        q: "Why does Kaiflow ask for Accessibility permission?",
+        a: "On macOS, Accessibility is how an app reads the title of the window in front, which lets Kaiflow tell one document or website from another. It is only used for that. Without it, Kaiflow still records app names. It never asks for Screen Recording.",
       },
       {
         q: "Does it work on Linux with Wayland?",
-        a: "Partly. Wayland does not allow an app to see which window another app has in front, so on Wayland TimeTrack can record idle, lock and sleep, but not apps or titles. Choose an X11 session at login for full tracking.",
+        a: "Partly. Wayland does not allow an app to see which window another app has in front, so on Wayland Kaiflow can record idle, lock and sleep, but not apps or titles. Choose an X11 session at login for full tracking.",
       },
       {
         q: "Where is my data stored?",
-        a: "In a local database on your computer. On macOS it lives in ~/Library/Application Support/com.carlosleon.timetrack/. You can export it as JSON, restore a daily backup, or delete any range at any time.",
+        a: "In a local database on your computer. On macOS it lives in ~/Library/Application Support/com.carlosleon.kaiflow/. You can export it as JSON, restore a daily backup, or delete any range at any time.",
       },
       {
         q: "Does anything leave my computer?",
@@ -263,11 +263,11 @@ export const en: Content = {
       },
       {
         q: "Why does macOS warn me when I open it?",
-        a: "TimeTrack is free and not notarized by Apple, which requires a paid developer account. macOS shows that warning for any app it has not checked. The source is public, and the first time you open it from System Settings → Privacy & Security (or with right-click → Open on macOS 14 and earlier) macOS remembers your choice.",
+        a: "Kaiflow is free and not notarized by Apple, which requires a paid developer account. macOS shows that warning for any app it has not checked. The source is public, and the first time you open it from System Settings → Privacy & Security (or with right-click → Open on macOS 14 and earlier) macOS remembers your choice.",
       },
       {
         q: "Is it free?",
-        a: "Yes. TimeTrack is free and open source under the MIT license. There is no account, no subscription and no paid tier.",
+        a: "Yes. Kaiflow is free and open source under the MIT license. There is no account, no subscription and no paid tier.",
       },
       {
         q: "Can I use it for commercial work?",
@@ -289,7 +289,7 @@ export const en: Content = {
       },
       {
         title: "Move it to Applications",
-        body: "Open the .dmg and drag TimeTrack to the Applications folder.",
+        body: "Open the .dmg and drag Kaiflow to the Applications folder.",
       },
       {
         title: "Open it the first time",
@@ -297,14 +297,14 @@ export const en: Content = {
       },
     ],
     firstOpenTitle: "First open",
-    firstOpenLead: "You only need to do this once. After that, TimeTrack opens like any other app.",
+    firstOpenLead: "You only need to do this once. After that, Kaiflow opens like any other app.",
     variants: [
       {
         title: "macOS 15 Sequoia or later",
         steps: [
-          "Try to open TimeTrack from Applications, then click Done in the warning.",
+          "Try to open Kaiflow from Applications, then click Done in the warning.",
           "Open System Settings → Privacy & Security.",
-          "Scroll down to Security and click Open Anyway next to the message about TimeTrack.",
+          "Scroll down to Security and click Open Anyway next to the message about Kaiflow.",
           "Click Open Anyway again and enter your password.",
         ],
       },
@@ -312,7 +312,7 @@ export const en: Content = {
         title: "macOS 13 Ventura and 14 Sonoma",
         steps: [
           "In Finder, open the Applications folder.",
-          "Right-click (or Control-click) TimeTrack and choose Open.",
+          "Right-click (or Control-click) Kaiflow and choose Open.",
           "Click Open in the dialog.",
         ],
       },
@@ -320,7 +320,7 @@ export const en: Content = {
     advancedTitle: "Advanced: use Terminal instead",
     advancedBody: "Only if you trust the download. This removes the quarantine flag, which skips the Gatekeeper check for this app:",
     permissionTitle: "Then allow window titles",
-    permissionBody: "When TimeTrack asks, turn it on in System Settings → Privacy & Security → Accessibility. Without it, TimeTrack still records app names.",
+    permissionBody: "When Kaiflow asks, turn it on in System Settings → Privacy & Security → Accessibility. Without it, Kaiflow still records app names.",
   },
   availability: {
     title: "Availability",
@@ -337,7 +337,7 @@ export const en: Content = {
   fork: {
     eyebrow: "Open source · MIT",
     title: "Make it yours",
-    lead: "TimeTrack is built to be forked. Change it by hand, or let an AI coding agent do the work: the project ships with a guide written for agents.",
+    lead: "Kaiflow is built to be forked. Change it by hand, or let an AI coding agent do the work: the project ships with a guide written for agents.",
     points: [
       {
         title: "A clean base to build on",
@@ -362,7 +362,7 @@ export const en: Content = {
   },
   support: {
     title: "Support the project",
-    lead: "TimeTrack is free and will stay that way. If it helps you, a star makes it easier for others to find it.",
+    lead: "Kaiflow is free and will stay that way. If it helps you, a star makes it easier for others to find it.",
     star: "Star on GitHub",
     sponsor: "Sponsor on GitHub",
   },
@@ -373,7 +373,8 @@ export const en: Content = {
     secondary: "View the source on GitHub",
   },
   footer: {
-    tagline: "A private time tracker for your menu bar.",
+    tagline: "Improve your focus, one day at a time.",
+    nameNote: "The name blends kaizen, the habit of small continuous improvements, with flow, the state of deep focus.",
     license: "MIT licensed",
     source: "Source code",
     releases: "Releases",

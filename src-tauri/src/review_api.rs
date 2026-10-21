@@ -130,7 +130,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let ai = FakeAi::default();
         let state = compose(
-            &dir.path().join("timetrack.db"),
+            &dir.path().join("kaiflow.db"),
             Box::new(RecordingSink::default()),
             AppState::default_shortcut(),
             Providers {

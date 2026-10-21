@@ -28,8 +28,8 @@ env:
   CARGO_TERM_COLOR: always
   # Common name of the self-signed release certificate (mode 2). Override with a repository
   # variable if your certificate uses another name.
-  SELF_SIGNED_IDENTITY: ${{ vars.MACOS_SELF_SIGNED_IDENTITY || 'TimeTrack Release' }}
-  APP_PATH_IN_APPLICATIONS: /Applications/Time Track Copilot.app
+  SELF_SIGNED_IDENTITY: ${{ vars.MACOS_SELF_SIGNED_IDENTITY || 'Kaiflow Release' }}
+  APP_PATH_IN_APPLICATIONS: /Applications/Kaiflow.app
 
 jobs:
   macos:
@@ -95,13 +95,13 @@ jobs:
           {
             echo "## Install on macOS"
             echo
-            echo "1. Download the \`.dmg\` below, open it and drag **Time Track Copilot** to **Applications**."
+            echo "1. Download the \`.dmg\` below, open it and drag **Kaiflow** to **Applications**."
             if [ "${mode}" = "notarized" ]; then
               echo "2. Open it from Applications. This build is notarized by Apple, so it opens normally."
             else
               echo "2. Open it once from Applications. macOS will say it cannot verify the developer: this free build is **not notarized by Apple**. Click **Done** (or **Cancel**), then:"
-              echo "   - **macOS 15 (Sequoia) or later:** open **System Settings → Privacy & Security**, scroll to **Security**, click **Open Anyway** next to the message about Time Track Copilot, and confirm with **Open Anyway** and your password."
-              echo "   - **macOS 13 and 14:** in Finder, open **Applications**, **right-click** (or Control-click) **Time Track Copilot**, choose **Open**, then **Open** again in the dialog."
+              echo "   - **macOS 15 (Sequoia) or later:** open **System Settings → Privacy & Security**, scroll to **Security**, click **Open Anyway** next to the message about Kaiflow, and confirm with **Open Anyway** and your password."
+              echo "   - **macOS 13 and 14:** in Finder, open **Applications**, **right-click** (or Control-click) **Kaiflow**, choose **Open**, then **Open** again in the dialog."
               echo
               echo "   You only need to do this the first time."
               echo
@@ -118,7 +118,7 @@ jobs:
             echo
             case "${mode}" in
               adhoc)
-                echo "> **Note:** this build is ad-hoc signed. After installing a new version, macOS forgets the Accessibility permission: remove Time Track Copilot from the Accessibility list with the **−** button and grant it again." ;;
+                echo "> **Note:** this build is ad-hoc signed. After installing a new version, macOS forgets the Accessibility permission: remove Kaiflow from the Accessibility list with the **−** button and grant it again." ;;
               self-signed)
                 echo "> This build is signed with the project's stable self-signed certificate, so the Accessibility permission is kept across updates." ;;
             esac
@@ -220,7 +220,7 @@ jobs:
           APPLE_TEAM_ID: ${{ env.SIGNING_MODE == 'notarized' && secrets.APPLE_TEAM_ID || '' }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: Time Track Copilot ${{ github.ref_name }}
+          releaseName: Kaiflow ${{ github.ref_name }}
           releaseBody: ${{ steps.config.outputs.notes }}
           # Always a draft first: it is published only after the checks below pass, so
           # `releases/latest` (the updater endpoint) never points at an unverified build.

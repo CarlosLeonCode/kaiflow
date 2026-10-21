@@ -110,7 +110,7 @@ fn exchange(request: &HttpRequest) -> Result<HttpResponse, AiError> {
         .redirect(reqwest::redirect::Policy::none())
         .connect_timeout(CONNECT_TIMEOUT.min(request.timeout))
         .timeout(request.timeout)
-        .user_agent(concat!("time-track-copilot/", env!("CARGO_PKG_VERSION")));
+        .user_agent(concat!("kaiflow/", env!("CARGO_PKG_VERSION")));
     if request.no_proxy {
         builder = builder.no_proxy();
     }

@@ -17,4 +17,5 @@ pub mod presets;
 pub mod queries;
 pub mod review;
 pub mod review_payload;
+pub mod secret_migration;
 pub mod settings_blobs;

@@ -1,4 +1,4 @@
-# Contributing to Time Track Copilot
+# Contributing to Kaiflow
 
 Thanks for your interest. Bug reports, fixes, docs and well-scoped features are all welcome.
 This project is also meant to be forked and customized; if you only want your own variant,
@@ -25,8 +25,8 @@ Requirements:
   build tools.
 
 ```bash
-git clone https://github.com/<you>/time-track-copilot.git
-cd time-track-copilot
+git clone https://github.com/<you>/kaiflow.git
+cd kaiflow
 npm install
 npm run tauri dev      # full app (Rust + UI)
 npm run dev:mock       # UI only, in-memory backend, no Rust build
@@ -52,7 +52,7 @@ All of these run in CI; run them locally first:
 cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
-cargo build -p time-track-app
+cargo build -p kaiflow
 npx tsc --noEmit
 npm run lint
 npm test
@@ -63,7 +63,7 @@ npm run e2e            # when the UI changed (needs `npx playwright install chro
 If you changed an IPC command or DTO, regenerate the TypeScript bindings and commit them:
 
 ```bash
-UPDATE_BINDINGS=1 cargo test -p time-track-app generated_bindings
+UPDATE_BINDINGS=1 cargo test -p kaiflow generated_bindings
 ```
 
 If you changed the landing page:

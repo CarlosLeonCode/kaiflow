@@ -1,7 +1,7 @@
 # Checklist manual del Gate 2: Accesibilidad (AX) y TCC en macOS (tarea 2.9)
 
 Quien la ejecuta: el usuario, sobre una compilacion **firmada** con la identidad estable
-"TimeTrack Dev" (ver `scripts/create-dev-identity.md` y `scripts/dev-sign.sh`). Con
+"Kaiflow Dev" (ver `scripts/create-dev-identity.md` y `scripts/dev-sign.sh`). Con
 `tauri dev` el permiso de Accesibilidad se concede al terminal, no a la app, por lo que esas
 ejecuciones no sirven para este gate.
 
@@ -13,13 +13,13 @@ retirado; si este gate falla, puede recuperarse desde el tag `electron-final`.
 
 ## 0. Preparacion
 
-- [ ] La identidad "TimeTrack Dev" existe en el llavero (`security find-identity -v -p codesigning`).
+- [ ] La identidad "Kaiflow Dev" existe en el llavero (`security find-identity -v -p codesigning`).
 - [ ] `scripts/dev-sign.sh` termina sin errores y deja la app en `~/Applications`.
 - [ ] `codesign -dv --verbose=4 ~/Applications/<app>.app` muestra el identificador
-      `com.carlosleon.timetrack` y los flags `runtime` (hardened runtime).
+      `com.carlosleon.kaiflow` y los flags `runtime` (hardened runtime).
 - [ ] Se parte de un estado limpio: en Ajustes del Sistema > Privacidad y seguridad >
       Accesibilidad la app NO aparece (o esta desactivada) y se ha borrado la base de datos de
-      prueba (`~/Library/Application Support/com.carlosleon.timetrack/`).
+      prueba (`~/Library/Application Support/com.carlosleon.kaiflow/`).
 - [ ] No se solicita en ningun momento Grabacion de Pantalla (R2.3, R5.5). Revisar tambien
       Privacidad y seguridad > Grabacion de pantalla: la app no debe figurar.
 

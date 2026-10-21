@@ -62,7 +62,7 @@ Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported to the project maintainer, [@CarlosLeonCode](https://github.com/CarlosLeonCode),
 privately through GitHub (for example, a private message on a linked social
 profile or, for anything involving a security or privacy risk, a
-[private security advisory](https://github.com/CarlosLeonCode/time-track-copilot/security/advisories/new)).
+[private security advisory](https://github.com/CarlosLeonCode/kaiflow/security/advisories/new)).
 Please do not report conduct issues in public issues or pull requests.
 All complaints will be reviewed and investigated promptly and fairly.
 

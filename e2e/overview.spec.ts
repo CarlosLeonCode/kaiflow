@@ -82,7 +82,7 @@ test.describe("Overview", () => {
 
     await page.getByRole("button", { name: "Export JSON" }).click();
 
-    await expect(page.getByText("/Users/demo/Downloads/time-track-export.json")).toBeVisible();
+    await expect(page.getByText("/Users/demo/Downloads/kaiflow-export.json")).toBeVisible();
   });
 
   test("explains an empty history and offers a way forward", async ({ page }) => {

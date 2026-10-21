@@ -1,14 +1,14 @@
 [package]
-name = "time-track-app"
+name = "kaiflow"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
-description = "Tauri shell for Time Track Copilot: composition root, typed IPC, tray and windows."
+description = "Tauri shell for Kaiflow: composition root, typed IPC, tray and windows."
 
 [lib]
-name = "time_track_app_lib"
+name = "kaiflow_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

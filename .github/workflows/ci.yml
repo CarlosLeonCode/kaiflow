@@ -51,7 +51,7 @@ jobs:
             libssl-dev build-essential pkg-config xvfb
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
-      - run: cargo build -p time-track-app
+      - run: cargo build -p kaiflow
       # The ignored X11 test needs a display: a bare Xvfb (no window manager) proves the
       # adapter connects, reads the idle counter and finds no active window without panicking.
       - name: X11 smoke test (Xvfb)
@@ -61,7 +61,7 @@ jobs:
       - name: Bindings are up to date
         if: runner.os == 'Linux'
         run: |
-          UPDATE_BINDINGS=1 cargo test -p time-track-app generated_bindings
+          UPDATE_BINDINGS=1 cargo test -p kaiflow generated_bindings
           git diff --exit-code src/shared/ipc/bindings.ts
 
   frontend:

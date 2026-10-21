@@ -8,7 +8,7 @@ import { defineConfig } from "astro/config";
  * It drives canonical links, hreflang alternates, Open Graph URLs and the sitemap.
  * Keep `public/robots.txt` in sync with it.
  */
-const SITE = "https://timetrack.example.com";
+const SITE = "https://kaiflow.example.com";
 
 export default defineConfig({
   site: SITE,

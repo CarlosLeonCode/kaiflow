@@ -118,5 +118,5 @@ export interface Content {
   support: { title: string; lead: string; star: string; sponsor: string };
   faq: { title: string; items: { q: string; a: string }[] };
   cta: { title: string; lead: string; primary: string; secondary: string };
-  footer: { tagline: string; license: string; source: string; releases: string; issues: string };
+  footer: { tagline: string; nameNote: string; license: string; source: string; releases: string; issues: string };
 }

@@ -2,5 +2,5 @@
 export const APP_INFO = {
   version: __APP_VERSION__,
   license: "MIT",
-  repositoryUrl: "https://github.com/CarlosLeonCode/time-track-copilot",
+  repositoryUrl: "https://github.com/CarlosLeonCode/kaiflow",
 } as const;

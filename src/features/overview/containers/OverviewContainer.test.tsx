@@ -259,14 +259,14 @@ describe("OverviewContainer", () => {
 
   it("exports the visible range as JSON and shows where it was saved", async () => {
     const user = userEvent.setup();
-    const { calls } = backend({ export_json: () => "/Users/me/Downloads/time-track-export.json" });
+    const { calls } = backend({ export_json: () => "/Users/me/Downloads/kaiflow-export.json" });
     renderWithProviders(<OverviewContainer />);
     await screen.findByTestId("overview-total");
 
     await user.click(screen.getByRole("button", { name: /Export JSON/ }));
 
     await waitFor(() => expect(calls.find((c) => c.cmd === "export_json")?.args).toEqual({ range: WEEK }));
-    expect(await screen.findByText("Exported to /Users/me/Downloads/time-track-export.json")).toBeInTheDocument();
+    expect(await screen.findByText("Exported to /Users/me/Downloads/kaiflow-export.json")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Dismiss" }));
     expect(screen.queryByText(/Exported to/)).not.toBeInTheDocument();
   });

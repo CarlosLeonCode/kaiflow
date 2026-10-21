@@ -5,6 +5,7 @@ pub mod api;
 pub mod backup_worker;
 pub mod calendar;
 pub mod composition;
+pub mod data_migration;
 pub mod error;
 pub mod event_sink;
 pub mod focus_watcher;
@@ -32,7 +33,7 @@ use crate::composition::{AiPorts, AppState, compose};
 use crate::settings_applier::{ShellApplier, TauriLoginItem, reconcile};
 use crate::shortcuts::{ShortcutManager, TauriRegistrar, announce_to_frontend};
 
-const DB_FILE: &str = "timetrack.db";
+const DB_FILE: &str = "kaiflow.db";
 
 /// Absolute path of the generated `bindings.ts`.
 pub fn bindings_path() -> PathBuf {
@@ -78,6 +79,7 @@ pub fn run() {
 
             let handle = app.handle().clone();
             let data_dir = app.path().app_data_dir()?;
+            carry_over_legacy_data(&data_dir);
             let shortcut = AppState::default_shortcut();
             // `setup` runs on the main thread, where the AppKit observers must be created.
             let providers = platform::providers(&handle);
@@ -159,6 +161,30 @@ pub fn run() {
     });
 }
 
+/// Brings the data of the app's former identity over before SQLite opens the database.
+/// A failure is logged and the app starts with what the new directory holds: the old
+/// directory is never touched, so nothing is lost and the next launch tries again.
+fn carry_over_legacy_data(data_dir: &std::path::Path) {
+    let legacy_dir = data_migration::legacy_data_dir(data_dir);
+    match data_migration::migrate_legacy_data(
+        data_dir,
+        DB_FILE,
+        &legacy_dir,
+        data_migration::LEGACY_DB_FILE,
+    ) {
+        Ok(data_migration::Outcome::Migrated { from, files }) => eprintln!(
+            "copied {files} files of earlier data from {} to {}; the old folder is kept as a fallback",
+            from.display(),
+            data_dir.display()
+        ),
+        Ok(_) => {}
+        Err(error) => eprintln!(
+            "could not copy earlier data from {}: {error}",
+            legacy_dir.display()
+        ),
+    }
+}
+
 /// Registers the global shortcut and aligns the login item with the stored settings, then
 /// installs the applier `settings_update` uses from now on. Failures only degrade the
 /// feature: the shortcut status carries the reason and the rest of the app keeps working.
@@ -217,7 +243,7 @@ mod tests {
         let current = std::fs::read_to_string(&committed).unwrap_or_default();
         assert_eq!(
             current, fresh,
-            "src/shared/ipc/bindings.ts is stale: run `UPDATE_BINDINGS=1 cargo test -p time-track-app generated_bindings`"
+            "src/shared/ipc/bindings.ts is stale: run `UPDATE_BINDINGS=1 cargo test -p kaiflow generated_bindings`"
         );
     }
 

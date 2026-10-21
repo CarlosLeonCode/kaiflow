@@ -17,7 +17,7 @@ use adapters_sqlite::{
     SqliteFocusRepository, SqliteGoalRepository, SqlitePrivacyRepository, SqliteReportRepository,
     SqliteRetentionRepository, SqliteSessionRepository, SqliteSettingsRepository,
 };
-use application::ai::{AiProvider, SecretStore};
+use application::ai::{AiProvider, LEGACY_KEYCHAIN_SERVICE, SecretStore};
 use application::commands::Commands;
 use application::engine::{Command, Engine, EngineHandle, Ports};
 use application::export::DataService;
@@ -31,6 +31,7 @@ use application::ports::{
 use application::presets::PresetService;
 use application::queries::Queries;
 use application::review::ReviewService;
+use application::secret_migration::MigratingSecretStore;
 use crossbeam_channel::{Receiver, Sender, bounded};
 use domain::{PrivacyPolicy, UtcMs};
 
@@ -116,11 +117,15 @@ pub struct AiPorts {
 }
 
 impl AiPorts {
-    /// HTTP providers and the keychain of this OS.
+    /// HTTP providers and the keychain of this OS. Keys saved under the service name used
+    /// before the rename to Kaiflow are moved to the current one the first time they are read.
     pub fn native() -> Self {
         Self {
             provider: Arc::new(HttpAiProvider::new()),
-            secrets: Arc::new(KeyringSecretStore::native()),
+            secrets: Arc::new(MigratingSecretStore::new(
+                Arc::new(KeyringSecretStore::native()),
+                Arc::new(KeyringSecretStore::native_for(LEGACY_KEYCHAIN_SERVICE)),
+            )),
         }
     }
 }

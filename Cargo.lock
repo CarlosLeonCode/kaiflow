@@ -2422,6 +2422,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "kaiflow"
+version = "0.1.0"
+dependencies = [
+ "adapters-ai",
+ "adapters-common",
+ "adapters-linux",
+ "adapters-macos",
+ "adapters-sqlite",
+ "adapters-windows",
+ "application",
+ "chrono",
+ "crossbeam-channel",
+ "domain",
+ "objc2",
+ "serde",
+ "serde_json",
+ "specta",
+ "specta-typescript",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-autostart",
+ "tauri-plugin-dialog",
+ "tauri-plugin-global-shortcut",
+ "tauri-plugin-notification",
+ "tauri-plugin-single-instance",
+ "tauri-plugin-updater",
+ "tauri-specta",
+ "tempfile",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "keyboard-types"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5074,38 +5106,6 @@ checksum = "7e689342a48d2ea927c87ea50cabf8594854bf940e9310208848d680d668ed85"
 dependencies = [
  "num-conv",
  "time-core",
-]
-
-[[package]]
-name = "time-track-app"
-version = "0.1.0"
-dependencies = [
- "adapters-ai",
- "adapters-common",
- "adapters-linux",
- "adapters-macos",
- "adapters-sqlite",
- "adapters-windows",
- "application",
- "chrono",
- "crossbeam-channel",
- "domain",
- "objc2",
- "serde",
- "serde_json",
- "specta",
- "specta-typescript",
- "tauri",
- "tauri-build",
- "tauri-plugin-autostart",
- "tauri-plugin-dialog",
- "tauri-plugin-global-shortcut",
- "tauri-plugin-notification",
- "tauri-plugin-single-instance",
- "tauri-plugin-updater",
- "tauri-specta",
- "tempfile",
- "thiserror 2.0.21",
 ]
 
 [[package]]

@@ -422,7 +422,7 @@ pub async fn export_json(
         app.dialog()
             .file()
             .add_filter("JSON", &["json"])
-            .set_file_name("time-track-export.json")
+            .set_file_name("kaiflow-export.json")
             .blocking_save_file()
     })
     .await?;
@@ -514,7 +514,7 @@ pub async fn restore_prepare(
     let chosen = blocking_dialog(&app, |app| {
         app.dialog()
             .file()
-            .add_filter("Time Track backup or export", &["gz", "json"])
+            .add_filter("Kaiflow backup or export", &["gz", "json"])
             .blocking_pick_file()
     })
     .await?;

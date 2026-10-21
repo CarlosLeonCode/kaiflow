@@ -33,7 +33,7 @@ describe("SettingsContainer", () => {
     const about = await screen.findByRole("region", { name: "About" });
     expect(within(about).getByText("0.0.0-test")).toBeInTheDocument();
     expect(within(about).getByText("MIT")).toBeInTheDocument();
-    expect(within(about).getByText("https://github.com/CarlosLeonCode/time-track-copilot")).toBeInTheDocument();
+    expect(within(about).getByText("https://github.com/CarlosLeonCode/kaiflow")).toBeInTheDocument();
     expect(about).not.toHaveTextContent(/notari/i);
   });
 

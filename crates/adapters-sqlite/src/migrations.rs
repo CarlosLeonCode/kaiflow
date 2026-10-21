@@ -167,7 +167,7 @@ mod tests {
     #[test]
     fn backup_is_created_before_migrating_an_existing_database() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("timetrack.db");
+        let path = dir.path().join("kaiflow.db");
         let mut conn = Connection::open(&path).unwrap();
         migrate(&mut conn, MIGRATIONS, Some(&path)).unwrap();
         assert!(
@@ -206,7 +206,7 @@ mod tests {
     #[test]
     fn failed_migration_keeps_previous_schema_data_and_backup() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("timetrack.db");
+        let path = dir.path().join("kaiflow.db");
         let mut conn = Connection::open(&path).unwrap();
         migrate(&mut conn, MIGRATIONS, Some(&path)).unwrap();
         conn.execute("INSERT INTO settings(key, value) VALUES ('k', '1')", [])

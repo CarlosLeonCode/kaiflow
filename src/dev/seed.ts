@@ -74,7 +74,7 @@ interface Step {
 /** Chronological script of today; the last step is the open segment. `null` is an idle hole. */
 const TODAY: readonly (Step | { idleMinutes: number })[] = [
   { app: "slack", title: "#eng-standup", minutes: 15 },
-  { app: "xcode", title: "TimeTrackApp.swift", minutes: 70 },
+  { app: "xcode", title: "KaiflowApp.swift", minutes: 70 },
   { app: "safari", title: "Swift concurrency - Apple Developer Documentation", minutes: 20 },
   { app: "zoom", title: "Weekly sync", minutes: 30 },
   { app: "xcode", title: "Tracker.swift", minutes: 55 },
@@ -96,7 +96,7 @@ function random(seed: number): () => number {
 }
 
 const PAST_TITLES: Record<AppKey, string[]> = {
-  xcode: ["TimeTrackApp.swift", "Tracker.swift", "Report.swift"],
+  xcode: ["KaiflowApp.swift", "Tracker.swift", "Report.swift"],
   slack: ["#eng-standup", "#general", "Design review thread"],
   safari: ["Swift forums", "Tauri documentation", "Hacker News"],
   zoom: ["Weekly sync", "1:1"],

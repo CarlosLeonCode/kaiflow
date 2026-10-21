@@ -1,9 +1,9 @@
 # AGENTS.md
 
 Guide for AI coding agents (Claude Code, Antigravity, Cursor, Codex, Copilot...) and for humans
-working on Time Track Copilot or a fork of it. Read this before changing code.
+working on Kaiflow or a fork of it. Read this before changing code.
 
-Time Track Copilot is a local-first time tracker: a Tauri 2 shell around a Rust workspace with
+Kaiflow is a local-first time tracker: a Tauri 2 shell around a Rust workspace with
 a hexagonal architecture, and a React UI. It records the frontmost app and (with permission)
 its window title into a local SQLite database. Nothing leaves the device except the update
 check and the opt-in AI weekly review.
@@ -93,7 +93,7 @@ Example: a new "tags" table with a list command shown in the main window.
    - Add its name to `COMMANDS` in `src-tauri/build.rs` (a unit test enforces the sync).
    - Grant `allow-<command-name>` (kebab-case) in the capability of each window that needs
      it: `src-tauri/capabilities/main.json`, `popover.json` and/or `onboarding.json`.
-7. **Bindings**: `UPDATE_BINDINGS=1 cargo test -p time-track-app` (CI fails if
+7. **Bindings**: `UPDATE_BINDINGS=1 cargo test -p kaiflow` (CI fails if
    `src/shared/ipc/bindings.ts` is stale).
 8. **Query hook**: add the query or mutation in `src/shared/ipc/queries.ts` and its key in
    `queryKeys.ts`.
@@ -112,7 +112,7 @@ Run all of them before you say a change is done:
 cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
-cargo build -p time-track-app
+cargo build -p kaiflow
 npx tsc --noEmit
 npm run lint
 npm test

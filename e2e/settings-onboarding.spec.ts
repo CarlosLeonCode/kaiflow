@@ -36,7 +36,7 @@ test.describe("Settings", () => {
     await about.scrollIntoViewIfNeeded();
     await expect(about.getByText("MIT", { exact: true })).toBeVisible();
     await expect(about.getByText(/^\d+\.\d+\.\d+/)).toBeVisible();
-    await expect(about.getByText("https://github.com/CarlosLeonCode/time-track-copilot", { exact: true })).toBeVisible();
+    await expect(about.getByText("https://github.com/CarlosLeonCode/kaiflow", { exact: true })).toBeVisible();
   });
 
   test("has no accessibility violations", async ({ page }) => {

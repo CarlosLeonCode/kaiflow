@@ -20,7 +20,11 @@ pub const KEY_AI: &str = "ai";
 pub const MAX_OUTPUT_TOKENS: u32 = 4096;
 
 /// Service name entries use in the OS keychain; the user name is the provider.
-pub const KEYCHAIN_SERVICE: &str = "com.timetrack.copilot.ai";
+pub const KEYCHAIN_SERVICE: &str = "com.carlosleon.kaiflow";
+
+/// Service name used before the rename to Kaiflow. Keys found there are moved to
+/// [`KEYCHAIN_SERVICE`] the first time they are read (see `secret_migration`).
+pub const LEGACY_KEYCHAIN_SERVICE: &str = "com.timetrack.copilot.ai";
 
 /// Where Ollama is expected unless the user typed another loopback address.
 pub const DEFAULT_OLLAMA_URL: &str = "http://localhost:11434";

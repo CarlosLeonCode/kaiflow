@@ -9,7 +9,7 @@ import { DataPanelContainer } from "./DataPanelContainer";
 
 const PREVIEW: RestorePreviewDto = {
   token: "restore-token-1",
-  file_name: "timetrack-backup-2026-10-19.json.gz",
+  file_name: "kaiflow-backup-2026-10-19.json.gz",
   kind: "backup",
   app_version: "0.1.0",
   exported_at: "2026-10-19T08:00:00Z",
@@ -32,7 +32,7 @@ function backend(initial: Partial<BackupStatusDto> = {}, extra: Record<string, (
     backup_reset_dir: () => (status = { ...status, custom_dir: null, dir: "/data/backups" }),
     backup_now: () => {
       status = { ...status, last_backup_at: FIXED_NOW, stored: status.stored + 1 };
-      return { path: "/data/backups/timetrack-backup-2026-10-20.json.gz", removed: 0 };
+      return { path: "/data/backups/kaiflow-backup-2026-10-20.json.gz", removed: 0 };
     },
     restore_prepare: () => {
       issued = PREVIEW.token;
@@ -41,7 +41,7 @@ function backend(initial: Partial<BackupStatusDto> = {}, extra: Record<string, (
     restore_apply: (args) => {
       if (args.token !== issued) throw { kind: "confirmation_required" };
       issued = null;
-      return { safety_copy: "/data/timetrack.db.pre-restore-1" };
+      return { safety_copy: "/data/kaiflow.db.pre-restore-1" };
     },
     ...extra,
   });
@@ -90,7 +90,7 @@ describe("DataPanelContainer", () => {
 
     await user.click(await screen.findByRole("button", { name: "Back up now" }));
 
-    expect(await screen.findByText(/Backup saved to \/data\/backups\/timetrack-backup-2026-10-20/)).toBeInTheDocument();
+    expect(await screen.findByText(/Backup saved to \/data\/backups\/kaiflow-backup-2026-10-20/)).toBeInTheDocument();
     await waitFor(() => expect(screen.getByTestId("last-backup")).not.toHaveTextContent("Never"));
   });
 
@@ -119,14 +119,14 @@ describe("DataPanelContainer", () => {
     await user.click(await screen.findByRole("button", { name: "Restore from file…" }));
 
     const dialog = await screen.findByRole("alertdialog", { name: "Restore this file?" });
-    expect(within(dialog).getByText(/timetrack-backup-2026-10-19.json.gz holds 321 tracked segments, 4 activities, 2 rules/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/kaiflow-backup-2026-10-19.json.gz holds 321 tracked segments, 4 activities, 2 rules/)).toBeInTheDocument();
     expect(within(dialog).getByText(/replaces everything stored now/)).toBeInTheDocument();
     expect(calls.some((c) => c.cmd === "restore_apply")).toBe(false);
 
     await user.click(within(dialog).getByRole("button", { name: "Restore and replace" }));
 
     await waitFor(() => expect(calls.find((c) => c.cmd === "restore_apply")?.args).toEqual({ token: "restore-token-1" }));
-    expect(await screen.findByText(/Restored\. A safety copy .* \/data\/timetrack\.db\.pre-restore-1/)).toBeInTheDocument();
+    expect(await screen.findByText(/Restored\. A safety copy .* \/data\/kaiflow\.db\.pre-restore-1/)).toBeInTheDocument();
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
   });
 

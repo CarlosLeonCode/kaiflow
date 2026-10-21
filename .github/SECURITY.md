@@ -3,7 +3,7 @@
 ## Supported versions
 
 Only the latest release published on
-[GitHub Releases](https://github.com/CarlosLeonCode/time-track-copilot/releases) receives
+[GitHub Releases](https://github.com/CarlosLeonCode/kaiflow/releases) receives
 security fixes.
 
 ## Reporting a vulnerability
@@ -11,7 +11,7 @@ security fixes.
 Please **do not** open a public issue for security problems.
 
 Report it privately through GitHub Security Advisories:
-[Report a vulnerability](https://github.com/CarlosLeonCode/time-track-copilot/security/advisories/new)
+[Report a vulnerability](https://github.com/CarlosLeonCode/kaiflow/security/advisories/new)
 (repository tab **Security > Advisories > Report a vulnerability**).
 
 Include, when possible:
@@ -26,7 +26,7 @@ published and you are credited unless you prefer otherwise.
 
 ## Scope notes
 
-Time Track Copilot is local-first. Things we consider security issues include, for example:
+Kaiflow is local-first. Things we consider security issues include, for example:
 
 - Any path that sends tracked data off the device other than the opt-in AI weekly review
 - Webview windows gaining access to commands or plugins they are not granted

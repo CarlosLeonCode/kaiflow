@@ -1,6 +1,6 @@
-# TimeTrack website
+# Kaiflow website
 
-The marketing landing page for TimeTrack. A static [Astro](https://astro.build) site with
+The marketing landing page for Kaiflow. A static [Astro](https://astro.build) site with
 Tailwind CSS 4, no client-side JavaScript, English at `/` and Spanish at `/es/`.
 
 It is fully isolated from the desktop app: its own `package.json`, lockfile, `tsconfig.json`
@@ -62,7 +62,7 @@ To reuse a server you already started, set `BASE_URL=http://localhost:1430`.
 ## Deploy
 
 The build output is plain static files in `website/dist/`. Before the first deploy, replace the
-placeholder domain `https://timetrack.example.com` in `astro.config.mjs` (`SITE`) and in
+placeholder domain `https://kaiflow.example.com` in `astro.config.mjs` (`SITE`) and in
 `public/robots.txt`.
 
 | Host | Settings |

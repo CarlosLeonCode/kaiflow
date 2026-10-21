@@ -176,7 +176,7 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
 
         let dir = tempfile::tempdir().unwrap();
-        let old = dir.path().join("timetrack-backup-2024-01-01.json.gz");
+        let old = dir.path().join("kaiflow-backup-2024-01-01.json.gz");
         FsFileSink.write_atomic(&old, b"older").unwrap();
         fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o555)).unwrap();
 
@@ -186,7 +186,7 @@ mod tests {
             None
         } else {
             Some(FsFileSink.write_atomic(
-                &dir.path().join("timetrack-backup-2024-01-02.json.gz"),
+                &dir.path().join("kaiflow-backup-2024-01-02.json.gz"),
                 b"new",
             ))
         };
@@ -196,10 +196,7 @@ mod tests {
             let message = result.unwrap_err().0;
             assert!(message.contains("could not write"), "{message}");
             assert_eq!(fs::read(&old).unwrap(), b"older");
-            assert_eq!(
-                leftovers(dir.path()),
-                ["timetrack-backup-2024-01-01.json.gz"]
-            );
+            assert_eq!(leftovers(dir.path()), ["kaiflow-backup-2024-01-01.json.gz"]);
         }
     }
 

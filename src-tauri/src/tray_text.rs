@@ -47,7 +47,7 @@ const SEPARATOR: &str = " · ";
 const FOCUS_MARKER: &str = "◔";
 /// Replaces the separator while a drift alert is showing.
 const DRIFT_SEPARATOR: &str = " ! ";
-const APP_NAME: &str = "Time Track Copilot";
+const APP_NAME: &str = "Kaiflow";
 
 const MINUTE_MS: i64 = 60_000;
 /// Added to every computed wake-up: the open segment is persisted on a 2 s heartbeat, so
@@ -824,9 +824,9 @@ mod tests {
 
     #[test]
     fn tooltip_names_the_app_and_carries_the_text() {
-        assert_eq!(tooltip(""), "Time Track Copilot");
-        assert_eq!(tooltip("3h 12m"), "Time Track Copilot — 3h 12m");
-        assert_eq!(tooltip("\u{2007}5m"), "Time Track Copilot — 5m");
+        assert_eq!(tooltip(""), "Kaiflow");
+        assert_eq!(tooltip("3h 12m"), "Kaiflow — 3h 12m");
+        assert_eq!(tooltip("\u{2007}5m"), "Kaiflow — 5m");
     }
 
     #[test]

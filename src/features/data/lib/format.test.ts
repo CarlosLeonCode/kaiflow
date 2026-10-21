@@ -9,7 +9,7 @@ const NOW = new Date(2026, 9, 20, 15, 0).getTime();
 function preview(overrides: Partial<RestorePreviewDto> = {}): RestorePreviewDto {
   return {
     token: "t",
-    file_name: "timetrack-backup-2026-10-19.json.gz",
+    file_name: "kaiflow-backup-2026-10-19.json.gz",
     kind: "backup",
     app_version: "0.1.0",
     exported_at: "2026-10-19T08:00:00Z",

@@ -20,7 +20,10 @@ use crate::ports::{BackupStore, Calendar, FileSink, PortError, SettingsRepositor
 use crate::queries::Range;
 use crate::settings_blobs::{BackupSettings, KEY_BACKUP, read_blob, write_blob};
 
-const BACKUP_PREFIX: &str = "timetrack-backup-";
+const BACKUP_PREFIX: &str = "kaiflow-backup-";
+/// Prefix of the daily backups written before the rename to Kaiflow. They are still counted,
+/// kept or pruned by the retention policy like the new ones.
+const LEGACY_BACKUP_PREFIX: &str = "timetrack-backup-";
 const BACKUP_SUFFIX: &str = ".json.gz";
 /// Weeks start on Monday until the calendar settings arrive with goals.
 const WEEK_START: u8 = 0;
@@ -353,10 +356,17 @@ impl DataService {
         let Ok(names) = self.files.list(dir) else {
             return 0;
         };
-        let days: Vec<i64> = names.iter().filter_map(|n| parse_backup_day(n)).collect();
-        select_to_delete(&days, WEEK_START)
+        let backups: Vec<(i64, &String)> = names
+            .iter()
+            .filter_map(|n| parse_backup_day(n).map(|day| (day, n)))
+            .collect();
+        let days: Vec<i64> = backups.iter().map(|(day, _)| *day).collect();
+        let doomed = select_to_delete(&days, WEEK_START);
+        // A day may have both a legacy and a current file: both go when the day goes.
+        backups
             .into_iter()
-            .filter(|day| self.files.delete(&dir.join(backup_file_name(*day))).is_ok())
+            .filter(|(day, _)| doomed.contains(day))
+            .filter(|(_, name)| self.files.delete(&dir.join(name)).is_ok())
             .count()
     }
 
@@ -426,16 +436,18 @@ impl DataService {
     }
 }
 
-/// `timetrack-backup-YYYY-MM-DD.json.gz` for a local day number.
+/// `kaiflow-backup-YYYY-MM-DD.json.gz` for a local day number.
 pub fn backup_file_name(day: i64) -> String {
     let (year, month, date) = civil_from_days(day);
     format!("{BACKUP_PREFIX}{year:04}-{month:02}-{date:02}{BACKUP_SUFFIX}")
 }
 
-/// The local day a backup file name stands for; `None` for any other file.
+/// The local day a backup file name stands for (current or legacy prefix); `None` for any
+/// other file.
 pub fn parse_backup_day(name: &str) -> Option<i64> {
     let date = name
-        .strip_prefix(BACKUP_PREFIX)?
+        .strip_prefix(BACKUP_PREFIX)
+        .or_else(|| name.strip_prefix(LEGACY_BACKUP_PREFIX))?
         .strip_suffix(BACKUP_SUFFIX)?;
     let mut parts = date.split('-');
     let year: i64 = parts.next()?.parse().ok()?;
@@ -520,7 +532,7 @@ mod tests {
             Arc::new(settings.clone()),
             Arc::new(FixedCalendar::fixed(0)),
             DIR.into(),
-            "/data/timetrack.db".into(),
+            "/data/kaiflow.db".into(),
             "9.9.9",
         );
         Rig {
@@ -609,7 +621,7 @@ mod tests {
         let report = rig.service.backup_now(now, "UTC+00:00").unwrap();
         assert_eq!(
             report.path,
-            Path::new(DIR).join("timetrack-backup-2024-02-29.json.gz")
+            Path::new(DIR).join("kaiflow-backup-2024-02-29.json.gz")
         );
         let doc = Document::parse(&rig.files.get(&report.path).unwrap()).unwrap();
         assert_eq!(doc.kind, Kind::Backup);
@@ -797,7 +809,7 @@ mod tests {
         assert_eq!(rig.store.safety_copies(), vec![report.safety_copy.clone()]);
         assert_eq!(
             report.safety_copy,
-            Path::new("/data/timetrack.db.pre-restore-200")
+            Path::new("/data/kaiflow.db.pre-restore-200")
         );
         assert_eq!(rig.store.data().segments.len(), 2);
         // Single use.
@@ -894,15 +906,75 @@ mod tests {
     #[test]
     fn backup_file_names_round_trip() {
         let name = backup_file_name(19_782);
-        assert_eq!(name, "timetrack-backup-2024-02-29.json.gz");
+        assert_eq!(name, "kaiflow-backup-2024-02-29.json.gz");
         assert_eq!(parse_backup_day(&name), Some(19_782));
         for bad in [
-            "timetrack-backup-2024-2-29.json.gz",
+            "kaiflow-backup-2024-2-29.json.gz",
             "backup.json.gz",
-            "timetrack-backup-2024-02-30.json.gz",
-            "timetrack-backup-2024-02-29.json",
+            "kaiflow-backup-2024-02-30.json.gz",
+            "kaiflow-backup-2024-02-29.json",
+            "other-backup-2024-02-29.json.gz",
         ] {
             assert_eq!(parse_backup_day(bad), None, "{bad}");
         }
+        assert_eq!(
+            parse_backup_day("timetrack-backup-2024-02-29.json.gz"),
+            Some(19_782),
+            "backups written before the rename are still recognized"
+        );
+    }
+
+    #[test]
+    fn retention_counts_and_prunes_backups_from_before_the_rename() {
+        let rig = rig();
+        for day in 100..105 {
+            rig.files.put(
+                &Path::new(DIR).join(format!(
+                    "{LEGACY_BACKUP_PREFIX}{}",
+                    &backup_file_name(day)[BACKUP_PREFIX.len()..]
+                )),
+                b"x",
+            );
+        }
+        for day in 105..110 {
+            rig.files
+                .put(&Path::new(DIR).join(backup_file_name(day)), b"x");
+        }
+        assert_eq!(rig.service.backup_status().unwrap().stored, 10);
+        let report = rig.service.backup_now(UtcMs(110 * DAY), "UTC").unwrap();
+        assert!(report.removed >= 1);
+        let remaining = backup_names(&rig.files);
+        let days: Vec<i64> = remaining
+            .iter()
+            .filter_map(|n| parse_backup_day(n))
+            .collect();
+        assert!(days.contains(&110) && days.contains(&104), "{remaining:?}");
+        let legacy_left = remaining
+            .iter()
+            .filter(|n| n.starts_with(LEGACY_BACKUP_PREFIX))
+            .count();
+        assert_eq!(
+            legacy_left + report.removed,
+            5,
+            "pruned files are legacy ones: {remaining:?}"
+        );
+    }
+
+    #[test]
+    fn exports_written_before_the_rename_still_restore() {
+        let rig = rig();
+        let mut value: serde_json::Value =
+            serde_json::from_slice(&backup_bytes_plain(&rig)).unwrap();
+        value["format"] = "timetrack".into();
+        let legacy = serde_json::to_vec(&value).unwrap();
+        rig.store
+            .replace_all(&crate::backup::BackupData::default())
+            .unwrap();
+
+        let preview = rig.service.restore_prepare(&legacy, UtcMs(100)).unwrap();
+        rig.service
+            .restore_apply(&preview.token, UtcMs(200))
+            .unwrap();
+        assert_eq!(rig.store.data().segments.len(), 2);
     }
 }

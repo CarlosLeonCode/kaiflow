@@ -2,4 +2,4 @@ User-agent: *
 Allow: /
 
 # PLACEHOLDER domain: keep in sync with `SITE` in astro.config.mjs.
-Sitemap: https://timetrack.example.com/sitemap-index.xml
+Sitemap: https://kaiflow.example.com/sitemap-index.xml

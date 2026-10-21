@@ -87,7 +87,7 @@ mod tests {
     #[test]
     fn open_creates_directories_and_enables_pragmas() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("nested/app/timetrack.db");
+        let path = dir.path().join("nested/app/kaiflow.db");
         let conn = open(&path).unwrap();
         assert_eq!(current_version(&conn).unwrap(), 5);
         let mode: String = conn
@@ -103,7 +103,7 @@ mod tests {
     #[test]
     fn reopening_an_up_to_date_database_makes_no_backup() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("timetrack.db");
+        let path = dir.path().join("kaiflow.db");
         drop(open(&path).unwrap());
         drop(open(&path).unwrap());
         assert!(!backup_path(&path, 5).exists());

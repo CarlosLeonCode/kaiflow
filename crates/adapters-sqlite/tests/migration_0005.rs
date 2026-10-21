@@ -15,7 +15,7 @@ const INSERT: &str =
 #[test]
 fn an_existing_v4_database_keeps_its_data_and_gets_a_backup() {
     let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("timetrack.db");
+    let path = dir.path().join("kaiflow.db");
     let mut conn = Connection::open(&path).unwrap();
     conn.pragma_update(None, "foreign_keys", true).unwrap();
     migrate(&mut conn, &MIGRATIONS[..4], Some(&path)).unwrap();

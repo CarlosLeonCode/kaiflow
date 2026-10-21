@@ -6,7 +6,9 @@
 //! Service) the store reports itself unavailable and refuses to keep keys: there is no
 //! plain-text, file or in-memory fallback, by design.
 //!
-//! Entries use the service [`KEYCHAIN_SERVICE`] and the provider name as the user name.
+//! Entries use the service [`KEYCHAIN_SERVICE`] and the provider name as the user name. A
+//! store for another service (the one used before the rename) comes from
+//! [`KeyringSecretStore::native_for`].
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, PoisonError};
@@ -29,6 +31,8 @@ enum Backend {
 
 pub struct KeyringSecretStore {
     backend: Backend,
+    /// Keychain service name of every entry.
+    service: &'static str,
     /// Entries are specifiers: creating them is cheap, but reusing them keeps one handle per
     /// provider (and lets in-memory stores used in tests behave like real ones).
     entries: Mutex<HashMap<String, Arc<Entry>>>,
@@ -40,10 +44,16 @@ impl KeyringSecretStore {
     /// The store of this platform. Never fails: problems become
     /// [`SecretAvailability::Unavailable`].
     pub fn native() -> Self {
+        Self::native_for(KEYCHAIN_SERVICE)
+    }
+
+    /// The store of this platform for entries under `service`.
+    pub fn native_for(service: &'static str) -> Self {
         match native_store() {
-            Ok(store) => Self::with_store(store),
+            Ok(store) => Self::with_store_for(store, service),
             Err(reason) => Self {
                 backend: Backend::Unavailable(reason),
+                service,
                 entries: Mutex::default(),
                 reachable: Mutex::new(Some(false)),
             },
@@ -52,8 +62,14 @@ impl KeyringSecretStore {
 
     /// Any credential store (tests use the in-memory one of `keyring-core`).
     pub fn with_store(store: Store) -> Self {
+        Self::with_store_for(store, KEYCHAIN_SERVICE)
+    }
+
+    /// Any credential store, for entries under `service`.
+    pub fn with_store_for(store: Store, service: &'static str) -> Self {
         Self {
             backend: Backend::Ready(store),
+            service,
             entries: Mutex::default(),
             reachable: Mutex::new(None),
         }
@@ -73,7 +89,7 @@ impl KeyringSecretStore {
         }
         let entry = Arc::new(
             self.store()?
-                .build(KEYCHAIN_SERVICE, user, None)
+                .build(self.service, user, None)
                 .map_err(map_error)?,
         );
         entries.insert(user.to_owned(), entry.clone());
@@ -247,6 +263,7 @@ mod tests {
     fn a_missing_secure_store_refuses_every_operation_and_keeps_nothing() {
         let store = KeyringSecretStore {
             backend: Backend::Unavailable("no Secret Service".into()),
+            service: KEYCHAIN_SERVICE,
             entries: Mutex::default(),
             reachable: Mutex::new(Some(false)),
         };

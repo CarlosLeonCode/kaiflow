@@ -984,6 +984,8 @@ pub struct FakeSecrets(Arc<Mutex<Secrets>>);
 #[derive(Default)]
 struct Secrets {
     unavailable: Option<String>,
+    /// `set` fails while this is on (a keychain that refuses writes).
+    refuse_writes: bool,
     keys: HashMap<ProviderKind, String>,
     /// Calls that touched the store (`get`, `set`, `delete`).
     touched: usize,
@@ -1006,6 +1008,11 @@ impl FakeSecrets {
 
     pub fn touched(&self) -> usize {
         self.0.lock().unwrap().touched
+    }
+
+    /// Makes every later `set` fail, like a keychain that refuses to write.
+    pub fn refuse_writes(&self) {
+        self.0.lock().unwrap().refuse_writes = true;
     }
 
     /// Removes every stored key (as if the user cleaned the keychain by hand).
@@ -1036,6 +1043,9 @@ impl SecretStore for FakeSecrets {
         s.touched += 1;
         if let Some(reason) = &s.unavailable {
             return Err(SecretError::Unavailable(reason.clone()));
+        }
+        if s.refuse_writes {
+            return Err(SecretError::Failed("the keychain refused this key".into()));
         }
         s.keys.insert(provider, secret.expose().to_owned());
         Ok(())

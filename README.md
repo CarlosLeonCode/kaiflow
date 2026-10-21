@@ -1,13 +1,13 @@
-# Time Track Copilot
+# Kaiflow
 
-[![CI](https://github.com/CarlosLeonCode/time-track-copilot/actions/workflows/ci.yml/badge.svg)](https://github.com/CarlosLeonCode/time-track-copilot/actions/workflows/ci.yml)
+[![CI](https://github.com/CarlosLeonCode/kaiflow/actions/workflows/ci.yml/badge.svg)](https://github.com/CarlosLeonCode/kaiflow/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Platform: macOS](https://img.shields.io/badge/platform-macOS%2013%2B-lightgrey.svg)](#platform-status)
 
 **A local-first time tracker you can fork and customize, by hand or with AI coding agents
 (Claude Code, Antigravity, Cursor, etc.).**
 
-Time Track Copilot lives in your menu bar and records which app and window you use, so you can
+Kaiflow lives in your menu bar and records which app and window you use, so you can
 see where your day actually goes. No timers, no account, no cloud: your data stays on your
 computer.
 
@@ -46,7 +46,7 @@ computer.
 - Reads only the frontmost app name and, with Accessibility permission, its window title.
 - Never requests Screen Recording; never reads keystrokes, clipboard or file contents.
 - Stores everything in a local SQLite database
-  (`~/Library/Application Support/com.carlosleon.timetrack/` on macOS).
+  (`~/Library/Application Support/com.carlosleon.kaiflow/` on macOS).
 - Exclude apps, hide titles, delete any range or everything.
 - Nothing leaves your device, except two things you control: the update check (only when
   updates are enabled for the build) and the AI weekly review if you turn it on and run it
@@ -55,12 +55,12 @@ computer.
 ## Install (macOS)
 
 1. Download the latest `.dmg` from
-   [Releases](https://github.com/CarlosLeonCode/time-track-copilot/releases/latest).
-2. Open it and drag **Time Track Copilot** to **Applications**.
+   [Releases](https://github.com/CarlosLeonCode/kaiflow/releases/latest).
+2. Open it and drag **Kaiflow** to **Applications**.
 3. **First open.** The app is free and **not notarized by Apple**, so macOS warns that it
    cannot verify the developer. Click **Done**, then:
    - **macOS 15 (Sequoia) or later:** open **System Settings → Privacy & Security**, scroll to
-     **Security**, click **Open Anyway** next to the message about Time Track Copilot, and
+     **Security**, click **Open Anyway** next to the message about Kaiflow, and
      confirm.
    - **macOS 13 and 14:** in Finder, right-click (or Control-click) the app in Applications,
      choose **Open**, then **Open** again.
@@ -73,7 +73,7 @@ computer.
 Only if you trust the download. This skips the Gatekeeper check for this app:
 
 ```sh
-xattr -dr com.apple.quarantine "/Applications/Time Track Copilot.app"
+xattr -dr com.apple.quarantine "/Applications/Kaiflow.app"
 ```
 
 </details>
@@ -92,7 +92,7 @@ signed.
 | Linux (Wayland) | Partial: idle, lock and sleep only (Wayland hides the active window) |
 
 Details per capability: [docs/platform-support.md](docs/platform-support.md). Want a Windows or
-Linux build sooner? Say so in [Issues](https://github.com/CarlosLeonCode/time-track-copilot/issues).
+Linux build sooner? Say so in [Issues](https://github.com/CarlosLeonCode/kaiflow/issues).
 
 ## Build from source
 

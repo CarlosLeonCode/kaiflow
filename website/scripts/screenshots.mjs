@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Captures real screenshots of the TimeTrack UI for the website.
+ * Captures real screenshots of the Kaiflow UI for the website.
  *
  * It starts the app's Vite dev server in `mock` mode (in-memory backend, seeded data) from
  * the repository root, opens each window with Playwright at 2x, and writes light and dark

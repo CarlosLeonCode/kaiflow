@@ -19,10 +19,10 @@ test.describe("Settings > Data", () => {
     const data = page.getByRole("region", { name: DATA });
 
     await data.getByRole("button", { name: "Back up now" }).click();
-    await expect(data.getByText(/Backup saved to .*timetrack-backup-today\.json\.gz/)).toBeVisible();
+    await expect(data.getByText(/Backup saved to .*kaiflow-backup-today\.json\.gz/)).toBeVisible();
 
     await data.getByRole("button", { name: "Choose folder…" }).click();
-    await expect(data.getByTestId("backup-folder")).toContainText("/Volumes/Backups/Time Track");
+    await expect(data.getByTestId("backup-folder")).toContainText("/Volumes/Backups/Kaiflow");
     await data.getByRole("button", { name: "Use default" }).click();
     await expect(data.getByTestId("backup-folder")).toContainText("/backups");
   });
@@ -50,7 +50,7 @@ test.describe("Settings > Data", () => {
     await page.getByRole("button", { name: "Restore from file…" }).click();
 
     const dialog = page.getByRole("alertdialog", { name: "Restore this file?" });
-    await expect(dialog).toContainText("timetrack-backup-yesterday.json.gz holds");
+    await expect(dialog).toContainText("kaiflow-backup-yesterday.json.gz holds");
     await expect(dialog).toContainText("replaces everything stored now");
     await expectNoA11yViolations(page);
     // Focus starts on Cancel; nothing is restored until the explicit confirmation.
