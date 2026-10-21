@@ -29,6 +29,12 @@ impl RetentionRepository for SqliteRetentionRepository {
             [from.0, to.0],
         )
         .map_err(port_err)?;
+        // So are the AI reviews whose week lies entirely inside the deleted range.
+        conn.execute(
+            "DELETE FROM ai_reviews WHERE period_start >= ?1 AND period_end <= ?2",
+            [from.0, to.0],
+        )
+        .map_err(port_err)?;
         conn.execute(
             "DELETE FROM segments
              WHERE ended_at IS NOT NULL AND started_at >= ?1 AND started_at < ?2",
@@ -63,6 +69,8 @@ impl RetentionRepository for SqliteRetentionRepository {
             [cutoff.0],
         )
         .map_err(port_err)?;
+        tx.execute("DELETE FROM ai_reviews WHERE period_end < ?1", [cutoff.0])
+            .map_err(port_err)?;
         // Pending gaps still wait for an answer; everything else is history.
         tx.execute(
             "DELETE FROM idle_gaps WHERE status <> 'pending' AND ended_at < ?1",
@@ -80,6 +88,8 @@ impl RetentionRepository for SqliteRetentionRepository {
         tx.execute("DELETE FROM idle_gaps", []).map_err(port_err)?;
         tx.execute("DELETE FROM focus_sessions WHERE ended_at IS NOT NULL", [])
             .map_err(port_err)?;
+        // Reviews summarize the deleted time (and may quote titles): they go too.
+        tx.execute("DELETE FROM ai_reviews", []).map_err(port_err)?;
         tx.commit().map_err(port_err)?;
         // VACUUM cannot run inside a transaction. It rewrites the file so deleted rows do not
         // linger in free pages; the checkpoint then drops them from the WAL as well.
@@ -235,5 +245,40 @@ mod tests {
             .query_row("PRAGMA freelist_count", [], |r| r.get(0))
             .unwrap();
         assert_eq!(free, 0, "VACUUM leaves no free pages");
+    }
+
+    fn seed_reviews(path: &std::path::Path) {
+        open(path)
+            .unwrap()
+            .execute_batch(
+                "INSERT INTO ai_reviews(id, period_start, period_end, period_label, provider, model,
+                   included_titles, request_json, response_json, status, created_at)
+                 VALUES (1, 10, 20, 'a', 'ollama', 'm', 0, '{}', '{}', 'ok', 21),
+                        (2, 100, 200, 'b', 'ollama', 'm', 1, '{}', '{}', 'ok', 201);",
+            )
+            .unwrap();
+    }
+
+    #[test]
+    fn ai_reviews_follow_the_tracked_data_they_summarize() {
+        let (_d, path, _w, r) = fixture();
+        seed_reviews(&path);
+        r.delete_range(UtcMs(0), UtcMs(50)).unwrap();
+        assert_eq!(
+            count(&path, "ai_reviews"),
+            1,
+            "only the review inside the range"
+        );
+        r.purge_older_than(UtcMs(150)).unwrap();
+        assert_eq!(
+            count(&path, "ai_reviews"),
+            1,
+            "ends at 200, after the cutoff"
+        );
+        r.purge_older_than(UtcMs(1_000)).unwrap();
+        assert_eq!(count(&path, "ai_reviews"), 0);
+        seed_reviews(&path);
+        r.delete_all().unwrap();
+        assert_eq!(count(&path, "ai_reviews"), 0);
     }
 }

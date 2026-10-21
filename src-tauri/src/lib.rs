@@ -13,6 +13,8 @@ pub mod ipc;
 pub mod notifications;
 pub mod placeholders;
 pub mod platform;
+pub mod review_api;
+pub mod review_worker;
 pub mod settings_applier;
 pub mod shortcuts;
 pub mod tray;
@@ -26,7 +28,7 @@ use std::sync::Arc;
 use specta_typescript::Typescript;
 use tauri::{AppHandle, Manager, RunEvent, Wry};
 
-use crate::composition::{AppState, compose};
+use crate::composition::{AiPorts, AppState, compose};
 use crate::settings_applier::{ShellApplier, TauriLoginItem, reconcile};
 use crate::shortcuts::{ShortcutManager, TauriRegistrar, announce_to_frontend};
 
@@ -89,6 +91,7 @@ pub fn run() {
                 )),
                 shortcut.clone(),
                 providers,
+                AiPorts::native(),
             )?);
             let settings = state.commands.get_settings()?;
             app.manage(state.clone());
@@ -99,6 +102,7 @@ pub fn run() {
             let tray_text = tray_text::TrayText::spawn(&handle);
             app.manage(tray_text.clone());
             app.manage(backup_worker::BackupWorker::spawn(&handle, state.clone()));
+            app.manage(review_worker::ReviewWorker::spawn(&handle, state.clone()));
             let goal_watcher = goal_watcher::GoalWatcher::spawn(&handle);
             app.manage(goal_watcher.clone());
             let focus_watcher = focus_watcher::FocusWatcher::spawn(&handle);
@@ -142,6 +146,9 @@ pub fn run() {
                 focus.stop();
             }
             if let Some(worker) = handle.try_state::<backup_worker::BackupWorker>() {
+                worker.stop();
+            }
+            if let Some(worker) = handle.try_state::<review_worker::ReviewWorker>() {
                 worker.stop();
             }
             if let Some(state) = handle.try_state::<Arc<AppState>>() {

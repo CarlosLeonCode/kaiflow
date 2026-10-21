@@ -130,6 +130,46 @@ export const commands = {
 	focusHistory: () => typedError<FocusSessionDto[], AppError>(__TAURI_INVOKE("focus_history")),
 	/**  The user closed the end summary of a finished session. */
 	focusSummaryDismiss: (id: number) => typedError<FocusStatusDto, AppError>(__TAURI_INVOKE("focus_summary_dismiss", { id })),
+	/**  AI settings and the state of the key store. Never returns a key. */
+	aiSettingsGet: () => typedError<AiSettingsDto, AppError>(__TAURI_INVOKE("ai_settings_get")),
+	aiSettingsUpdate: (patch: AiSettingsPatchDto) => typedError<AiSettingsDto, AppError>(__TAURI_INVOKE("ai_settings_update", { patch })),
+	/**
+	 *  The only way a key enters the app: it goes straight to the OS keychain and is never
+	 *  returned. Refused (never stored anywhere else) when the OS has no secure store.
+	 */
+	aiSetKey: (provider: AiProviderDto, key: string) => typedError<AiSettingsDto, AppError>(__TAURI_INVOKE("ai_set_key", { provider, key })),
+	aiDeleteKey: (provider: AiProviderDto) => typedError<AiSettingsDto, AppError>(__TAURI_INVOKE("ai_delete_key", { provider })),
+	/**  Whether a key is saved (never the key itself). */
+	aiHasKey: (provider: AiProviderDto) => typedError<boolean, AppError>(__TAURI_INVOKE("ai_has_key", { provider })),
+	/**
+	 *  Checks the key and the connection of a provider that is switched on; returns how many
+	 *  models it lists. `ai_not_enabled` (no traffic) before the opt-in.
+	 */
+	aiTest: (provider: AiProviderDto) => typedError<number, AppError>(__TAURI_INVOKE("ai_test", { provider })),
+	/**  Models the account can use. `ai_not_enabled` (no traffic) before the opt-in. */
+	aiModelsList: (provider: AiProviderDto) => typedError<string[], AppError>(__TAURI_INVOKE("ai_models_list", { provider })),
+	/**  The weekly review, built locally: no AI, no network. `weeks_ago` 0 is the current week. */
+	reviewGet: (weeksAgo: number) => typedError<WeeklyReviewDto, AppError>(__TAURI_INVOKE("review_get", { weeksAgo })),
+	/**  Saves (blank removes) the personal note of the week that starts on local day `first_day`. */
+	reviewNoteSet: (firstDay: number, note: string) => typedError<null, AppError>(__TAURI_INVOKE("review_note_set", { firstDay, note })),
+	/**
+	 *  Builds the exact request a run would send; nothing is sent. `ai_not_enabled` (no
+	 *  traffic) before the opt-in.
+	 */
+	reviewPreview: (weeksAgo: number, includeTitles: boolean, language: string) => typedError<ReviewPreviewDto, AppError>(__TAURI_INVOKE("review_preview", { weeksAgo, includeTitles, language })),
+	/**
+	 *  Sends a previewed request and stores the answer. Waits for the provider (up to 60 s, 180 s
+	 *  for Ollama) or for `review_cancel`; a failure stores nothing.
+	 */
+	reviewRun: (previewId: string) => typedError<AiReviewDto, AppError>(__TAURI_INVOKE("review_run", { previewId })),
+	/**  Stops the analysis in progress; its command returns at once. */
+	reviewCancel: () => typedError<null, AppError>(__TAURI_INVOKE("review_cancel")),
+	aiReviewsList: () => typedError<AiReviewDto[], AppError>(__TAURI_INVOKE("ai_reviews_list")),
+	aiReviewsDelete: (id: number) => typedError<null, AppError>(__TAURI_INVOKE("ai_reviews_delete", { id })),
+	/**  Step one of "delete all reviews": the token the confirmation sends back. */
+	aiReviewsPrepareDeleteAll: () => typedError<string, AppError>(__TAURI_INVOKE("ai_reviews_prepare_delete_all")),
+	/**  Step two: deletes every review; returns how many. Needs the token. */
+	aiReviewsDeleteAll: (token: string) => typedError<number, AppError>(__TAURI_INVOKE("ai_reviews_delete_all", { token })),
 	/**
 	 *  Asks the update server for a newer signed release. Returns it (and announces it with
 	 *  `update-available`), or `null` when the app is current or updates are not configured.
@@ -177,6 +217,76 @@ export type ActivityTotalDto = {
 	total_ms: number,
 };
 
+/**  Why an AI call failed, so the UI can say something useful. */
+export type AiFailureDto = "offline" | "timeout" | "rate_limited" | "unauthorized" | "remote_host_rejected" | "provider" | "bad_response" | "cancelled";
+
+export type AiProviderDto = "anthropic" | "gemini" | "openai" | "ollama";
+
+/**  What the settings show about one provider. */
+export type AiProviderInfoDto = {
+	provider: AiProviderDto,
+	label: string,
+	needs_key: boolean,
+	/**  Runs on this computer: the data never leaves it. */
+	local: boolean,
+	default_model: string,
+	/**  The model in use (the user's, else the default). Empty for Ollama until one is chosen. */
+	model: string,
+	/**  The user switched this provider on. */
+	enabled: boolean,
+	consented_at: number | null,
+	/**  A key is saved in the keychain. The key itself is never returned. */
+	has_key: boolean,
+	/**  Ollama only. */
+	base_url: string | null,
+};
+
+export type AiProviderPatchDto = {
+	provider: AiProviderDto,
+	/**  `true` is the explicit opt-in for this provider. */
+	enabled: boolean | null,
+	/**  Empty text goes back to the provider default. */
+	model: string | null,
+	/**  Ollama only; empty goes back to the default address. Must be a localhost address. */
+	base_url: string | null,
+};
+
+/**  A stored AI review: what was sent and what came back. */
+export type AiReviewDto = {
+	id: number,
+	period_start: number,
+	period_end: number,
+	period_label: string,
+	provider: AiProviderDto,
+	model: string,
+	included_titles: boolean,
+	/**  The exact data that was sent (JSON text). */
+	request_json: string,
+	status: ReviewStatusDto,
+	/**  The structured answer (`status` is `ok`). */
+	output: ReviewOutputDto | null,
+	/**  The plain-text answer (`status` is `text_fallback`). */
+	text: string | null,
+	created_at: number,
+};
+
+export type AiSettingsDto = {
+	selected: AiProviderDto,
+	include_titles: boolean,
+	monday_review: boolean,
+	/**  Why the last automatic Monday review failed, if it did. */
+	last_auto_error: string | null,
+	providers: AiProviderInfoDto[],
+	secret_store: SecretStoreDto,
+};
+
+export type AiSettingsPatchDto = {
+	selected: AiProviderDto | null,
+	include_titles: boolean | null,
+	monday_review: boolean | null,
+	provider: AiProviderPatchDto | null,
+};
+
 export type AppError = 
 /**  A title pattern did not compile (R9.4); nothing was saved. */
 { kind: "invalid_pattern"; pattern: string; reason: string } | 
@@ -194,6 +304,14 @@ export type AppError =
  *  there is nothing to detect drift with. `reason` says why, so the UI can explain it.
  */
 { kind: "focus_unavailable"; reason: DegradedReasonDto } | 
+/**  The AI provider was not switched on by the user: nothing was sent anywhere. */
+{ kind: "ai_not_enabled" } | 
+/**  The provider needs an API key and none is saved. */
+{ kind: "ai_key_missing" } | 
+/**  The OS has no secure place for API keys; they are never kept anywhere less safe. */
+{ kind: "secret_store_unavailable"; reason: string } | 
+/**  The provider call failed. `message` is written for the user and never has the key. */
+{ kind: "ai"; reason: AiFailureDto; message: string } | 
 /**  Infrastructure failure (engine thread gone, dialog or file errors). */
 { kind: "internal"; message: string };
 
@@ -283,7 +401,7 @@ export type DataChanged = {
 	kind: DataKindDto,
 };
 
-export type DataKindDto = "segments" | "gaps" | "goals" | "focus";
+export type DataKindDto = "segments" | "gaps" | "goals" | "focus" | "reviews";
 
 /**
  *  Why tracking runs degraded, so the UI can explain it (and only offer System Settings
@@ -423,6 +541,11 @@ export type GoalEventKindDto = "reached" | "exceeded";
 
 export type GoalKindDto = "minimum" | "maximum";
 
+export type GoalMissDto = {
+	goal: string,
+	reason: string,
+};
+
 /**  What a goal measures: one activity, one app or all tracked time. */
 export type GoalScopeDto = { kind: "activity"; activity_id: number } | { kind: "app"; app_id: string } | { kind: "total" };
 
@@ -445,6 +568,23 @@ export type GoalStatusDto = {
 	unseen: GoalEventKindDto | null,
 };
 
+/**  How a goal fared in the reviewed week. */
+export type GoalWeekDto = {
+	goal: GoalDto,
+	periods: GoalWeekPeriodDto[],
+	met: number,
+	missed: number,
+	current_streak: number,
+	best_streak: number,
+};
+
+export type GoalWeekPeriodDto = {
+	/**  Local day number (days since 1970-01-01) of the first day of the period. */
+	start_day: number,
+	actual_ms: number,
+	result: WeekResultDto,
+};
+
 export type IdleGapDto = {
 	id: number,
 	started_at: number,
@@ -462,6 +602,11 @@ export type IdleGapResolved = {
 
 /**  Same enum as the domain and the database (design section 3). */
 export type IdleResolutionDto = { kind: "discard" } | { kind: "assign_previous" } | { kind: "assign_activity"; activity_id: number };
+
+export type PatternDto = {
+	observation: string,
+	evidence: string,
+};
 
 export type PeriodDto = "daily" | "weekly" | "monthly";
 
@@ -553,6 +698,35 @@ export type RetentionImpactDto = {
 /**  How a patch changes retention; a tagged enum avoids the `Option<Option<_>>` ambiguity. */
 export type RetentionPatchDto = { kind: "forever" } | { kind: "days"; days: number };
 
+/**  The structured answer of a review. */
+export type ReviewOutputDto = {
+	summary: string,
+	wins: string[],
+	patterns: PatternDto[],
+	goal_misses: GoalMissDto[],
+	suggestions: SuggestionAiDto[],
+};
+
+/**  Exactly what a run would send. Nothing has been sent yet. */
+export type ReviewPreviewDto = {
+	/**  Single-use handle `review_run` sends back. */
+	id: string,
+	provider: AiProviderDto,
+	model: string,
+	period_label: string,
+	included_titles: boolean,
+	title_count: number,
+	/**  The instructions part of the request. */
+	system: string,
+	/**  The data part, byte for byte. */
+	user: string,
+	bytes: number,
+	/**  The model runs on this computer. */
+	local: boolean,
+};
+
+export type ReviewStatusDto = "ok" | "text_fallback";
+
 export type RuleDto = {
 	id: number,
 	activity_id: number,
@@ -570,6 +744,12 @@ export type RuleInputDto = {
 
 /**  What a rule matches; used both to read and to write rules. */
 export type RuleSpecDto = { kind: "app"; app_id: string } | { kind: "title_pattern"; pattern: string; app_id: string | null };
+
+export type SecretStoreDto = {
+	available: boolean,
+	/**  Why keys cannot be kept, when `available` is false. */
+	reason: string | null,
+};
 
 export type SegmentSourceDto = "tracked" | "idle_assigned";
 
@@ -631,6 +811,11 @@ export type StreakDto = {
 	best: number,
 	/**  The open period is not met (yet) and would end the streak if it closed as it is. */
 	at_risk: boolean,
+};
+
+export type SuggestionAiDto = {
+	action: string,
+	rationale: string,
 };
 
 /**  An app that could be filed under a preset activity. Never applied automatically. */
@@ -701,6 +886,24 @@ export type UpdateInfoDto = {
 	current_version: string,
 	notes: string | null,
 	date: string | null,
+};
+
+export type WeekResultDto = "met" | "missed" | "inactive" | "in_progress";
+
+/**  Everything the Review section shows for a week. Built without any AI. */
+export type WeeklyReviewDto = {
+	weeks_ago: number,
+	/**  Local day number of the first day of the week. */
+	first_day: number,
+	from: number,
+	to: number,
+	label: string,
+	dashboard: DashboardDto,
+	goals: GoalWeekDto[],
+	/**  Closed focus sessions that started in the week. */
+	focus: FocusSessionDto[],
+	note: string,
+	reviews: AiReviewDto[],
 };
 
 /* Tauri Specta runtime */

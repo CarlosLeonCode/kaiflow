@@ -8,9 +8,11 @@ use application::export::DataError;
 use application::focus::FocusServiceError;
 use application::ports::PortError;
 use application::queries::QueryError;
+use application::review::ReviewError;
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
+use crate::ipc::ai_dto::AiFailureDto;
 use crate::ipc::dto::DegradedReasonDto;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type, thiserror::Error)]
@@ -39,6 +41,21 @@ pub enum AppError {
     /// there is nothing to detect drift with. `reason` says why, so the UI can explain it.
     #[error("focus sessions are unavailable while tracking is degraded")]
     FocusUnavailable { reason: DegradedReasonDto },
+    /// The AI provider was not switched on by the user: nothing was sent anywhere.
+    #[error("AI analysis is not enabled for this provider")]
+    AiNotEnabled,
+    /// The provider needs an API key and none is saved.
+    #[error("no API key is saved for this provider")]
+    AiKeyMissing,
+    /// The OS has no secure place for API keys; they are never kept anywhere less safe.
+    #[error("secure key storage is unavailable: {reason}")]
+    SecretStoreUnavailable { reason: String },
+    /// The provider call failed. `message` is written for the user and never has the key.
+    #[error("{message}")]
+    Ai {
+        reason: AiFailureDto,
+        message: String,
+    },
     /// Infrastructure failure (engine thread gone, dialog or file errors).
     #[error("internal error: {message}")]
     Internal { message: String },
@@ -85,6 +102,28 @@ impl From<FocusServiceError> for AppError {
                 reason: reason.into(),
             },
             FocusServiceError::Storage(e) => e.into(),
+        }
+    }
+}
+
+impl From<ReviewError> for AppError {
+    fn from(e: ReviewError) -> Self {
+        match e {
+            ReviewError::NotEnabled => Self::AiNotEnabled,
+            ReviewError::KeyMissing => Self::AiKeyMissing,
+            ReviewError::SecretStoreUnavailable(reason) => Self::SecretStoreUnavailable { reason },
+            ReviewError::Ai(error) => Self::Ai {
+                reason: (&error).into(),
+                message: error.to_string(),
+            },
+            ReviewError::ConfirmationRequired => Self::ConfirmationRequired,
+            ReviewError::NotFound => Self::NotFound,
+            ReviewError::Storage(e) => e.into(),
+            ReviewError::Busy | ReviewError::Invalid(_) | ReviewError::SecretStore(_) => {
+                Self::Invalid {
+                    message: e.to_string(),
+                }
+            }
         }
     }
 }

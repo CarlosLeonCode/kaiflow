@@ -1,6 +1,7 @@
 //! Typed IPC surface: commands, events and DTOs, collected into one tauri-specta builder
 //! that both the running app and the bindings generator use.
 
+pub mod ai_dto;
 pub mod commands;
 pub mod dto;
 pub mod events;
@@ -80,6 +81,22 @@ pub fn builder() -> Builder<Wry> {
             commands::focus_allow_app,
             commands::focus_history,
             commands::focus_summary_dismiss,
+            commands::ai_settings_get,
+            commands::ai_settings_update,
+            commands::ai_set_key,
+            commands::ai_delete_key,
+            commands::ai_has_key,
+            commands::ai_test,
+            commands::ai_models_list,
+            commands::review_get,
+            commands::review_note_set,
+            commands::review_preview,
+            commands::review_run,
+            commands::review_cancel,
+            commands::ai_reviews_list,
+            commands::ai_reviews_delete,
+            commands::ai_reviews_prepare_delete_all,
+            commands::ai_reviews_delete_all,
             commands::update_check,
             commands::update_install,
         ])

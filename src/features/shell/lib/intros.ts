@@ -23,6 +23,10 @@ export const INTROS: Record<SectionId, IntroCopy> = {
     title: "Work in focused blocks",
     body: "Start a session with what you want to get done, how long it should last and which activities or apps belong to it. If you spend a while somewhere else, you get a gentle nudge: no sound, nothing is blocked. When the time is up you see how much of it stayed on target.",
   },
+  review: {
+    title: "Look back on your week",
+    body: "Every week gets a summary built on this computer: where your time went, when you were busiest, how your goals went and your focus sessions, plus a place for your own notes. Optionally, you can ask an AI model for a written analysis. That is off until you switch a provider on in Settings, and you always see exactly what would be sent before anything leaves your computer. Window titles are never included unless you choose so.",
+  },
   activities: {
     title: "Organize time into activities",
     body: "An activity is a label for what you were doing: a project, a client or a kind of task. Rules say which apps and window titles belong to each one, so your time is sorted for you, past time included. Anything without a rule stays Unassigned.",
@@ -33,6 +37,6 @@ export const INTROS: Record<SectionId, IntroCopy> = {
   },
   settings: {
     title: "Tune the app",
-    body: "Idle detection, appearance, the first day of your week, startup behavior and the global shortcut live here, along with your data: a daily backup of your tracked time and a way to restore it from a file.",
+    body: "Idle detection, appearance, the first day of your week, startup behavior and the global shortcut live here, along with your data (a daily backup of your tracked time and a way to restore it from a file) and the optional AI analysis, which stays off until you switch a provider on.",
   },
 };

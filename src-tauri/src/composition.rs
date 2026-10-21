@@ -8,13 +8,16 @@ use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 use std::thread::JoinHandle;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use adapters_ai::HttpAiProvider;
 use adapters_common::files::FsFileSink;
 use adapters_common::idle::IdleThreshold;
+use adapters_common::secrets::KeyringSecretStore;
 use adapters_sqlite::{
-    DbError, SqliteActivityRepository, SqliteBackupStore, SqliteFocusRepository,
-    SqliteGoalRepository, SqlitePrivacyRepository, SqliteReportRepository,
+    DbError, SqliteActivityRepository, SqliteAiReviewRepository, SqliteBackupStore,
+    SqliteFocusRepository, SqliteGoalRepository, SqlitePrivacyRepository, SqliteReportRepository,
     SqliteRetentionRepository, SqliteSessionRepository, SqliteSettingsRepository,
 };
+use application::ai::{AiProvider, SecretStore};
 use application::commands::Commands;
 use application::engine::{Command, Engine, EngineHandle, Ports};
 use application::export::DataService;
@@ -27,6 +30,7 @@ use application::ports::{
 };
 use application::presets::PresetService;
 use application::queries::Queries;
+use application::review::ReviewService;
 use crossbeam_channel::{Receiver, Sender, bounded};
 use domain::{PrivacyPolicy, UtcMs};
 
@@ -103,6 +107,24 @@ pub trait SettingsApplier: Send + Sync {
     fn refresh_focus(&self) {}
 }
 
+/// The two ports of the optional AI review: the provider connections and the OS keychain.
+/// Production uses [`AiPorts::native`]; tests pass fakes, so no test touches the network or
+/// the keychain.
+pub struct AiPorts {
+    pub provider: Arc<dyn AiProvider>,
+    pub secrets: Arc<dyn SecretStore>,
+}
+
+impl AiPorts {
+    /// HTTP providers and the keychain of this OS.
+    pub fn native() -> Self {
+        Self {
+            provider: Arc::new(HttpAiProvider::new()),
+            secrets: Arc::new(KeyringSecretStore::native()),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum ComposeError {
     Db(DbError),
@@ -141,6 +163,8 @@ pub struct AppState {
     pub goals: Arc<GoalService>,
     /// Focus sessions: start, drift detection, summary and recovery.
     pub focus: Arc<FocusService>,
+    /// The weekly review and its optional AI analysis.
+    pub review: Arc<ReviewService>,
     /// Read-only listing of activities and rules (writes go through `commands`).
     pub activities: Arc<dyn ActivityRepository>,
     pub permission: Arc<dyn PermissionProvider>,
@@ -166,6 +190,7 @@ pub fn compose(
     sink: Box<dyn EventSink>,
     shortcut: SharedShortcut,
     providers: Providers,
+    ai: AiPorts,
 ) -> Result<AppState, ComposeError> {
     let sessions = SqliteSessionRepository::new(adapters_sqlite::open(db_path)?);
     // Opened after the first connection so the schema exists when the read pool starts.
@@ -208,6 +233,19 @@ pub fn compose(
         activities.clone(),
         settings.clone(),
     ));
+    let review = Arc::new(ReviewService::new(
+        reports.clone(),
+        activities.clone(),
+        goals.clone(),
+        Arc::new(SqliteFocusRepository::new(adapters_sqlite::open(db_path)?)),
+        settings.clone(),
+        Arc::new(ChronoLocalCalendar),
+        ai.secrets,
+        ai.provider,
+        Arc::new(SqliteAiReviewRepository::new(adapters_sqlite::open(
+            db_path,
+        )?)),
+    ));
     let presets = PresetService::new(activities.clone(), reports, settings.clone());
     let commands = Arc::new(
         Commands::new(activities.clone(), privacy.clone(), settings, retention)
@@ -245,6 +283,7 @@ pub fn compose(
         data,
         goals,
         focus,
+        review,
         activities,
         permission: providers.permission,
         shortcut,

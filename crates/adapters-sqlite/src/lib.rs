@@ -9,6 +9,7 @@ pub mod migrations;
 mod privacy_repo;
 mod report_repo;
 mod retention_repo;
+mod review_repo;
 mod session_repo;
 mod settings_repo;
 
@@ -20,5 +21,6 @@ pub use goal_repo::SqliteGoalRepository;
 pub use privacy_repo::SqlitePrivacyRepository;
 pub use report_repo::SqliteReportRepository;
 pub use retention_repo::SqliteRetentionRepository;
+pub use review_repo::SqliteAiReviewRepository;
 pub use session_repo::SqliteSessionRepository;
 pub use settings_repo::SqliteSettingsRepository;

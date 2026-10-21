@@ -12,6 +12,10 @@ use domain::{
     PrivacyPolicy, Productivity, SeenApp, Segment, SegmentId, SegmentSource, UtcMs,
 };
 
+use crate::ai::{
+    AiConfig, AiError, AiProvider, AiRequest, CancelToken, ProviderKind, Secret,
+    SecretAvailability, SecretError, SecretStore,
+};
 use crate::ports::*;
 
 #[derive(Clone, Default)]
@@ -968,5 +972,232 @@ impl FocusRepository for FakeFocus {
             }
         }
         Ok(())
+    }
+}
+
+// ---- AI review ----
+
+/// An in-memory keychain. `unavailable` mimics a Linux session without a Secret Service.
+#[derive(Clone, Default)]
+pub struct FakeSecrets(Arc<Mutex<Secrets>>);
+
+#[derive(Default)]
+struct Secrets {
+    unavailable: Option<String>,
+    keys: HashMap<ProviderKind, String>,
+    /// Calls that touched the store (`get`, `set`, `delete`).
+    touched: usize,
+}
+
+impl FakeSecrets {
+    pub fn unavailable(reason: &str) -> Self {
+        let fake = Self::default();
+        fake.0.lock().unwrap().unavailable = Some(reason.into());
+        fake
+    }
+
+    pub fn stored(&self, provider: ProviderKind) -> Option<String> {
+        self.0.lock().unwrap().keys.get(&provider).cloned()
+    }
+
+    pub fn put(&self, provider: ProviderKind, key: &str) {
+        self.0.lock().unwrap().keys.insert(provider, key.into());
+    }
+
+    pub fn touched(&self) -> usize {
+        self.0.lock().unwrap().touched
+    }
+
+    /// Removes every stored key (as if the user cleaned the keychain by hand).
+    pub fn clear(&self) {
+        self.0.lock().unwrap().keys.clear();
+    }
+}
+
+impl SecretStore for FakeSecrets {
+    fn availability(&self) -> SecretAvailability {
+        match &self.0.lock().unwrap().unavailable {
+            None => SecretAvailability::Available,
+            Some(reason) => SecretAvailability::Unavailable(reason.clone()),
+        }
+    }
+
+    fn get(&self, provider: ProviderKind) -> Result<Option<Secret>, SecretError> {
+        let mut s = self.0.lock().unwrap();
+        s.touched += 1;
+        if let Some(reason) = &s.unavailable {
+            return Err(SecretError::Unavailable(reason.clone()));
+        }
+        Ok(s.keys.get(&provider).map(|k| Secret::new(k.clone())))
+    }
+
+    fn set(&self, provider: ProviderKind, secret: &Secret) -> Result<(), SecretError> {
+        let mut s = self.0.lock().unwrap();
+        s.touched += 1;
+        if let Some(reason) = &s.unavailable {
+            return Err(SecretError::Unavailable(reason.clone()));
+        }
+        s.keys.insert(provider, secret.expose().to_owned());
+        Ok(())
+    }
+
+    fn delete(&self, provider: ProviderKind) -> Result<(), SecretError> {
+        let mut s = self.0.lock().unwrap();
+        s.touched += 1;
+        s.keys.remove(&provider);
+        Ok(())
+    }
+}
+
+/// What a [`FakeAi`] was asked.
+#[derive(Debug, Clone)]
+pub struct AiCall {
+    pub request: Option<AiRequest>,
+    pub config: AiConfig,
+    pub had_key: bool,
+}
+
+/// A provider that never touches the network: it records the calls and answers with what the
+/// test put in.
+#[derive(Clone)]
+pub struct FakeAi(Arc<Mutex<AiState>>);
+
+struct AiState {
+    hang: bool,
+    calls: Vec<AiCall>,
+    answer: Result<String, AiError>,
+    models: Result<Vec<String>, AiError>,
+}
+
+impl Default for FakeAi {
+    fn default() -> Self {
+        Self(Arc::new(Mutex::new(AiState {
+            hang: false,
+            calls: Vec::new(),
+            answer: Ok(String::new()),
+            models: Ok(Vec::new()),
+        })))
+    }
+}
+
+impl FakeAi {
+    pub fn answer_with(&self, answer: Result<String, AiError>) {
+        self.0.lock().unwrap().answer = answer;
+    }
+
+    /// Makes `complete` wait until it is cancelled, like a provider that never answers.
+    pub fn hang(&self) {
+        self.0.lock().unwrap().hang = true;
+    }
+
+    pub fn list_with(&self, models: Result<Vec<String>, AiError>) {
+        self.0.lock().unwrap().models = models;
+    }
+
+    pub fn calls(&self) -> Vec<AiCall> {
+        self.0.lock().unwrap().calls.clone()
+    }
+
+    /// How many times anything was sent or listed: the "no network" counter.
+    pub fn traffic(&self) -> usize {
+        self.0.lock().unwrap().calls.len()
+    }
+}
+
+impl AiProvider for FakeAi {
+    fn complete(
+        &self,
+        request: &AiRequest,
+        key: Option<&Secret>,
+        cancel: &CancelToken,
+    ) -> Result<String, AiError> {
+        let mut s = self.0.lock().unwrap();
+        s.calls.push(AiCall {
+            request: Some(request.clone()),
+            config: request.config.clone(),
+            had_key: key.is_some(),
+        });
+        let hang = s.hang;
+        let answer = s.answer.clone();
+        drop(s);
+        while hang && !cancel.is_cancelled() {
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        if cancel.is_cancelled() {
+            return Err(AiError::Cancelled);
+        }
+        answer
+    }
+
+    fn list_models(
+        &self,
+        config: &AiConfig,
+        key: Option<&Secret>,
+        _cancel: &CancelToken,
+    ) -> Result<Vec<String>, AiError> {
+        let mut s = self.0.lock().unwrap();
+        s.calls.push(AiCall {
+            request: None,
+            config: config.clone(),
+            had_key: key.is_some(),
+        });
+        s.models.clone()
+    }
+}
+
+/// In-memory review history.
+#[derive(Clone, Default)]
+pub struct FakeReviews(Arc<Mutex<Vec<StoredReview>>>);
+
+impl FakeReviews {
+    pub fn all(&self) -> Vec<StoredReview> {
+        self.0.lock().unwrap().clone()
+    }
+}
+
+impl AiReviewRepository for FakeReviews {
+    fn insert(&self, review: &StoredReview) -> PortResult<StoredReview> {
+        let mut all = self.0.lock().unwrap();
+        let id = all.iter().map(|r| r.id).max().unwrap_or(0) + 1;
+        let stored = StoredReview {
+            id,
+            ..review.clone()
+        };
+        all.push(stored.clone());
+        Ok(stored)
+    }
+
+    fn list(&self, limit: u32) -> PortResult<Vec<StoredReview>> {
+        let mut all = self.0.lock().unwrap().clone();
+        all.sort_by(|a, b| b.created_at.cmp(&a.created_at).then(b.id.cmp(&a.id)));
+        all.truncate(limit as usize);
+        Ok(all)
+    }
+
+    fn for_period(&self, period_start: UtcMs) -> PortResult<Vec<StoredReview>> {
+        let mut all: Vec<StoredReview> = self
+            .0
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|r| r.period_start == period_start)
+            .cloned()
+            .collect();
+        all.sort_by(|a, b| b.created_at.cmp(&a.created_at).then(b.id.cmp(&a.id)));
+        Ok(all)
+    }
+
+    fn delete(&self, id: i64) -> PortResult<bool> {
+        let mut all = self.0.lock().unwrap();
+        let before = all.len();
+        all.retain(|r| r.id != id);
+        Ok(all.len() < before)
+    }
+
+    fn delete_all(&self) -> PortResult<usize> {
+        let mut all = self.0.lock().unwrap();
+        let n = all.len();
+        all.clear();
+        Ok(n)
     }
 }

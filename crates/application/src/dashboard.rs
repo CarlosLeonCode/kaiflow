@@ -95,6 +95,26 @@ impl Queries {
         calendar: &dyn Calendar,
         now: UtcMs,
     ) -> Result<Dashboard, QueryError> {
+        self.dashboard_with_titles(
+            range,
+            buckets,
+            previous,
+            calendar,
+            now,
+            DASHBOARD_TOP_TITLES,
+        )
+    }
+
+    /// Like [`Queries::dashboard`] with a custom number of window titles in the result.
+    pub fn dashboard_with_titles(
+        &self,
+        range: Range,
+        buckets: &[Range],
+        previous: Option<Range>,
+        calendar: &dyn Calendar,
+        now: UtcMs,
+        top_titles: usize,
+    ) -> Result<Dashboard, QueryError> {
         if range.from >= range.to || previous.is_some_and(|p| p.from >= p.to) {
             return Err(QueryError::InvalidRange);
         }
@@ -213,7 +233,7 @@ impl Queries {
                 .then_with(|| a.window_title.cmp(&b.window_title))
                 .then_with(|| a.app_id.cmp(&b.app_id))
         });
-        title_rows.truncate(DASHBOARD_TOP_TITLES);
+        title_rows.truncate(top_titles);
 
         let stacked = buckets
             .iter()

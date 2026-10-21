@@ -10,11 +10,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use domain::calendar::{next_period_start, period_start};
-#[cfg(test)]
-use domain::goals::GoalKind;
 use domain::goals::{
-    ClosedPeriod, CurrentPeriod, EventKind, Goal, GoalScope, GoalState, Outcome, Streak, is_met,
-    ms_until_crossing, progress, retention_cuts_streak, streak,
+    ClosedPeriod, CurrentPeriod, EventKind, Goal, GoalKind, GoalScope, GoalState, Outcome, Streak,
+    is_met, ms_until_crossing, progress, retention_cuts_streak, streak,
 };
 use domain::{Activity, ActivityId, Period, UNASSIGNED, UtcMs};
 
@@ -49,6 +47,60 @@ pub struct GoalStatus {
     pub streak: Streak,
     /// A threshold crossed in this period that the user has not acknowledged yet.
     pub unseen: Option<EventKind>,
+}
+
+/// How one period of a goal ended up inside a reviewed week.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WeekResult {
+    Met,
+    Missed,
+    /// A rest day of a daily goal, or a period from before the goal existed.
+    Inactive,
+    /// Still open and not decided yet.
+    InProgress,
+}
+
+impl WeekResult {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Met => "met",
+            Self::Missed => "missed",
+            Self::Inactive => "inactive",
+            Self::InProgress => "in_progress",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GoalWeekPeriod {
+    pub start_day: i64,
+    pub actual_ms: i64,
+    pub result: WeekResult,
+}
+
+/// A goal seen through one reviewed week: the periods that touch it, and its streak as of now.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GoalWeek {
+    pub goal: Goal,
+    /// Daily goals: one entry per day of the week. Weekly and monthly goals: the period that
+    /// contains the first day of the week (its total may cover more than the week).
+    pub periods: Vec<GoalWeekPeriod>,
+    pub current_streak: u32,
+    pub best_streak: u32,
+}
+
+impl GoalWeek {
+    pub fn met(&self) -> usize {
+        self.count(WeekResult::Met)
+    }
+
+    pub fn missed(&self) -> usize {
+        self.count(WeekResult::Missed)
+    }
+
+    fn count(&self, result: WeekResult) -> usize {
+        self.periods.iter().filter(|p| p.result == result).count()
+    }
 }
 
 /// A threshold that was just crossed for the first time in its period.
@@ -191,6 +243,95 @@ impl GoalService {
                     .find(|e| e.goal_id == goal.id && e.period_start_day == status.period_start_day)
                     .map(|e| e.kind);
                 GoalStatus { unseen, ..status }
+            })
+            .collect())
+    }
+
+    /// How every live goal fared in the week that starts on local day `week_start_day`: one
+    /// load of the segments of the week (plus the enclosing weekly / monthly periods), the
+    /// streaks as of `now`. Goals created after the week are left out.
+    pub fn week_outcomes(
+        &self,
+        week_start_day: i64,
+        now: UtcMs,
+    ) -> Result<Vec<GoalWeek>, CommandError> {
+        let week_end_day = week_start_day + 7;
+        let goals: Vec<Goal> = self
+            .live_goals()?
+            .into_iter()
+            .filter(|g| self.calendar.local_day(g.created_at) < week_end_day)
+            .collect();
+        if goals.is_empty() {
+            return Ok(Vec::new());
+        }
+        let week_start = read_week_start(self.settings.as_ref())?;
+        let today = self.calendar.local_day(now);
+
+        let mut tables = HashMap::new();
+        for period in Period::ALL {
+            if !goals.iter().any(|g| g.period == period) {
+                continue;
+            }
+            let starts: Vec<i64> = match period {
+                Period::Daily => (week_start_day..week_end_day).collect(),
+                _ => vec![period_start(period, week_start_day, week_start)],
+            };
+            let mut bounds: Vec<UtcMs> = starts
+                .iter()
+                .map(|d| self.calendar.start_of_day(*d))
+                .collect();
+            let last = starts[starts.len() - 1];
+            bounds.push(self.calendar.start_of_day(next_period_start(period, last)));
+            tables.insert(period, Table { starts, bounds });
+        }
+        let totals = self.totals(&goals, &tables, now)?;
+        let streaks: HashMap<i64, Streak> = self
+            .statuses(now)?
+            .into_iter()
+            .map(|s| (s.goal.id, s.streak))
+            .collect();
+
+        Ok(goals
+            .into_iter()
+            .zip(totals)
+            .map(|(goal, totals)| {
+                let table = &tables[&totals.period];
+                let created_day = self.calendar.local_day(goal.created_at);
+                let periods = table
+                    .starts
+                    .iter()
+                    .zip(&totals.totals)
+                    .map(|(start, actual)| {
+                        let end = next_period_start(goal.period, *start);
+                        let result = if end <= created_day || !goal.is_active_on(*start) {
+                            WeekResult::Inactive
+                        } else if end <= today {
+                            if is_met(&goal, *actual) {
+                                WeekResult::Met
+                            } else {
+                                WeekResult::Missed
+                            }
+                        } else {
+                            match (goal.kind, is_met(&goal, *actual)) {
+                                (GoalKind::Minimum, true) => WeekResult::Met,
+                                (GoalKind::Maximum, false) => WeekResult::Missed,
+                                _ => WeekResult::InProgress,
+                            }
+                        };
+                        GoalWeekPeriod {
+                            start_day: *start,
+                            actual_ms: *actual,
+                            result,
+                        }
+                    })
+                    .collect();
+                let streak = streaks.get(&goal.id).copied().unwrap_or_default();
+                GoalWeek {
+                    goal,
+                    periods,
+                    current_streak: streak.current,
+                    best_streak: streak.best,
+                }
             })
             .collect())
     }
@@ -1014,5 +1155,46 @@ mod tests {
         assert_eq!(r.service.streak_days_cut(cutoff, now), Ok(Some(10)));
         // A cutoff before the streak starts touches nothing.
         assert_eq!(r.service.streak_days_cut(UtcMs(79 * DAY), now), Ok(None));
+    }
+    #[test]
+    fn a_reviewed_week_lists_each_day_of_a_daily_goal_and_the_streak() {
+        let r = rig();
+        // Day 95 is a Monday (1970-01-01 was a Thursday).
+        let monday = 95;
+        let created = UtcMs((monday - 1) * DAY);
+        let saved = r
+            .service
+            .save(total_goal(Period::Daily, GoalKind::Minimum, HOUR), created)
+            .unwrap();
+        spend(&r.store, "a", monday * DAY, monday * DAY + 90 * MIN);
+        spend(
+            &r.store,
+            "a",
+            (monday + 1) * DAY,
+            (monday + 1) * DAY + 30 * MIN,
+        );
+        // Wednesday noon: Monday and Tuesday are closed, Wednesday is still open.
+        let now = UtcMs((monday + 2) * DAY + 12 * HOUR);
+
+        let weeks = r.service.week_outcomes(monday, now).unwrap();
+        assert_eq!(weeks.len(), 1);
+        let week = &weeks[0];
+        assert_eq!(week.goal.id, saved.id);
+        assert_eq!(week.periods.len(), 7);
+        assert_eq!(week.periods[0].result, WeekResult::Met);
+        assert_eq!(week.periods[0].actual_ms, 90 * MIN);
+        assert_eq!(week.periods[1].result, WeekResult::Missed);
+        assert_eq!(week.periods[2].result, WeekResult::InProgress);
+        assert_eq!((week.met(), week.missed()), (1, 1));
+        assert_eq!(week.best_streak, 1);
+        assert_eq!(week.current_streak, 0, "Tuesday broke it");
+
+        // A goal created after the week is not part of it.
+        assert!(
+            r.service
+                .week_outcomes(monday - 14, now)
+                .unwrap()
+                .is_empty()
+        );
     }
 }

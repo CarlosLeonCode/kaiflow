@@ -13,6 +13,7 @@ use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
 use serde::{Deserialize, Serialize};
 
+use crate::ai::KEY_AI;
 use crate::settings_blobs::KEY_BACKUP;
 
 /// Value of `format`.
@@ -25,8 +26,16 @@ const GZIP_MAGIC: [u8; 2] = [0x1f, 0x8b];
 
 /// Settings that belong to this device rather than to the data: never exported with the
 /// document's settings and never overwritten by a restore.
-pub const DEVICE_SETTINGS: [&str; 4] =
-    ["autostart", "shortcut", "onboarding_completed", KEY_BACKUP];
+///
+/// The AI settings are device bound on purpose: the opt-in to send data to a provider is a
+/// decision about this computer, so a restored file can never switch it on.
+pub const DEVICE_SETTINGS: [&str; 5] = [
+    "autostart",
+    "shortcut",
+    "onboarding_completed",
+    KEY_BACKUP,
+    KEY_AI,
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -200,6 +209,25 @@ pub struct FocusSessionRecord {
     pub allowed_activities: Vec<i64>,
 }
 
+/// An AI weekly review kept in the history. API keys are never part of it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AiReviewRecord {
+    pub id: i64,
+    pub period_start: i64,
+    pub period_end: i64,
+    pub period_label: String,
+    /// `anthropic`, `gemini`, `openai` or `ollama`.
+    pub provider: String,
+    pub model: String,
+    #[serde(default)]
+    pub included_titles: bool,
+    pub request_json: String,
+    pub response_json: String,
+    /// `ok` or `text_fallback`.
+    pub status: String,
+    pub created_at: i64,
+}
+
 /// The data a snapshot carries and a restore replaces.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -215,6 +243,8 @@ pub struct BackupData {
     pub goal_events: Vec<GoalEventRecord>,
     /// Added with focus sessions; documents written before them simply lack the array.
     pub focus_sessions: Vec<FocusSessionRecord>,
+    /// Added with the AI weekly review; documents written before it simply lack the array.
+    pub ai_reviews: Vec<AiReviewRecord>,
 }
 
 impl BackupData {
@@ -249,9 +279,6 @@ pub struct Document {
     pub range: Option<RangeDoc>,
     #[serde(flatten)]
     pub data: BackupData,
-    /// Reserved for a later feature; empty today and tolerated by every reader.
-    #[serde(default)]
-    pub ai_reviews: Vec<serde_json::Value>,
 }
 
 /// Why a file cannot be read as a Time Track document.
@@ -301,7 +328,6 @@ impl Document {
                 to: to.0,
             }),
             data,
-            ai_reviews: Vec::new(),
         }
     }
 
@@ -431,6 +457,21 @@ impl Document {
             }
             if session.allowed_activities.iter().any(|id| !known(*id)) {
                 return bad("a focus session allows an unknown activity");
+            }
+        }
+        // Reviews with a provider or status this version does not know are dropped (a newer
+        // app may have written them); the rest must be coherent.
+        self.data.ai_reviews.retain(|r| {
+            crate::ai::ProviderKind::parse(&r.provider).is_some()
+                && crate::ports::ReviewStatus::parse(&r.status).is_some()
+        });
+        let mut review_ids = std::collections::HashSet::new();
+        for review in &self.data.ai_reviews {
+            if !review_ids.insert(review.id) {
+                return bad("duplicate AI review ids");
+            }
+            if review.period_end <= review.period_start || review.model.trim().is_empty() {
+                return bad("an AI review is incomplete");
             }
         }
         // Only one open segment can exist; documents close them, but never trust a file.
@@ -588,6 +629,19 @@ mod tests {
                 allowed_apps: vec!["excel".into()],
                 allowed_activities: vec![2],
             }],
+            ai_reviews: vec![AiReviewRecord {
+                id: 3,
+                period_start: 1_000,
+                period_end: 9_000,
+                period_label: "2024-02-26 to 2024-03-03".into(),
+                provider: "ollama".into(),
+                model: "llama".into(),
+                included_titles: false,
+                request_json: "{\"totals\":{}}".into(),
+                response_json: "{\"summary\":\"ok\"}".into(),
+                status: "ok".into(),
+                created_at: 8_000,
+            }],
         }
     }
 
@@ -739,6 +793,42 @@ mod tests {
                 Err(DocumentError::Inconsistent(_))
             ));
         }
+    }
+
+    #[test]
+    fn ai_reviews_round_trip_old_files_restore_and_bad_ones_are_handled() {
+        let parsed = Document::parse(&doc().to_json()).unwrap();
+        assert_eq!(parsed.data.ai_reviews, data().ai_reviews);
+
+        let mut value: serde_json::Value = serde_json::from_slice(&doc().to_json()).unwrap();
+        value.as_object_mut().unwrap().remove("ai_reviews");
+        let parsed = Document::parse(&serde_json::to_vec(&value).unwrap()).unwrap();
+        assert!(parsed.data.ai_reviews.is_empty());
+
+        let mut unknown = doc();
+        unknown.data.ai_reviews[0].provider = "from-the-future".into();
+        let parsed = Document::parse(&unknown.to_json()).unwrap();
+        assert!(
+            parsed.data.ai_reviews.is_empty(),
+            "unknown providers are dropped"
+        );
+
+        let mut twice = doc();
+        let copy = twice.data.ai_reviews[0].clone();
+        twice.data.ai_reviews.push(copy);
+        let mut backwards = doc();
+        backwards.data.ai_reviews[0].period_end = 5;
+        for bad in [twice, backwards] {
+            assert!(matches!(
+                Document::parse(&bad.to_json()),
+                Err(DocumentError::Inconsistent(_))
+            ));
+        }
+    }
+
+    #[test]
+    fn the_ai_settings_are_device_bound() {
+        assert!(DEVICE_SETTINGS.contains(&KEY_AI));
     }
 
     #[test]

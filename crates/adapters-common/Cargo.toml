@@ -11,6 +11,20 @@ description = "Platform-neutral adapter logic shared by the macOS, Windows and L
 domain.workspace = true
 application.workspace = true
 crossbeam-channel.workspace = true
+# OS keychain for the AI API keys. keyring 4.x is a thin wrapper meant for demos; its own docs
+# tell applications to link keyring-core plus the credential stores they want (see secrets.rs).
+keyring-core = "1"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+apple-native-keyring-store = { version = "1", features = ["keychain"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-native-keyring-store = "1"
+
+# Secret Service over zbus (pure Rust, no libdbus) with the pure-Rust crypto. There is
+# deliberately no keyutils fallback (it does not persist) and no file fallback.
+[target.'cfg(target_os = "linux")'.dependencies]
+zbus-secret-service-keyring-store = { version = "1", features = ["crypto-rust"] }
 
 [dev-dependencies]
 tempfile.workspace = true

@@ -1,0 +1,16 @@
+[package]
+name = "adapters-ai"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "AI providers for the weekly review: Anthropic, Google Gemini, OpenAI and Ollama over blocking HTTPS (reqwest + rustls). The only crate that opens AI connections."
+
+[dependencies]
+application.workspace = true
+serde_json.workspace = true
+# Blocking client on rustls. The crypto provider (ring, already used by the updater plugin)
+# is installed explicitly, see `transport::ensure_crypto_provider`.
+reqwest = { version = "0.13", default-features = false, features = ["blocking", "rustls-no-provider"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }

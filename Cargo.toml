@@ -5,6 +5,7 @@ members = [
     "crates/application",
     "crates/adapters-sqlite",
     "crates/adapters-common",
+    "crates/adapters-ai",
     "crates/adapters-macos",
     "crates/adapters-windows",
     "crates/adapters-linux",
@@ -22,6 +23,7 @@ publish = false
 domain = { path = "crates/domain" }
 application = { path = "crates/application" }
 adapters-common = { path = "crates/adapters-common" }
+adapters-ai = { path = "crates/adapters-ai" }
 
 # select! over signals, IPC commands and ticks in the engine thread (design section 6).
 crossbeam-channel = "0.5"

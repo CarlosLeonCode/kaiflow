@@ -1,4 +1,4 @@
-import { CalendarDays, ChartNoAxesColumn, Settings, ShieldCheck, Tags, Target, Timer, type LucideIcon } from "lucide-react";
+import { CalendarDays, ChartNoAxesColumn, NotebookPen, Settings, ShieldCheck, Tags, Target, Timer, type LucideIcon } from "lucide-react";
 
 import { cn } from "@/shared/lib/utils";
 import { Kbd } from "@/shared/ui/kbd";
@@ -10,6 +10,7 @@ const ICONS: Record<SectionId, LucideIcon> = {
   overview: ChartNoAxesColumn,
   goals: Target,
   focus: Timer,
+  review: NotebookPen,
   activities: Tags,
   privacy: ShieldCheck,
   settings: Settings,

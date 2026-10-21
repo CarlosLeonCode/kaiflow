@@ -20,6 +20,12 @@ export const queryKeys = {
   focus: ["focus"] as const,
   focusStatus: ["focus", "status"] as const,
   focusHistory: ["focus", "history"] as const,
+  /** AI settings and the key store state. */
+  aiSettings: ["ai", "settings"] as const,
+  /** Every stored AI review (the history). */
+  aiReviews: ["ai", "reviews"] as const,
+  /** One weekly review; under the `report` prefix, so data changes refresh it too. */
+  reviewWeek: (weeksAgo: number) => ["report", "review", weeksAgo] as const,
   retentionImpact: (days: number | null) => ["retention-impact", days] as const,
   /** The update the backend announced (written by the `update-available` event, never fetched). */
   update: ["update"] as const,

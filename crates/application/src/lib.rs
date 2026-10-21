@@ -1,5 +1,6 @@
 //! Application layer: ports, effect execution and the single engine thread.
 
+pub mod ai;
 pub mod backup;
 pub mod commands;
 pub mod dashboard;
@@ -14,4 +15,6 @@ pub mod idle_policy;
 pub mod ports;
 pub mod presets;
 pub mod queries;
+pub mod review;
+pub mod review_payload;
 pub mod settings_blobs;

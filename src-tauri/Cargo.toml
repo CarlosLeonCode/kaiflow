@@ -19,6 +19,7 @@ domain.workspace = true
 application.workspace = true
 adapters-sqlite = { path = "../crates/adapters-sqlite" }
 adapters-common.workspace = true
+adapters-ai.workspace = true
 
 tauri = { version = "2.12", features = ["tray-icon", "image-png"] }
 # Only used from Rust (save and open dialogs for export, backup folder and restore); no window receives plugin permissions (R6.5).

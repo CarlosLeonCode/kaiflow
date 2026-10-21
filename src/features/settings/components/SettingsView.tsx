@@ -45,6 +45,8 @@ interface Props {
   onOpenAccessibilitySettings: () => void;
   /** Slot after Privacy: the Data panel (backup and restore). */
   data?: ReactNode;
+  /** Slot after Data: the optional AI analysis. */
+  ai?: ReactNode;
   /** Slot after the settings: the updates panel. */
   updates?: ReactNode;
 }
@@ -60,6 +62,7 @@ export function SettingsView({
   onChange,
   onOpenAccessibilitySettings,
   data,
+  ai,
   updates,
 }: Props) {
   return (
@@ -256,6 +259,8 @@ export function SettingsView({
           </Panel>
 
           {data}
+
+          {ai}
 
           {updates}
         </div>

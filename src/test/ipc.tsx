@@ -3,6 +3,9 @@ import { render } from "@testing-library/react";
 import type { ReactElement } from "react";
 
 import type {
+  AiProviderInfoDto,
+  AiReviewDto,
+  AiSettingsDto,
   BackupStatusDto,
   DashboardDto,
   FocusActiveDto,
@@ -12,6 +15,7 @@ import type {
   GoalDto,
   GoalStatusDto,
   ReportDto,
+  WeeklyReviewDto,
   SettingsDto,
   TrackingStatusDto,
 } from "@/shared/ipc";
@@ -210,6 +214,76 @@ export function focusSession(overrides: Partial<FocusSessionDto> = {}): FocusSes
     percent_inside: 75,
     top_distractions: [{ app_id: "com.tinyspeck.slackmacgap", app_name: "Slack", ms: 12 * MIN }],
     seen: false,
+    ...overrides,
+  };
+}
+
+/** The four providers, all off; override what the test needs. */
+export function aiSettings(overrides: Partial<AiSettingsDto> = {}, provider: Partial<AiProviderInfoDto> = {}): AiSettingsDto {
+  const base: AiProviderInfoDto[] = [
+    { provider: "anthropic", label: "Anthropic (Claude)", needs_key: true, local: false, default_model: "claude-haiku-5-5", model: "claude-haiku-5-5", enabled: false, consented_at: null, has_key: false, base_url: null },
+    { provider: "gemini", label: "Google Gemini", needs_key: true, local: false, default_model: "gemini-3.5-flash-lite", model: "gemini-3.5-flash-lite", enabled: false, consented_at: null, has_key: false, base_url: null },
+    { provider: "openai", label: "OpenAI", needs_key: true, local: false, default_model: "gpt-6-luna", model: "gpt-6-luna", enabled: false, consented_at: null, has_key: false, base_url: null },
+    { provider: "ollama", label: "Ollama (on this computer)", needs_key: false, local: true, default_model: "", model: "", enabled: false, consented_at: null, has_key: true, base_url: "http://localhost:11434" },
+  ];
+  const selected = overrides.selected ?? "anthropic";
+  return {
+    selected,
+    include_titles: false,
+    monday_review: false,
+    last_auto_error: null,
+    providers: base.map((p) => (p.provider === selected ? { ...p, ...provider } : p)),
+    secret_store: { available: true, reason: null },
+    ...overrides,
+  };
+}
+
+/** A stored analysis with a structured answer; override what the test needs. */
+export function aiReview(overrides: Partial<AiReviewDto> = {}): AiReviewDto {
+  return {
+    id: 1,
+    period_start: FIXED_NOW - 7 * 86_400_000,
+    period_end: FIXED_NOW,
+    period_label: "2026-10-12 to 2026-10-18",
+    provider: "anthropic",
+    model: "claude-haiku-5-5",
+    included_titles: false,
+    request_json: '{"totals":{"tracked_minutes":180}}',
+    status: "ok",
+    output: {
+      summary: "A steady week.",
+      wins: ["Focused mornings"],
+      patterns: [{ observation: "Late browsing", evidence: "90 minutes after 22:00" }],
+      goal_misses: [{ goal: "Write daily", reason: "Tuesday was full of meetings" }],
+      suggestions: [{ action: "Close the browser at 21:00", rationale: "It cuts late use" }],
+    },
+    text: null,
+    created_at: FIXED_NOW,
+    ...overrides,
+  };
+}
+
+/** A week with some tracked time; override what the test needs. */
+export function review(overrides: Partial<WeeklyReviewDto> = {}): WeeklyReviewDto {
+  return {
+    weeks_ago: 0,
+    first_day: 20_738,
+    from: Date.UTC(2026, 9, 12),
+    to: Date.UTC(2026, 9, 19),
+    label: "2026-10-12 to 2026-10-18",
+    dashboard: dashboard({
+      total_ms: 3 * 3_600_000,
+      by_activity: [
+        { activity_id: 2, name: "Deep work", color: "#3b82f6", total_ms: 2 * 3_600_000, productivity: "productive" },
+        { activity_id: 3, name: "Email", color: "#22c55e", total_ms: 3_600_000, productivity: "neutral" },
+      ],
+      productivity: { productive_ms: 2 * 3_600_000, neutral_ms: 3_600_000, distracting_ms: 0 },
+      focus_ratio: { kind: "ratio", ratio: 1 },
+    }),
+    goals: [],
+    focus: [],
+    note: "",
+    reviews: [],
     ...overrides,
   };
 }

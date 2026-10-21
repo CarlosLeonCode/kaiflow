@@ -507,7 +507,7 @@ impl AppState {
         Ok(self.commands.delete_all(&ConfirmToken(token), self.now())?)
     }
 
-    fn now(&self) -> domain::UtcMs {
+    pub(crate) fn now(&self) -> domain::UtcMs {
         use application::ports::Clock;
         self.clock.now()
     }
@@ -534,6 +534,14 @@ mod tests {
         TrackingStateDto, TrayDisplayDto,
     };
 
+    /// AI ports that never reach a network or a keychain.
+    fn no_ai() -> crate::composition::AiPorts {
+        crate::composition::AiPorts {
+            provider: Arc::new(application::fakes::FakeAi::default()),
+            secrets: Arc::new(application::fakes::FakeSecrets::default()),
+        }
+    }
+
     struct Rig {
         state: AppState,
         window: FakeWindow,
@@ -559,6 +567,7 @@ mod tests {
                 idle_threshold: adapters_common::idle::IdleThreshold::default(),
                 sampler: None,
             },
+            no_ai(),
         )
         .unwrap();
         Rig {
@@ -1046,6 +1055,7 @@ mod tests {
                 permission: Arc::new(WaylandSession),
                 ..Providers::placeholders()
             },
+            no_ai(),
         )
         .unwrap();
         assert_eq!(state.get_status().unwrap().degraded_reason, None);
@@ -1486,6 +1496,7 @@ mod tests {
                     permission: Arc::new(Denied(reason)),
                     ..Providers::placeholders()
                 },
+                no_ai(),
             )
             .unwrap();
             state
@@ -1525,6 +1536,7 @@ mod tests {
                 Box::new(RecordingSink::default()),
                 AppState::default_shortcut(),
                 Providers::placeholders(),
+                no_ai(),
             )
             .unwrap()
         };

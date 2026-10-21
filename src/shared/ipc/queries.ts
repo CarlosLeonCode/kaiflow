@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tansta
 import { commands } from "./bindings";
 import type {
   ActivityDto,
+  AiProviderDto,
+  AiSettingsPatchDto,
   BackupStatusDto,
   DeleteOpDto,
   FocusStartDto,
@@ -550,4 +552,128 @@ export function useAllowFocusAppMutation() {
 /** The user closed the end summary of a finished session. */
 export function useDismissFocusSummaryMutation() {
   return useFocusCommand((id: number) => unwrap(commands.focusSummaryDismiss(id)));
+}
+
+// ---- weekly review and the optional AI analysis ----
+
+/** AI settings, per-provider opt-in and the key store state. Never carries a key. */
+export function useAiSettingsQuery() {
+  return useQuery({
+    queryKey: queryKeys.aiSettings,
+    queryFn: () => unwrap(commands.aiSettingsGet()),
+  });
+}
+
+export function useUpdateAiSettingsMutation() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (patch: AiSettingsPatchDto) => unwrap(commands.aiSettingsUpdate(patch)),
+    onSuccess: (settings) => client.setQueryData(queryKeys.aiSettings, settings),
+  });
+}
+
+/** The only way a key goes in: it is stored in the OS keychain and never comes back. */
+export function useSetAiKeyMutation() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { provider: AiProviderDto; key: string }) =>
+      unwrap(commands.aiSetKey(input.provider, input.key)),
+    onSuccess: (settings) => client.setQueryData(queryKeys.aiSettings, settings),
+  });
+}
+
+export function useDeleteAiKeyMutation() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (provider: AiProviderDto) => unwrap(commands.aiDeleteKey(provider)),
+    onSuccess: (settings) => client.setQueryData(queryKeys.aiSettings, settings),
+  });
+}
+
+/** Lists the models of a provider that is switched on (a button, never automatic). */
+export function useAiModelsMutation() {
+  return useMutation({ mutationFn: (provider: AiProviderDto) => unwrap(commands.aiModelsList(provider)) });
+}
+
+/** Checks the key and the connection; resolves with how many models the provider lists. */
+export function useTestAiMutation() {
+  return useMutation({ mutationFn: (provider: AiProviderDto) => unwrap(commands.aiTest(provider)) });
+}
+
+/** The weekly review, built locally: no AI and no network. `weeksAgo` 0 is the current week. */
+export function useWeeklyReviewQuery(weeksAgo: number) {
+  return useQuery({
+    queryKey: queryKeys.reviewWeek(weeksAgo),
+    queryFn: () => unwrap(commands.reviewGet(weeksAgo)),
+  });
+}
+
+/** Saves the personal note of a week (blank removes it). */
+export function useSetReviewNoteMutation() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { firstDay: number; note: string }) =>
+      unwrap(commands.reviewNoteSet(input.firstDay, input.note)),
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.reports }),
+  });
+}
+
+/** Builds the exact request a run would send; nothing is sent. */
+export function usePreviewReviewMutation() {
+  return useMutation({
+    mutationFn: (input: { weeksAgo: number; includeTitles: boolean; language: string }) =>
+      unwrap(commands.reviewPreview(input.weeksAgo, input.includeTitles, input.language)),
+  });
+}
+
+/** Sends a previewed request; resolves with the stored review. */
+export function useRunReviewMutation() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (previewId: string) => unwrap(commands.reviewRun(previewId)),
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: queryKeys.aiReviews });
+      void client.invalidateQueries({ queryKey: queryKeys.reports });
+    },
+  });
+}
+
+export function useCancelReviewMutation() {
+  return useMutation({ mutationFn: () => unwrap(commands.reviewCancel()) });
+}
+
+export function useAiReviewsQuery() {
+  return useQuery({
+    queryKey: queryKeys.aiReviews,
+    queryFn: () => unwrap(commands.aiReviewsList()),
+  });
+}
+
+function useInvalidateReviews() {
+  const client = useQueryClient();
+  return () => {
+    void client.invalidateQueries({ queryKey: queryKeys.aiReviews });
+    void client.invalidateQueries({ queryKey: queryKeys.reports });
+  };
+}
+
+export function useDeleteAiReviewMutation() {
+  const invalidate = useInvalidateReviews();
+  return useMutation({
+    mutationFn: (id: number) => unwrap(commands.aiReviewsDelete(id)),
+    onSuccess: invalidate,
+  });
+}
+
+/** Step one of "delete all": resolves with the token the confirmation must send back. */
+export function usePrepareDeleteAllAiReviewsMutation() {
+  return useMutation({ mutationFn: () => unwrap(commands.aiReviewsPrepareDeleteAll()) });
+}
+
+export function useDeleteAllAiReviewsMutation() {
+  const invalidate = useInvalidateReviews();
+  return useMutation({
+    mutationFn: (token: string) => unwrap(commands.aiReviewsDeleteAll(token)),
+    onSuccess: invalidate,
+  });
 }

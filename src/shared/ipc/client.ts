@@ -32,6 +32,12 @@ export function describeError(error: AppError): string {
       return "Accessibility access is not granted.";
     case "focus_unavailable":
       return "Focus sessions need window tracking, which is unavailable right now.";
+    case "ai_not_enabled":
+      return "AI analysis is off for this provider. Switch it on in Settings > AI first.";
+    case "ai_key_missing":
+      return "No API key is saved for this provider. Add one in Settings > AI.";
+    case "secret_store_unavailable":
+      return `There is no secure place to keep API keys on this computer (${error.reason}). Keys are never stored in plain text, so this provider stays off.`;
     case "not_found":
       return "That item no longer exists.";
     case "confirmation_required":
@@ -39,6 +45,7 @@ export function describeError(error: AppError): string {
     case "storage":
     case "invalid":
     case "internal":
+    case "ai":
       return error.message;
   }
 }

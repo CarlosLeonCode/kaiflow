@@ -9,6 +9,10 @@ use tauri::{AppHandle, State};
 use tauri_plugin_dialog::DialogExt;
 use tauri_specta::Event;
 
+use super::ai_dto::{
+    AiProviderDto, AiReviewDto, AiSettingsDto, AiSettingsPatchDto, ReviewPreviewDto,
+    WeeklyReviewDto,
+};
 use super::dto::{
     ActivityDto, ApplyPresetResultDto, BackupReportDto, BackupStatusDto, DashboardDto, DeleteOpDto,
     FocusSessionDto, FocusStartDto, FocusStatusDto, GoalDto, GoalStatusDto, IdleGapDto,
@@ -682,6 +686,171 @@ pub async fn focus_summary_dismiss(
     let status = run(state, move |s| s.focus_summary_dismiss(id)).await?;
     announce_focus(&app, &status);
     Ok(status)
+}
+
+// ---- weekly review and the optional AI analysis ----
+
+/// Tells every window the review history changed.
+fn announce_reviews_changed(app: &AppHandle) {
+    let _ = DataChanged {
+        kind: DataKindDto::Reviews,
+    }
+    .emit(app);
+}
+
+/// AI settings and the state of the key store. Never returns a key.
+#[tauri::command]
+#[specta::specta]
+pub async fn ai_settings_get(state: Shared<'_>) -> Result<AiSettingsDto, AppError> {
+    run(state, AppState::ai_settings).await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn ai_settings_update(
+    state: Shared<'_>,
+    patch: AiSettingsPatchDto,
+) -> Result<AiSettingsDto, AppError> {
+    run(state, move |s| s.ai_settings_update(patch)).await
+}
+
+/// The only way a key enters the app: it goes straight to the OS keychain and is never
+/// returned. Refused (never stored anywhere else) when the OS has no secure store.
+#[tauri::command]
+#[specta::specta]
+pub async fn ai_set_key(
+    state: Shared<'_>,
+    provider: AiProviderDto,
+    key: String,
+) -> Result<AiSettingsDto, AppError> {
+    run(state, move |s| s.ai_set_key(provider, &key)).await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn ai_delete_key(
+    state: Shared<'_>,
+    provider: AiProviderDto,
+) -> Result<AiSettingsDto, AppError> {
+    run(state, move |s| s.ai_delete_key(provider)).await
+}
+
+/// Whether a key is saved (never the key itself).
+#[tauri::command]
+#[specta::specta]
+pub async fn ai_has_key(state: Shared<'_>, provider: AiProviderDto) -> Result<bool, AppError> {
+    run(state, move |s| s.ai_has_key(provider)).await
+}
+
+/// Checks the key and the connection of a provider that is switched on; returns how many
+/// models it lists. `ai_not_enabled` (no traffic) before the opt-in.
+#[tauri::command]
+#[specta::specta]
+pub async fn ai_test(state: Shared<'_>, provider: AiProviderDto) -> Result<u32, AppError> {
+    run(state, move |s| s.ai_test(provider)).await
+}
+
+/// Models the account can use. `ai_not_enabled` (no traffic) before the opt-in.
+#[tauri::command]
+#[specta::specta]
+pub async fn ai_models_list(
+    state: Shared<'_>,
+    provider: AiProviderDto,
+) -> Result<Vec<String>, AppError> {
+    run(state, move |s| s.ai_models_list(provider)).await
+}
+
+/// The weekly review, built locally: no AI, no network. `weeks_ago` 0 is the current week.
+#[tauri::command]
+#[specta::specta]
+pub async fn review_get(state: Shared<'_>, weeks_ago: u32) -> Result<WeeklyReviewDto, AppError> {
+    run(state, move |s| s.review_get(weeks_ago)).await
+}
+
+/// Saves (blank removes) the personal note of the week that starts on local day `first_day`.
+#[tauri::command]
+#[specta::specta]
+pub async fn review_note_set(
+    state: Shared<'_>,
+    first_day: i64,
+    note: String,
+) -> Result<(), AppError> {
+    run(state, move |s| s.review_note_set(first_day, &note)).await
+}
+
+/// Builds the exact request a run would send; nothing is sent. `ai_not_enabled` (no
+/// traffic) before the opt-in.
+#[tauri::command]
+#[specta::specta]
+pub async fn review_preview(
+    state: Shared<'_>,
+    weeks_ago: u32,
+    include_titles: bool,
+    language: String,
+) -> Result<ReviewPreviewDto, AppError> {
+    run(state, move |s| {
+        s.review_preview(weeks_ago, include_titles, &language)
+    })
+    .await
+}
+
+/// Sends a previewed request and stores the answer. Waits for the provider (up to 60 s, 180 s
+/// for Ollama) or for `review_cancel`; a failure stores nothing.
+#[tauri::command]
+#[specta::specta]
+pub async fn review_run(
+    app: AppHandle,
+    state: Shared<'_>,
+    preview_id: String,
+) -> Result<AiReviewDto, AppError> {
+    let review = run(state, move |s| s.review_run(&preview_id)).await?;
+    announce_reviews_changed(&app);
+    Ok(review)
+}
+
+/// Stops the analysis in progress; its command returns at once.
+#[tauri::command]
+#[specta::specta]
+pub async fn review_cancel(state: Shared<'_>) -> Result<(), AppError> {
+    run(state, |s| {
+        s.review_cancel();
+        Ok(())
+    })
+    .await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn ai_reviews_list(state: Shared<'_>) -> Result<Vec<AiReviewDto>, AppError> {
+    run(state, AppState::ai_reviews_list).await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn ai_reviews_delete(app: AppHandle, state: Shared<'_>, id: i64) -> Result<(), AppError> {
+    run(state, move |s| s.ai_reviews_delete(id)).await?;
+    announce_reviews_changed(&app);
+    Ok(())
+}
+
+/// Step one of "delete all reviews": the token the confirmation sends back.
+#[tauri::command]
+#[specta::specta]
+pub async fn ai_reviews_prepare_delete_all(state: Shared<'_>) -> Result<String, AppError> {
+    run(state, |s| Ok(s.ai_reviews_prepare_delete_all())).await
+}
+
+/// Step two: deletes every review; returns how many. Needs the token.
+#[tauri::command]
+#[specta::specta]
+pub async fn ai_reviews_delete_all(
+    app: AppHandle,
+    state: Shared<'_>,
+    token: String,
+) -> Result<u32, AppError> {
+    let deleted = run(state, move |s| s.ai_reviews_delete_all(&token)).await?;
+    announce_reviews_changed(&app);
+    Ok(deleted)
 }
 
 #[cfg(test)]

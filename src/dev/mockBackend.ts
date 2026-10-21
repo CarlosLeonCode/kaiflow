@@ -47,6 +47,7 @@ import {
 } from "./mockGoals";
 import { closed, observe, startProblem, summarize, type MockSession } from "./mockFocus";
 import { matchPreset, mockPresets } from "./mockPresets";
+import { createMockReview } from "./mockReview";
 import { buildSeed, type MockData, type MockSegment } from "./seed";
 
 const SYSTEM_ACTIVITY = 1;
@@ -69,6 +70,12 @@ export interface MockOptions {
    * the drift alert already showing (the e2e clock is fixed, so time never passes by itself).
    */
   demoFocus?: "running" | "drift";
+  /** The OS has no secure key store (Linux without a Secret Service): keys are refused. */
+  keychainMissing?: boolean;
+  /** Every AI analysis fails as if the network were down. */
+  aiOffline?: boolean;
+  /** Start with the Ollama provider switched on, so Review can run without opening Settings. */
+  aiOn?: boolean;
   /** The automatic backup has failed (Settings > Data shows the error, "Back up now" fails). */
   backupFails?: boolean;
   now?: () => number;
@@ -440,7 +447,35 @@ export function installMockBackend(options: MockOptions = {}): void {
     return before - data.segments.length;
   };
 
+  const review = createMockReview(
+    {
+      clock,
+      weekStart: () => settings.week_start,
+      segments: () => data.segments,
+      goals: () => goals,
+      dashboard: (range, buckets, previous) =>
+        buildDashboard({
+          range,
+          buckets,
+          previous,
+          segments: data.segments,
+          activities: data.activities,
+          classify: (segment) => classify(segment, data.rules),
+          title: redact,
+          now: clock(),
+        }),
+      focusSessions: () => history,
+      goalStreaks: () => new Map(goalStatuses().map((s) => [s.status.goal.id, s.status.streak])),
+      classify: (segment) => classify(segment, data.rules),
+      fail,
+    },
+    { keychainMissing: options.keychainMissing, aiOffline: options.aiOffline, aiOn: options.aiOn },
+  );
+  // E2E tests read how many calls could have reached an AI provider.
+  (globalThis as { __mockAiTraffic?: () => number }).__mockAiTraffic = review.trafficCount;
+
   const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
+    ...review.handlers,
     get_status: () => status(),
     start: () => {
       const focus = lastFocus();

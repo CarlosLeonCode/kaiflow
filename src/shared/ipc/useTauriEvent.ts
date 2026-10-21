@@ -67,6 +67,7 @@ export function useBackendEventSync(): void {
     invalidate(queryKeys.goals);
   });
   useTauriEvent(events.dataChanged, () => {
+    invalidate(queryKeys.aiReviews);
     invalidate(queryKeys.reports);
     invalidate(queryKeys.timelines);
     invalidate(queryKeys.idleGaps);

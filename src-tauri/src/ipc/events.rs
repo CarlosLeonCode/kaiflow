@@ -25,6 +25,7 @@ pub enum DataKindDto {
     Gaps,
     Goals,
     Focus,
+    Reviews,
 }
 
 impl From<DataKind> for DataKindDto {
@@ -34,6 +35,7 @@ impl From<DataKind> for DataKindDto {
             DataKind::Gaps => Self::Gaps,
             DataKind::Goals => Self::Goals,
             DataKind::Focus => Self::Focus,
+            DataKind::Reviews => Self::Reviews,
         }
     }
 }

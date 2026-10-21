@@ -63,6 +63,7 @@ pub enum DataKind {
     Gaps,
     Goals,
     Focus,
+    Reviews,
 }
 
 /// Facts the UI shell turns into frontend events.
@@ -329,6 +330,66 @@ pub trait FocusRepository: Send + Sync {
     /// The newest closed session whose summary the user has not acknowledged.
     fn unseen(&self) -> PortResult<Option<StoredFocus>>;
     fn mark_seen(&self, id: i64) -> PortResult<()>;
+}
+
+/// How an AI review answer was stored.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReviewStatus {
+    /// The answer followed the schema.
+    Ok,
+    /// The model answered in plain text; it is kept as it came.
+    TextFallback,
+}
+
+impl ReviewStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Ok => "ok",
+            Self::TextFallback => "text_fallback",
+        }
+    }
+
+    pub fn parse(name: &str) -> Option<Self> {
+        match name {
+            "ok" => Some(Self::Ok),
+            "text_fallback" => Some(Self::TextFallback),
+            _ => None,
+        }
+    }
+}
+
+/// One AI weekly review as kept in the history.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoredReview {
+    /// `<= 0` until stored.
+    pub id: i64,
+    pub period_start: UtcMs,
+    pub period_end: UtcMs,
+    pub period_label: String,
+    /// `anthropic`, `gemini`, `openai` or `ollama`.
+    pub provider: String,
+    pub model: String,
+    pub included_titles: bool,
+    /// The exact data that was sent (JSON text).
+    pub request_json: String,
+    /// The answer (JSON text; `{"text": ...}` for a plain-text fallback).
+    pub response_json: String,
+    pub status: ReviewStatus,
+    pub created_at: UtcMs,
+}
+
+/// History of AI reviews (migration 0005). Keys never pass through here.
+pub trait AiReviewRepository: Send + Sync {
+    /// Stores the review and returns it with its id.
+    fn insert(&self, review: &StoredReview) -> PortResult<StoredReview>;
+    /// Newest first.
+    fn list(&self, limit: u32) -> PortResult<Vec<StoredReview>>;
+    /// Reviews of the period that starts at `period_start`, newest first.
+    fn for_period(&self, period_start: UtcMs) -> PortResult<Vec<StoredReview>>;
+    /// `true` when something was deleted.
+    fn delete(&self, id: i64) -> PortResult<bool>;
+    /// Returns how many were deleted.
+    fn delete_all(&self) -> PortResult<usize>;
 }
 
 pub trait EventSink: Send {

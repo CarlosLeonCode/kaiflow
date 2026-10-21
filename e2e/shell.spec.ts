@@ -37,7 +37,7 @@ test.describe("main window shell", () => {
     const steps: [() => Promise<void>, string][] = [
       [() => nav(page).getByRole("button", { name: /^Activities/ }).click(), "Activities"],
       [() => nav(page).getByRole("button", { name: /^Overview/ }).click(), "Overview"],
-      [() => page.keyboard.press("Meta+5"), "Activities"],
+      [() => page.keyboard.press("Meta+6"), "Activities"],
       [() => page.keyboard.press("Meta+1"), "Today"],
     ];
 

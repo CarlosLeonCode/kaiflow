@@ -89,7 +89,7 @@ fn migration_keeps_a_v1_backup_and_all_rows_as_neutral_activities() {
     assert!(!table_exists(&copy, "activities"));
 
     // Migrated database.
-    assert_eq!(current_version(&conn).unwrap(), 4);
+    assert_eq!(current_version(&conn).unwrap(), 5);
     assert!(!table_exists(&conn, "categories"));
     assert!(!table_exists(&conn, "category_rules"));
     assert_eq!(count(&conn, "SELECT COUNT(*) FROM activities"), 3);
@@ -422,5 +422,5 @@ fn failed_0002_leaves_the_v1_database_intact() {
 
     // A later healthy run still succeeds from the intact v1 state.
     migrate(&mut conn, MIGRATIONS, Some(&path)).unwrap();
-    assert_eq!(current_version(&conn).unwrap(), 4);
+    assert_eq!(current_version(&conn).unwrap(), 5);
 }

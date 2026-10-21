@@ -4,9 +4,9 @@ use std::path::Path;
 use std::sync::Mutex;
 
 use application::backup::{
-    ActivityRecord, BackupData, DEVICE_SETTINGS, FocusDistractionRecord, FocusSessionRecord,
-    GapRecord, GoalEventRecord, GoalRecord, PrivacyRuleRecord, RuleRecord, SegmentRecord,
-    SettingRecord,
+    ActivityRecord, AiReviewRecord, BackupData, DEVICE_SETTINGS, FocusDistractionRecord,
+    FocusSessionRecord, GapRecord, GoalEventRecord, GoalRecord, PrivacyRuleRecord, RuleRecord,
+    SegmentRecord, SettingRecord,
 };
 use application::ports::{BackupStore, PortError, PortResult};
 use domain::UtcMs;
@@ -46,6 +46,7 @@ impl BackupStore for SqliteBackupStore {
             goals: read_goals(&tx)?,
             goal_events: read_goal_events(&tx, from, to)?,
             focus_sessions: read_focus_sessions(&tx, from, to)?,
+            ai_reviews: read_ai_reviews(&tx, from, to)?,
         };
         tx.finish().map_err(port_err)?;
         Ok(data)
@@ -78,6 +79,7 @@ fn replace_in(tx: &rusqlite::Transaction<'_>, data: &BackupData) -> PortResult<(
     // Goals and focus sessions first: they reference activities (their events and allowed
     // sets go with them).
     for table in [
+        "ai_reviews",
         "focus_sessions",
         "goal_events",
         "goals",
@@ -213,6 +215,27 @@ fn replace_in(tx: &rusqlite::Transaction<'_>, data: &BackupData) -> PortResult<(
             )
             .map_err(port_err)?;
         }
+    }
+    for r in &data.ai_reviews {
+        tx.execute(
+            "INSERT INTO ai_reviews(id, period_start, period_end, period_label, provider, model,
+               included_titles, request_json, response_json, status, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            params![
+                r.id,
+                r.period_start,
+                r.period_end,
+                r.period_label,
+                r.provider,
+                r.model,
+                r.included_titles,
+                r.request_json,
+                r.response_json,
+                r.status,
+                r.created_at
+            ],
+        )
+        .map_err(port_err)?;
     }
     for s in &data.segments {
         tx.execute(
@@ -459,6 +482,36 @@ fn read_focus_sessions(c: &Connection, from: i64, to: i64) -> PortResult<Vec<Foc
     Ok(out)
 }
 
+/// AI reviews whose period overlaps `[from, to)`.
+fn read_ai_reviews(c: &Connection, from: i64, to: i64) -> PortResult<Vec<AiReviewRecord>> {
+    let mut stmt = c
+        .prepare(
+            "SELECT id, period_start, period_end, period_label, provider, model, included_titles,
+                    request_json, response_json, status, created_at
+             FROM ai_reviews WHERE period_start < ?2 AND period_end > ?1
+             ORDER BY period_start, id",
+        )
+        .map_err(port_err)?;
+    stmt.query_map([from, to], |r| {
+        Ok(AiReviewRecord {
+            id: r.get(0)?,
+            period_start: r.get(1)?,
+            period_end: r.get(2)?,
+            period_label: r.get(3)?,
+            provider: r.get(4)?,
+            model: r.get(5)?,
+            included_titles: r.get::<_, i64>(6)? != 0,
+            request_json: r.get(7)?,
+            response_json: r.get(8)?,
+            status: r.get(9)?,
+            created_at: r.get(10)?,
+        })
+    })
+    .map_err(port_err)?
+    .collect::<Result<_, _>>()
+    .map_err(port_err)
+}
+
 /// Segments overlapping `[from, to)`. A segment still open is returned closed at its
 /// heartbeat (`recovered`), which is what the app itself would do after a crash.
 fn read_segments(c: &Connection, from: i64, to: i64) -> PortResult<Vec<SegmentRecord>> {
@@ -536,7 +589,11 @@ mod tests {
                VALUES (1, 2, 'app', 'com.code', NULL, 0);
              INSERT INTO privacy_rules(app_id, mode) VALUES ('bank', 'exclude');
              INSERT INTO settings(key, value) VALUES ('theme', '\"dark\"'), ('autostart', 'true'),
-               ('backup', '{\"dir\":\"/x\"}');
+               ('backup', '{\"dir\":\"/x\"}'), ('ai', '{\"monday_review\":true}');
+             INSERT INTO ai_reviews(id, period_start, period_end, period_label, provider, model,
+               included_titles, request_json, response_json, status, created_at)
+               VALUES (1, 1000, 8000, '2024-02-26 to 2024-03-03', 'ollama', 'llama', 0,
+                       '{\"totals\":{}}', '{\"summary\":\"ok\"}', 'ok', 8100);
              INSERT INTO segments(id, started_at, ended_at, heartbeat_at, app_id, app_name,
                window_title, end_reason, source, activity_id)
                VALUES (1, 1000, 2000, 2000, 'com.code', 'Code', 'main.rs', 'focus_change', 'tracked', NULL),
@@ -592,7 +649,10 @@ mod tests {
         assert_eq!(session.distractions[0].app_name, "Slack");
         assert!(session.seen);
         let keys: Vec<&str> = data.settings.iter().map(|s| s.key.as_str()).collect();
-        assert_eq!(keys, ["theme"]);
+        assert_eq!(keys, ["theme"], "the AI opt-in is device bound too");
+        assert_eq!(data.ai_reviews.len(), 1);
+        assert_eq!(data.ai_reviews[0].provider, "ollama");
+        assert!(!data.ai_reviews[0].included_titles);
     }
 
     #[test]
@@ -604,6 +664,7 @@ mod tests {
         assert_eq!(data.idle_gaps.len(), 1);
         // Goal definitions are not time-bound; their events follow the range.
         assert_eq!((data.goals.len(), data.goal_events.len()), (2, 1));
+        assert_eq!(data.ai_reviews.len(), 1, "the review overlaps the range");
         let narrow = store.snapshot(Some((UtcMs(0), UtcMs(3000)))).unwrap();
         assert_eq!((narrow.goals.len(), narrow.goal_events.len()), (2, 1));
         assert!(
@@ -612,6 +673,14 @@ mod tests {
                 .unwrap()
                 .segments
                 .is_empty()
+        );
+        assert!(
+            store
+                .snapshot(Some((UtcMs(8000), UtcMs(9000))))
+                .unwrap()
+                .ai_reviews
+                .is_empty(),
+            "a review of another period is not part of the range"
         );
     }
 
@@ -643,6 +712,7 @@ mod tests {
         assert_eq!(again.goals, data.goals);
         assert_eq!(again.goal_events, data.goal_events);
         assert_eq!(again.focus_sessions, data.focus_sessions);
+        assert_eq!(again.ai_reviews, data.ai_reviews);
         assert_eq!(again.settings, data.settings, "stale setting replaced");
         let conn = open(&other_path).unwrap();
         let shortcut: String = conn

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-ai-models-list"
+description = "Enables the ai_models_list command without any pre-configured scope."
+commands.allow = ["ai_models_list"]
+
+[[permission]]
+identifier = "deny-ai-models-list"
+description = "Denies the ai_models_list command without any pre-configured scope."
+commands.deny = ["ai_models_list"]

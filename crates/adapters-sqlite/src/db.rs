@@ -89,7 +89,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("nested/app/timetrack.db");
         let conn = open(&path).unwrap();
-        assert_eq!(current_version(&conn).unwrap(), 4);
+        assert_eq!(current_version(&conn).unwrap(), 5);
         let mode: String = conn
             .query_row("PRAGMA journal_mode", [], |r| r.get(0))
             .unwrap();
@@ -106,6 +106,6 @@ mod tests {
         let path = dir.path().join("timetrack.db");
         drop(open(&path).unwrap());
         drop(open(&path).unwrap());
-        assert!(!backup_path(&path, 4).exists());
+        assert!(!backup_path(&path, 5).exists());
     }
 }

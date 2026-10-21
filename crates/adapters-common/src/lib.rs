@@ -9,3 +9,4 @@ pub mod files;
 pub mod idle;
 pub mod permission;
 pub mod sampler;
+pub mod secrets;
