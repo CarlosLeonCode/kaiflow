@@ -2,6 +2,7 @@ import { Monitor, Moon, Sun } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { DegradedReasonDto, SettingsDto, SettingsPatchDto } from "@/shared/ipc";
+import { APP_INFO } from "@/shared/lib/appInfo";
 import { parseTheme, type ThemeSetting } from "@/shared/lib/theme";
 import { Alert, AlertDescription } from "@/shared/ui/alert";
 import { Panel, Row } from "@/shared/ui/field";
@@ -22,6 +23,7 @@ import {
   promptTimeoutOptions,
   weekStartOptions,
 } from "../lib/options";
+import { AboutPanel } from "./AboutPanel";
 import { ShortcutField } from "./ShortcutField";
 
 const THEMES: readonly SegmentedOption<ThemeSetting>[] = [
@@ -263,6 +265,12 @@ export function SettingsView({
           {ai}
 
           {updates}
+
+          <AboutPanel
+            version={APP_INFO.version}
+            license={APP_INFO.license}
+            repositoryUrl={APP_INFO.repositoryUrl}
+          />
         </div>
       )}
     </Page>

@@ -21,6 +21,27 @@ const MARK: Record<Support, { icon: IconName; tone: string; label: string }> = {
     <h2 id="platforms-title" class="section-title">{t.platforms.title}</h2>
     <p class="section-lead">{t.platforms.lead}</p>
 
+    <h3 class="sr-only">{t.availability.title}</h3>
+    <ul class="mt-10 grid gap-4 sm:grid-cols-3">
+      {
+        t.availability.items.map((item) => (
+          <li class="rounded-2xl border border-line bg-surface p-5">
+            <div class="flex items-center justify-between gap-3">
+              <span class="font-semibold tracking-tight">{item.name}</span>
+              <span
+                class={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${
+                  item.status === "available" ? "border-positive text-positive" : "border-line text-fg-muted"
+                }`}
+              >
+                {item.status === "available" ? t.availability.available : t.availability.soon}
+              </span>
+            </div>
+            <p class="mt-2 text-sm leading-relaxed text-fg-muted">{item.detail}</p>
+          </li>
+        ))
+      }
+    </ul>
+
     <!-- The table scrolls inside its own box on narrow screens; the page itself never does. -->
     <div class="relative mt-10 overflow-x-auto rounded-2xl border border-line bg-surface" tabindex="0" role="region" aria-labelledby="platforms-title">
       <table class="w-full min-w-[640px] border-collapse text-left text-sm">
@@ -60,6 +81,14 @@ const MARK: Record<Support, { icon: IconName; tone: string; label: string }> = {
       <a href={LINKS.buildFromSource} class="inline-flex items-center gap-1.5 py-1 text-accent underline-offset-4 hover:underline">
         <Icon name="github" size={16} />
         {t.platforms.sourceLink}
+      </a>
+      <a href={LINKS.releases} class="inline-flex items-center gap-1.5 py-1 text-accent underline-offset-4 hover:underline">
+        <Icon name="bell" size={16} />
+        {t.availability.watch}
+      </a>
+      <a href={LINKS.platformVote} class="inline-flex items-center gap-1.5 py-1 text-accent underline-offset-4 hover:underline">
+        <Icon name="send" size={16} />
+        {t.availability.vote}
       </a>
     </p>
   </div>

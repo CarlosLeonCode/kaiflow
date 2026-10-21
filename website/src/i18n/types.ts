@@ -31,7 +31,7 @@ export interface Content {
     partial: string;
     no: string;
   };
-  nav: { features: string; privacy: string; platforms: string; faq: string; download: string };
+  nav: { features: string; privacy: string; platforms: string; install: string; faq: string; download: string };
   language: { label: string; en: string; es: string };
   hero: {
     eyebrow: string;
@@ -41,6 +41,9 @@ export interface Content {
     secondaryLabel: string;
     secondary: { label: string; href: string }[];
     note: string;
+    /** "Free. Not notarized by Apple..." line, followed by a link to the Install section. */
+    notice: string;
+    noticeLink: string;
     shotAlt: string;
     popoverAlt: string;
   };
@@ -79,6 +82,40 @@ export interface Content {
     note: string;
     sourceLink: string;
   };
+  install: {
+    title: string;
+    lead: string;
+    steps: { title: string; body: string }[];
+    firstOpenTitle: string;
+    firstOpenLead: string;
+    variants: { title: string; steps: string[] }[];
+    advancedTitle: string;
+    advancedBody: string;
+    permissionTitle: string;
+    permissionBody: string;
+  };
+  availability: {
+    title: string;
+    available: string;
+    soon: string;
+    items: { name: string; status: "available" | "soon"; detail: string }[];
+    watch: string;
+    vote: string;
+  };
+  fork: {
+    eyebrow: string;
+    title: string;
+    lead: string;
+    points: Item[];
+    agentsTitle: string;
+    agents: string[];
+    promptTitle: string;
+    prompt: string;
+    agentsLink: string;
+    forkingLink: string;
+    forkLink: string;
+  };
+  support: { title: string; lead: string; star: string; sponsor: string };
   faq: { title: string; items: { q: string; a: string }[] };
   cta: { title: string; lead: string; primary: string; secondary: string };
   footer: { tagline: string; license: string; source: string; releases: string; issues: string };

@@ -30,9 +30,19 @@ test.describe("Settings", () => {
     await expect(page.getByRole("button", { name: "Installing update" })).toBeVisible();
   });
 
+  test("shows the version, license and source code in About", async ({ page }) => {
+    await openSection(page, "Settings");
+    const about = page.getByRole("region", { name: "About" });
+    await about.scrollIntoViewIfNeeded();
+    await expect(about.getByText("MIT", { exact: true })).toBeVisible();
+    await expect(about.getByText(/^\d+\.\d+\.\d+/)).toBeVisible();
+    await expect(about.getByText("https://github.com/CarlosLeonCode/time-track-copilot", { exact: true })).toBeVisible();
+  });
+
   test("has no accessibility violations", async ({ page }) => {
     await openSection(page, "Settings");
     await expect(page.getByRole("radio", { name: "Dark" })).toBeVisible();
+    await page.getByRole("region", { name: "About" }).scrollIntoViewIfNeeded();
     await expectNoA11yViolations(page);
   });
 });

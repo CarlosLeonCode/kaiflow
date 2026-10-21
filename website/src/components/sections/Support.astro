@@ -1,0 +1,34 @@
+---
+import type { Content } from "../../i18n";
+import { LINKS, SHOW_SPONSOR } from "../../lib/links";
+import Icon from "../Icon.astro";
+
+interface Props {
+  t: Content;
+}
+
+const { t } = Astro.props;
+---
+
+<section id="support" aria-labelledby="support-title" class="border-y border-line bg-bg-subtle py-16 sm:py-20">
+  <div class="container-page flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+    <div class="max-w-2xl">
+      <h2 id="support-title" class="text-2xl font-semibold tracking-tight">{t.support.title}</h2>
+      <p class="mt-2 text-[15px] leading-relaxed text-fg-muted">{t.support.lead}</p>
+    </div>
+    <div class="flex shrink-0 flex-col gap-3 sm:flex-row">
+      <a href={LINKS.repo} class="btn btn-secondary w-full sm:w-auto">
+        <Icon name="star" size={18} />
+        {t.support.star}
+      </a>
+      {
+        SHOW_SPONSOR && (
+          <a href={LINKS.sponsor} class="btn btn-secondary w-full sm:w-auto">
+            <Icon name="heart" size={18} class="text-negative" />
+            {t.support.sponsor}
+          </a>
+        )
+      }
+    </div>
+  </div>
+</section>

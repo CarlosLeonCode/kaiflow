@@ -26,6 +26,17 @@ describe("SettingsContainer", () => {
     expect(screen.getByRole("combobox", { name: "Show next to the icon" })).toHaveValue("today_total");
   });
 
+  it("shows the version, the MIT license and the repository in About", async () => {
+    mockBackend({ get_status: () => status() });
+    renderWithProviders(<SettingsContainer />);
+
+    const about = await screen.findByRole("region", { name: "About" });
+    expect(within(about).getByText("0.0.0-test")).toBeInTheDocument();
+    expect(within(about).getByText("MIT")).toBeInTheDocument();
+    expect(within(about).getByText("https://github.com/CarlosLeonCode/time-track-copilot")).toBeInTheDocument();
+    expect(about).not.toHaveTextContent(/notari/i);
+  });
+
   it("saves what the menu bar shows next to the icon", async () => {
     const user = userEvent.setup();
     const { calls } = mockBackend({

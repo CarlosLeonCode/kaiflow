@@ -4,7 +4,7 @@ export const es: Content = {
   meta: {
     title: "TimeTrack: descubre en qué se va tu día",
     description:
-      "Un registro de tiempo privado y local que vive en la barra de menús de macOS, Windows y Linux. Seguimiento automático por app y ventana, objetivos, sesiones de enfoque y revisión semanal. Gratis y de código abierto.",
+      "Un registro de tiempo privado y local que vive en la barra de menús de macOS, con Windows y Linux próximamente. Seguimiento automático por app y ventana, objetivos, sesiones de enfoque y revisión semanal. Gratis, de código abierto (MIT) y fácil de adaptar con agentes de programación con IA.",
     ogAlt: "TimeTrack: un registro de tiempo privado que vive en la barra de menús.",
   },
   a11y: {
@@ -17,7 +17,7 @@ export const es: Content = {
     partial: "Compatible en parte",
     no: "No compatible",
   },
-  nav: { features: "Funciones", privacy: "Privacidad", platforms: "Plataformas", faq: "Preguntas", download: "Descargar" },
+  nav: { features: "Funciones", privacy: "Privacidad", platforms: "Plataformas", install: "Instalar", faq: "Preguntas", download: "Descargar" },
   language: { label: "Idioma", en: "English", es: "Español" },
   hero: {
     eyebrow: "Gratis y de código abierto · Privado por diseño",
@@ -25,12 +25,14 @@ export const es: Content = {
     lead:
       "TimeTrack registra en segundo plano qué app y qué ventana estás usando y te muestra el día en una línea de tiempo clara. Sin cronómetros que iniciar, sin cuentas que crear y sin que nada salga de tu equipo.",
     primary: "Descargar para macOS",
-    secondaryLabel: "También para",
+    secondaryLabel: "Próximamente:",
     secondary: [
       { label: "Windows", href: "#platforms" },
       { label: "Linux", href: "#platforms" },
     ],
-    note: "Requiere macOS. Compilación universal para Apple silicon e Intel.",
+    note: "Requiere macOS 13 o posterior. Compilación universal para Apple silicon e Intel.",
+    notice: "Gratis. Sin notarización de Apple: la primera vez, ábrela desde Ajustes del Sistema → Privacidad y seguridad.",
+    noticeLink: "Ver los pasos de instalación",
     shotAlt:
       "La vista Hoy de TimeTrack: 4 horas y 25 minutos de tiempo enfocado, una línea de tiempo de colores de 9:00 a 14:00 y totales por app y por actividad.",
     popoverAlt:
@@ -208,7 +210,7 @@ export const es: Content = {
   },
   platforms: {
     title: "Compatibilidad por plataforma",
-    lead: "Diseñado para la barra de menús de macOS, y también registra en Windows y Linux.",
+    lead: "Disponible para macOS. Windows y Linux ya están implementados y registran tu tiempo; las descargas listas para instalar llegarán pronto.",
     feature: "Función",
     columns: ["macOS", "Windows", "Linux (X11)", "Linux (Wayland)"],
     rows: [
@@ -234,7 +236,7 @@ export const es: Content = {
       },
       {
         label: "Descarga lista para instalar",
-        cells: [["yes", "DMG firmado"], ["partial", "Por ahora, compilar desde el código"], ["partial", "Por ahora, compilar desde el código"], ["partial", "Por ahora, compilar desde el código"]],
+        cells: [["yes", "DMG en GitHub Releases"], ["partial", "Próximamente. Por ahora, compilar desde el código"], ["partial", "Próximamente. Por ahora, compilar desde el código"], ["partial", "Próximamente. Por ahora, compilar desde el código"]],
       },
     ],
     note: "Wayland no permite que las apps vean qué ventana está activa, así que allí solo se registran la inactividad, el bloqueo y el reposo. Inicia una sesión X11 (por ejemplo, GNOME sobre Xorg) para un seguimiento completo.",
@@ -260,14 +262,109 @@ export const es: Content = {
         a: "Solo dos cosas, y ambas bajo tu control: la comprobación de actualizaciones de la app y la revisión semanal con IA, si la activas y la ejecutas. Todo lo demás se queda en tu equipo.",
       },
       {
-        q: "¿Cuánto cuesta?",
-        a: "Nada. TimeTrack es gratuito y de código abierto con licencia MIT. Sin cuentas, sin suscripciones y sin versiones de pago.",
+        q: "¿Por qué macOS muestra un aviso al abrirla?",
+        a: "TimeTrack es gratuita y no está notarizada por Apple, algo que requiere una cuenta de desarrollador de pago. macOS muestra ese aviso con cualquier app que no ha revisado. El código es público y, la primera vez que la abres desde Ajustes del Sistema → Privacidad y seguridad (o con clic derecho → Abrir en macOS 14 y anteriores), macOS recuerda tu decisión.",
+      },
+      {
+        q: "¿Es gratis?",
+        a: "Sí. TimeTrack es gratuita y de código abierto con licencia MIT. Sin cuentas, sin suscripciones y sin versiones de pago.",
+      },
+      {
+        q: "¿Puedo usarla para trabajo comercial?",
+        a: "Sí. La licencia MIT permite usarla, modificarla y redistribuirla, también con fines comerciales y dentro de tus propios productos, siempre que conserves el aviso de copyright y de licencia.",
       },
       {
         q: "¿Ralentiza mi equipo?",
         a: "No. Comprueba la ventana activa cada par de segundos y reacciona a los cambios de app al momento, lo que consume muy poca energía.",
       },
     ],
+  },
+  install: {
+    title: "Instalar en macOS",
+    lead: "Lleva un minuto. La primera apertura necesita un paso más porque la app es gratuita y no está notarizada por Apple.",
+    steps: [
+      {
+        title: "Descarga",
+        body: "Obtén el último .dmg desde GitHub Releases. Es una compilación universal para Apple silicon e Intel.",
+      },
+      {
+        title: "Muévela a Aplicaciones",
+        body: "Abre el .dmg y arrastra TimeTrack a la carpeta Aplicaciones.",
+      },
+      {
+        title: "Ábrela por primera vez",
+        body: "macOS indica que no puede verificar al desarrollador. Pulsa Listo y sigue los pasos de tu versión de macOS.",
+      },
+    ],
+    firstOpenTitle: "Primera apertura",
+    firstOpenLead: "Solo hay que hacerlo una vez. Después, TimeTrack se abre como cualquier otra app.",
+    variants: [
+      {
+        title: "macOS 15 Sequoia o posterior",
+        steps: [
+          "Intenta abrir TimeTrack desde Aplicaciones y pulsa Listo en el aviso.",
+          "Abre Ajustes del Sistema → Privacidad y seguridad.",
+          "Baja hasta Seguridad y pulsa Abrir igualmente junto al mensaje sobre TimeTrack.",
+          "Pulsa de nuevo Abrir igualmente e introduce tu contraseña.",
+        ],
+      },
+      {
+        title: "macOS 13 Ventura y 14 Sonoma",
+        steps: [
+          "En Finder, abre la carpeta Aplicaciones.",
+          "Haz clic derecho (o Control + clic) en TimeTrack y elige Abrir.",
+          "Pulsa Abrir en el diálogo.",
+        ],
+      },
+    ],
+    advancedTitle: "Avanzado: usar Terminal",
+    advancedBody: "Solo si confías en la descarga. Este comando quita la marca de cuarentena, lo que omite la comprobación de Gatekeeper para esta app:",
+    permissionTitle: "Después, permite los títulos de ventana",
+    permissionBody: "Cuando TimeTrack lo pida, actívala en Ajustes del Sistema → Privacidad y seguridad → Accesibilidad. Sin ese permiso, TimeTrack registra igualmente el nombre de las apps.",
+  },
+  availability: {
+    title: "Disponibilidad",
+    available: "Disponible",
+    soon: "Próximamente",
+    items: [
+      { name: "macOS", status: "available", detail: "DMG universal para macOS 13 o posterior" },
+      { name: "Windows", status: "soon", detail: "Implementado. Hoy puedes compilarlo desde el código" },
+      { name: "Linux", status: "soon", detail: "Implementado para X11. Hoy puedes compilarlo desde el código" },
+    ],
+    watch: "Seguir las versiones",
+    vote: "Pide tu plataforma",
+  },
+  fork: {
+    eyebrow: "Código abierto · MIT",
+    title: "Hazla tuya",
+    lead: "TimeTrack está pensada para bifurcarse (fork). Modifícala a mano o deja que un agente de programación con IA haga el trabajo: el proyecto incluye una guía escrita para agentes.",
+    points: [
+      {
+        title: "Una base limpia sobre la que construir",
+        body: "Un dominio puro, puertos explícitos y un adaptador por sistema operativo, para que los cambios sean pequeños, locales y fáciles de probar.",
+      },
+      {
+        title: "Instrucciones para agentes de IA",
+        body: "AGENTS.md describe la arquitectura, las reglas que hay que respetar y los comandos exactos para verificar un cambio.",
+      },
+      {
+        title: "Cambia la marca en una tarde",
+        body: "La guía para hacer un fork enumera cada nombre, icono y clave que cambiar, con ideas y ejemplos de instrucciones.",
+      },
+    ],
+    agentsTitle: "Funciona bien con",
+    agents: ["Claude Code", "Antigravity", "Cursor", "Codex", "GitHub Copilot"],
+    promptTitle: "Ejemplo de instrucción",
+    prompt: "Lee AGENTS.md. Añade una exportación CSV de los totales por actividad para un rango de fechas, siguiendo la receta de principio a fin, y ejecuta todos los comandos de verificación.",
+    agentsLink: "Leer AGENTS.md",
+    forkingLink: "Guía para hacer un fork",
+    forkLink: "Hacer un fork en GitHub",
+  },
+  support: {
+    title: "Apoya el proyecto",
+    lead: "TimeTrack es gratuita y seguirá siéndolo. Si te resulta útil, una estrella en GitHub ayuda a que otras personas la encuentren.",
+    star: "Dar una estrella en GitHub",
+    sponsor: "Patrocinar en GitHub",
   },
   cta: {
     title: "Empieza a ver tu día con claridad.",

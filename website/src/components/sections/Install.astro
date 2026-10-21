@@ -1,0 +1,82 @@
+---
+import type { Content } from "../../i18n";
+import { LINKS } from "../../lib/links";
+import Icon from "../Icon.astro";
+
+interface Props {
+  t: Content;
+}
+
+const { t } = Astro.props;
+const QUARANTINE_COMMAND = 'xattr -dr com.apple.quarantine "/Applications/Time Track Copilot.app"';
+---
+
+<section id="install" aria-labelledby="install-title" class="py-20 sm:py-28">
+  <div class="container-page">
+    <h2 id="install-title" class="section-title">{t.install.title}</h2>
+    <p class="section-lead">{t.install.lead}</p>
+
+    <ol class="mt-10 grid gap-6 md:grid-cols-3">
+      {
+        t.install.steps.map((step, index) => (
+          <li class="rounded-2xl border border-line bg-surface p-6">
+            <span
+              class="inline-flex size-8 items-center justify-center rounded-full bg-accent-soft text-sm font-semibold text-accent"
+              aria-hidden="true"
+            >
+              {index + 1}
+            </span>
+            <h3 class="mt-4 font-semibold tracking-tight">{step.title}</h3>
+            <p class="mt-2 text-[15px] leading-relaxed text-fg-muted">{step.body}</p>
+          </li>
+        ))
+      }
+    </ol>
+    <p class="mt-6">
+      <a href={LINKS.download} class="btn btn-primary w-full px-5 sm:w-auto">
+        <Icon name="download" size={18} />
+        {t.hero.primary}
+      </a>
+    </p>
+
+    <h3 id="first-open" class="mt-14 text-xl font-semibold tracking-tight">{t.install.firstOpenTitle}</h3>
+    <p class="mt-2 max-w-3xl text-[15px] leading-relaxed text-fg-muted">{t.install.firstOpenLead}</p>
+
+    <div class="mt-6 grid gap-6 md:grid-cols-2">
+      {
+        t.install.variants.map((variant) => (
+          <div class="rounded-2xl border border-line bg-bg-subtle p-6">
+            <h4 class="font-semibold tracking-tight">{variant.title}</h4>
+            <ol class="mt-4 list-decimal space-y-2 pl-5 text-[15px] leading-relaxed text-fg-muted marker:font-semibold marker:text-fg">
+              {variant.steps.map((step) => <li>{step}</li>)}
+            </ol>
+          </div>
+        ))
+      }
+    </div>
+
+    <details class="group mt-6 rounded-2xl border border-line">
+      <summary class="flex cursor-pointer list-none items-center justify-between gap-4 px-6 py-4 font-medium [&::-webkit-details-marker]:hidden">
+        <span class="inline-flex items-center gap-2">
+          <Icon name="terminal" size={18} class="text-fg-muted" />
+          {t.install.advancedTitle}
+        </span>
+        <span class="text-xl leading-none text-fg-muted transition-transform group-open:rotate-45" aria-hidden="true">+</span>
+      </summary>
+      <div class="px-6 pb-6">
+        <p class="text-[15px] leading-relaxed text-fg-muted">{t.install.advancedBody}</p>
+        <pre
+          class="mt-3 overflow-x-auto rounded-xl border border-line bg-bg-subtle p-4 text-sm"
+          tabindex="0"><code>{QUARANTINE_COMMAND}</code></pre>
+      </div>
+    </details>
+
+    <div class="mt-6 flex items-start gap-3 rounded-2xl border border-line bg-surface p-6">
+      <Icon name="shield" size={22} class="mt-0.5 shrink-0 text-accent" />
+      <div>
+        <h3 class="font-semibold tracking-tight">{t.install.permissionTitle}</h3>
+        <p class="mt-1 text-[15px] leading-relaxed text-fg-muted">{t.install.permissionBody}</p>
+      </div>
+    </div>
+  </div>
+</section>
