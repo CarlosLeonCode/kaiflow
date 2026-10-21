@@ -175,6 +175,11 @@ target/
 dist/
 src-tauri/gen/
 
+# Marketing website (website/)
+website/dist/
+website/node_modules/
+website/.astro/
+
 # Playwright
 test-results/
 playwright-report/

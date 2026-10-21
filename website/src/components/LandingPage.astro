@@ -1,0 +1,40 @@
+---
+import { getContent, type Locale } from "../i18n";
+import Base from "../layouts/Base.astro";
+import Footer from "./Footer.astro";
+import Header from "./Header.astro";
+import AiReview from "./sections/AiReview.astro";
+import Faq from "./sections/Faq.astro";
+import Features from "./sections/Features.astro";
+import FinalCta from "./sections/FinalCta.astro";
+import Hero from "./sections/Hero.astro";
+import HowItWorks from "./sections/HowItWorks.astro";
+import Personas from "./sections/Personas.astro";
+import Platforms from "./sections/Platforms.astro";
+import Privacy from "./sections/Privacy.astro";
+import Showcase from "./sections/Showcase.astro";
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const t = getContent(locale);
+---
+
+<Base locale={locale}>
+  <Header locale={locale} />
+  <main id="main" tabindex="-1" class="outline-none">
+    <Hero t={t} />
+    <HowItWorks t={t} />
+    <Features t={t} />
+    <Showcase t={t} />
+    <Personas t={t} />
+    <Privacy t={t} />
+    <AiReview t={t} />
+    <Platforms t={t} />
+    <Faq t={t} />
+    <FinalCta t={t} />
+  </main>
+  <Footer locale={locale} />
+</Base>

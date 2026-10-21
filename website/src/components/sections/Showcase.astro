@@ -1,0 +1,38 @@
+---
+import type { Content } from "../../i18n";
+import Screenshot from "../Screenshot.astro";
+
+interface Props {
+  t: Content;
+}
+
+const { t } = Astro.props;
+---
+
+<section aria-labelledby="showcase-title" class="border-y border-line bg-bg-subtle py-20 sm:py-28">
+  <div class="container-page">
+    <h2 id="showcase-title" class="section-title">{t.showcase.title}</h2>
+    <p class="section-lead">{t.showcase.lead}</p>
+
+    <div class="mt-12 grid gap-12 lg:gap-16">
+      {
+        t.showcase.shots.map((shot, index) => (
+          <figure class="grid items-center gap-6 lg:grid-cols-12 lg:gap-10">
+            <div class:list={["window lg:col-span-8", index % 2 === 1 && "lg:order-2"]}>
+              <Screenshot
+                name={shot.key}
+                alt={shot.alt}
+                widths={[640, 760]}
+                sizes="(min-width: 1152px) 760px, (min-width: 1024px) 66vw, calc(100vw - 32px)"
+              />
+            </div>
+            <figcaption class="lg:col-span-4">
+              <h3 class="text-xl font-semibold tracking-tight">{shot.title}</h3>
+              <p class="mt-2 leading-relaxed text-fg-muted">{shot.body}</p>
+            </figcaption>
+          </figure>
+        ))
+      }
+    </div>
+  </div>
+</section>

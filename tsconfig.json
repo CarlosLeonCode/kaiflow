@@ -19,5 +19,5 @@
     "paths": { "@/*": ["./src/*"] }
   },
   "include": ["src", "e2e", "vite.config.ts", "vitest.config.ts", "playwright.config.ts", "eslint.config.js"],
-  "exclude": ["node_modules", "dist", "src-tauri"]
+  "exclude": ["node_modules", "dist", "src-tauri", "website"]
 }

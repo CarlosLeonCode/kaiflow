@@ -1,0 +1,60 @@
+---
+/**
+ * An app screenshot that follows the visitor's color scheme: the dark capture is served
+ * through a `prefers-color-scheme: dark` source, the light one is the default. Both are
+ * resized and converted to AVIF/WebP at build time by Astro's image service.
+ */
+import { getImage } from "astro:assets";
+
+import { SCREENSHOTS, type ScreenshotKey } from "../lib/screenshots";
+
+interface Props {
+  name: ScreenshotKey;
+  alt: string;
+  /** Rendered widths in CSS pixels to generate (2x variants are added automatically). */
+  widths: number[];
+  sizes: string;
+  /** Above-the-fold images load eagerly with high priority. */
+  priority?: boolean;
+  class?: string;
+}
+
+const { name, alt, widths, sizes, priority = false, class: className } = Astro.props;
+const { light, dark } = SCREENSHOTS[name];
+
+const allWidths = [...new Set(widths.flatMap((w) => [w, w * 2]))]
+  .filter((w) => w <= light.width)
+  .sort((a, b) => a - b);
+
+async function srcset(image: ImageMetadata, format: "avif" | "webp") {
+  const result = await getImage({ src: image, widths: allWidths, format, quality: format === "avif" ? 60 : 78 });
+  return result.srcSet.attribute;
+}
+
+const [darkAvif, darkWebp, lightAvif, lightWebp] = await Promise.all([
+  srcset(dark, "avif"),
+  srcset(dark, "webp"),
+  srcset(light, "avif"),
+  srcset(light, "webp"),
+]);
+
+const fallback = await getImage({ src: light, width: widths[widths.length - 1], format: "webp", quality: 78 });
+---
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" type="image/avif" srcset={darkAvif} sizes={sizes} />
+  <source media="(prefers-color-scheme: dark)" type="image/webp" srcset={darkWebp} sizes={sizes} />
+  <source type="image/avif" srcset={lightAvif} sizes={sizes} />
+  <source type="image/webp" srcset={lightWebp} sizes={sizes} />
+  <img
+    src={fallback.src}
+    alt={alt}
+    width={light.width}
+    height={light.height}
+    sizes={sizes}
+    loading={priority ? "eager" : "lazy"}
+    decoding={priority ? "sync" : "async"}
+    fetchpriority={priority ? "high" : "auto"}
+    class:list={["block h-auto w-full", className]}
+  />
+</picture>

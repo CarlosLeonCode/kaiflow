@@ -1,0 +1,40 @@
+---
+import { getRelativeLocaleUrl } from "astro:i18n";
+
+import { getContent, LANG_TAG, LOCALES, type Locale } from "../i18n";
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const t = getContent(locale);
+const SHORT: Record<Locale, string> = { en: "EN", es: "ES" };
+---
+
+<nav aria-label={t.a11y.languageNav}>
+  <ul class="flex items-center rounded-lg border border-line p-0.5 text-xs font-medium">
+    {
+      LOCALES.map((l) => {
+        const current = l === locale;
+        return (
+          <li>
+            <a
+              href={getRelativeLocaleUrl(l, "")}
+              hreflang={LANG_TAG[l].html}
+              lang={LANG_TAG[l].html}
+              aria-current={current ? "page" : undefined}
+              class:list={[
+                "inline-flex min-h-8 min-w-9 items-center justify-center rounded-md px-2 transition-colors",
+                current ? "bg-bg-subtle text-fg" : "text-fg-muted hover:text-fg",
+              ]}
+            >
+              {SHORT[l]}
+              <span class="sr-only"> ({t.language[l]})</span>
+            </a>
+          </li>
+        );
+      })
+    }
+  </ul>
+</nav>

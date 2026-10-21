@@ -1,0 +1,45 @@
+---
+import type { Content } from "../../i18n";
+import Icon, { type IconName } from "../Icon.astro";
+
+interface Props {
+  t: Content;
+}
+
+const { t } = Astro.props;
+
+const columns: { title: string; items: string[]; icon: IconName; bullet: IconName; tone: string }[] = [
+  { title: t.privacy.readTitle, items: t.privacy.read, icon: "eye", bullet: "check", tone: "text-positive" },
+  { title: t.privacy.neverTitle, items: t.privacy.never, icon: "eyeOff", bullet: "x", tone: "text-negative" },
+  { title: t.privacy.storageTitle, items: t.privacy.storage, icon: "database", bullet: "check", tone: "text-positive" },
+];
+---
+
+<section id="privacy" aria-labelledby="privacy-title" class="border-y border-line bg-bg-subtle py-20 sm:py-28">
+  <div class="container-page">
+    <Icon name="shield" size={28} class="text-accent" />
+    <h2 id="privacy-title" class="section-title mt-4">{t.privacy.title}</h2>
+    <p class="section-lead">{t.privacy.lead}</p>
+
+    <div class="mt-12 grid gap-6 md:grid-cols-3">
+      {
+        columns.map((column) => (
+          <div class="rounded-2xl border border-line bg-surface p-6">
+            <h3 class="flex items-center gap-2 font-semibold tracking-tight">
+              <Icon name={column.icon} size={20} class="text-fg-muted" />
+              {column.title}
+            </h3>
+            <ul class="mt-5 space-y-3">
+              {column.items.map((item) => (
+                <li class="flex gap-3 text-[15px] leading-relaxed">
+                  <Icon name={column.bullet} size={18} class={`mt-0.5 shrink-0 ${column.tone}`} />
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))
+      }
+    </div>
+  </div>
+</section>

@@ -1,0 +1,32 @@
+---
+import type { Content } from "../../i18n";
+import Icon, { type IconName } from "../Icon.astro";
+
+interface Props {
+  t: Content;
+}
+
+const { t } = Astro.props;
+
+/** Icons follow the order of `features.items` in the locale files. */
+const ICONS: IconName[] = ["clock", "tag", "chart", "target", "timer", "review", "moon", "archive"];
+---
+
+<section id="features" aria-labelledby="features-title" class="py-20 sm:py-28">
+  <div class="container-page">
+    <h2 id="features-title" class="section-title">{t.features.title}</h2>
+    <p class="section-lead">{t.features.lead}</p>
+
+    <ul class="mt-12 grid gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
+      {
+        t.features.items.map((item, index) => (
+          <li class="bg-surface p-6">
+            <Icon name={ICONS[index] ?? "clock"} size={22} class="text-accent" />
+            <h3 class="mt-4 font-semibold tracking-tight">{item.title}</h3>
+            <p class="mt-2 text-[15px] leading-relaxed text-fg-muted">{item.body}</p>
+          </li>
+        ))
+      }
+    </ul>
+  </div>
+</section>

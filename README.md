@@ -70,6 +70,7 @@ npm run e2e
 | `crates/adapters-linux` | X11 (`x11rb`) focus and idle, logind over D-Bus, Wayland detection |
 | `src-tauri` | Tauri shell: composition, typed IPC, tray, windows, updater |
 | `src` | React frontend: popover, main window, onboarding |
+| `website` | Marketing landing page (Astro, isolated build), see [website/README.md](website/README.md) |
 
 ## Releases
 

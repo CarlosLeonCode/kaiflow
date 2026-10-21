@@ -1,0 +1,37 @@
+---
+import { getContent, type Locale } from "../i18n";
+import { LINKS } from "../lib/links";
+
+interface Props {
+  locale: Locale;
+}
+
+const { locale } = Astro.props;
+const t = getContent(locale);
+const links = [
+  { href: LINKS.repo, label: t.footer.source },
+  { href: LINKS.download, label: t.footer.releases },
+  { href: LINKS.issues, label: t.footer.issues },
+  { href: LINKS.license, label: t.footer.license },
+];
+---
+
+<footer class="border-t border-line">
+  <div class="container-page flex flex-col gap-6 py-10 text-sm text-fg-muted sm:flex-row sm:items-center sm:justify-between">
+    <div>
+      <p class="font-semibold text-fg">TimeTrack</p>
+      <p class="mt-1">{t.footer.tagline}</p>
+    </div>
+    <ul class="flex flex-wrap gap-x-5 gap-y-2">
+      {
+        links.map((link) => (
+          <li>
+            <a href={link.href} class="inline-block py-1 underline-offset-4 hover:text-fg hover:underline">
+              {link.label}
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </div>
+</footer>
