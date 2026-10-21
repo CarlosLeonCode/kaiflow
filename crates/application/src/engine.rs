@@ -598,8 +598,17 @@ mod tests {
         clock.advance(2_000);
         handle.signal(SystemSignal::Focus(Some(focus("b", None))));
         handle.tick();
-        let Ok(Reply::Status(status)) = handle.request(Command::GetStatus) else {
-            panic!("status expected");
+        // Signals and commands travel on separate channels and `select!` picks
+        // between ready channels at random, so poll until the signal lands.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        let status = loop {
+            let Ok(Reply::Status(status)) = handle.request(Command::GetStatus) else {
+                panic!("status expected");
+            };
+            if status.current == Some(focus("b", None)) || std::time::Instant::now() > deadline {
+                break status;
+            }
+            std::thread::yield_now();
         };
         assert_eq!(status.current, Some(focus("b", None)));
 
