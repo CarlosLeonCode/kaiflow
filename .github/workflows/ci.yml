@@ -21,7 +21,7 @@ jobs:
       # Toolchain version comes from rust-toolchain.toml.
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.90"
+          toolchain: "1.93"
           components: rustfmt
       # rustfmt ignores cfg, so one OS formats-checks the Windows and Linux adapters too.
       - run: cargo fmt --all --check
@@ -38,7 +38,7 @@ jobs:
       # Toolchain version comes from rust-toolchain.toml.
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.90"
+          toolchain: "1.93"
           components: clippy
       - uses: Swatinem/rust-cache@v2
       # WebKitGTK, AppIndicator (tray), librsvg and xdo for Tauri; Xvfb for the X11 smoke test.

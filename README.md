@@ -23,7 +23,7 @@ TimeTrack is a local-first menu bar app that records which apps and windows you 
 
 ## Development
 
-Requirements: Rust 1.90+, Node.js 22.12+, Xcode command line tools.
+Requirements: Rust 1.93+, Node.js 22.12+, Xcode command line tools.
 
 ```bash
 npm install

@@ -125,7 +125,7 @@ que publica la release espere a todos los jobs:
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.90"
+          toolchain: "1.93"
       - uses: Swatinem/rust-cache@v2
       - run: npm ci
       - uses: tauri-apps/tauri-action@v0

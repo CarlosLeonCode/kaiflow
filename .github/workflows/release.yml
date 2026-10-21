@@ -80,7 +80,7 @@ jobs:
       # Toolchain version comes from rust-toolchain.toml; both slices are needed for universal.
       - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.90"
+          toolchain: "1.93"
           targets: aarch64-apple-darwin,x86_64-apple-darwin
       - uses: Swatinem/rust-cache@v2
         with:
