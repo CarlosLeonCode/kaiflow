@@ -5,7 +5,7 @@ use std::fmt;
 use crossbeam_channel::Sender;
 use domain::{
     Activity, ActivityId, ActivityRule, AssignedSpan, EndReason, FocusSnapshot, GapId, GapStatus,
-    IdleGap, PermissionState, PrivacyPolicy, Productivity, Segment, SegmentId, UtcMs,
+    IdleGap, PermissionState, PrivacyPolicy, Productivity, SeenApp, Segment, SegmentId, UtcMs,
 };
 
 /// Failure reported by an adapter (storage, OS call...). Carries a readable message only.
@@ -145,6 +145,10 @@ pub trait ReportRepository: Send + Sync {
     fn auto_discarded_gaps(&self, _from: UtcMs, _to: UtcMs) -> PortResult<u32> {
         Ok(0)
     }
+    /// Every distinct app present in the history, most used first (capped by the adapter).
+    fn seen_apps(&self) -> PortResult<Vec<SeenApp>> {
+        Ok(Vec::new())
+    }
 }
 
 pub trait SettingsRepository: Send + Sync {
@@ -156,6 +160,14 @@ pub trait SettingsRepository: Send + Sync {
 pub trait ActivityRepository: Send + Sync {
     fn list(&self) -> PortResult<Vec<Activity>>;
     fn create(&self, name: &str, color: &str, productivity: Productivity) -> PortResult<Activity>;
+    /// Like `create`, for an activity that comes from a preset (`preset_key` is stored).
+    fn create_with_preset(
+        &self,
+        name: &str,
+        color: &str,
+        productivity: Productivity,
+        preset_key: &str,
+    ) -> PortResult<Activity>;
     fn update(&self, activity: &Activity) -> PortResult<()>;
     /// Reassigns manual segments to "Unassigned" in the same transaction.
     fn delete(&self, id: ActivityId) -> PortResult<()>;

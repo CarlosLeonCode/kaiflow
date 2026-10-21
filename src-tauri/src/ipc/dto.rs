@@ -4,11 +4,12 @@
 
 use application::commands::{DeleteOp, RuleInput, RuleSpec, Settings, SettingsPatch, TrayDisplay};
 use application::ports::{DegradedReason, PrivacyMode, TrackingKind, TrackingStatus};
+use application::presets::{ApplyOutcome, SuggestionView};
 use application::queries::{ActivityTotal, AppTotal, BucketTotal, Range, Report, TimelineItem};
 use application::settings_blobs::UiSettings;
 use domain::{
     Activity, ActivityId, ActivityRule, EndReason, FocusSnapshot, GapId, IdleGap, IdleResolution,
-    PermissionState, PrivacyPolicy, Productivity, RuleKind, SegmentSource, UtcMs,
+    PermissionState, Preset, PrivacyPolicy, Productivity, RuleKind, SegmentSource, UtcMs,
 };
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -411,6 +412,97 @@ impl From<ActivityDto> for Activity {
             sort_order: c.sort_order,
             productivity: c.productivity.into(),
             preset_key: c.preset_key,
+        }
+    }
+}
+
+/// One activity a preset pack would create.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct PresetActivityDto {
+    pub key: String,
+    pub name: String,
+    pub color: String,
+    pub productivity: ProductivityDto,
+    /// A few recognisable app names this activity covers, for the preview.
+    pub example_apps: Vec<String>,
+}
+
+/// A pack of preset activities (opt-in; nothing is created until it is applied).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct PresetDto {
+    pub key: String,
+    pub name: String,
+    pub description: String,
+    pub activities: Vec<PresetActivityDto>,
+}
+
+/// How many example apps a preset activity shows.
+const EXAMPLE_APPS: usize = 4;
+
+impl From<&Preset> for PresetDto {
+    fn from(p: &Preset) -> Self {
+        Self {
+            key: p.key.into(),
+            name: p.name.into(),
+            description: p.description.into(),
+            activities: p
+                .activities
+                .iter()
+                .map(|a| PresetActivityDto {
+                    key: a.key.into(),
+                    name: a.name.into(),
+                    color: a.color.into(),
+                    productivity: a.productivity.into(),
+                    example_apps: a
+                        .hints
+                        .name_tokens
+                        .iter()
+                        .take(EXAMPLE_APPS)
+                        .map(|t| (*t).into())
+                        .collect(),
+                })
+                .collect(),
+        }
+    }
+}
+
+/// What applying a pack changed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct ApplyPresetResultDto {
+    pub activities_created: u32,
+    pub rules_created: u32,
+}
+
+impl From<ApplyOutcome> for ApplyPresetResultDto {
+    fn from(o: ApplyOutcome) -> Self {
+        Self {
+            activities_created: o.activities_created,
+            rules_created: o.rules_created,
+        }
+    }
+}
+
+/// An app that could be filed under a preset activity. Never applied automatically.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct SuggestionDto {
+    pub app_id: String,
+    pub app_name: String,
+    pub pack_key: String,
+    pub activity_key: String,
+    pub activity_name: String,
+    /// The existing activity it would use; `null` when accepting creates it.
+    pub activity_id: Option<i64>,
+}
+
+impl From<SuggestionView> for SuggestionDto {
+    fn from(s: SuggestionView) -> Self {
+        Self {
+            app_id: s.app_id,
+            app_name: s.app_name,
+            pack_key: s.pack_key.into(),
+            activity_key: s.activity_key.into(),
+            activity_name: s.activity_name.into(),
+            activity_id: s.activity_id.map(|id| id.0),
         }
     }
 }

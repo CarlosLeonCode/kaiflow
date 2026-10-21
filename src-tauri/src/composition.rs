@@ -20,6 +20,7 @@ use application::ports::{
     ActiveWindowProvider, ActivityRepository, Clock, EventSink, Notifier, PermissionProvider,
     PortResult, PowerEventsProvider, PrivacyMode, PrivacyRepository,
 };
+use application::presets::PresetService;
 use application::queries::Queries;
 use crossbeam_channel::{Receiver, Sender, bounded};
 use domain::{PrivacyPolicy, UtcMs};
@@ -117,6 +118,8 @@ pub struct AppState {
     pub engine: EngineHandle,
     pub queries: Queries,
     pub commands: Arc<Commands>,
+    /// Opt-in activity presets and app suggestions.
+    pub presets: PresetService,
     /// Read-only listing of activities and rules (writes go through `commands`).
     pub activities: Arc<dyn ActivityRepository>,
     pub permission: Arc<dyn PermissionProvider>,
@@ -159,7 +162,9 @@ pub fn compose(
         adapters_sqlite::open(db_path)?,
     ));
 
-    let queries = Queries::new(Arc::new(reports), activities.clone());
+    let reports = Arc::new(reports);
+    let queries = Queries::new(reports.clone(), activities.clone());
+    let presets = PresetService::new(activities.clone(), reports, settings.clone());
     let commands = Arc::new(Commands::new(
         activities.clone(),
         privacy.clone(),
@@ -193,6 +198,7 @@ pub fn compose(
         engine: handle,
         queries,
         commands,
+        presets,
         activities,
         permission: providers.permission,
         shortcut,

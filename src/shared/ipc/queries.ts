@@ -186,7 +186,7 @@ export function useHidePopoverMutation() {
 /** Activity and rule edits change how existing segments are grouped (R9.2): refresh everything derived. */
 function invalidateClassification(client: QueryClient): Promise<unknown> {
   return Promise.all(
-    [queryKeys.activities, queryKeys.rules, queryKeys.reports, queryKeys.timelines].map((queryKey) =>
+    [queryKeys.activities, queryKeys.rules, queryKeys.suggestions, queryKeys.reports, queryKeys.timelines].map((queryKey) =>
       client.invalidateQueries({ queryKey }),
     ),
   );
@@ -239,6 +239,49 @@ export function useDeleteRuleMutation() {
   return useMutation({
     mutationFn: (id: number) => unwrap(commands.rulesDelete(id)),
     onSuccess: () => invalidateClassification(client),
+  });
+}
+
+/** The opt-in preset catalog; static, so it never goes stale. */
+export function usePresetsQuery() {
+  return useQuery({
+    queryKey: queryKeys.presets,
+    queryFn: () => unwrap(commands.presetsList()),
+    staleTime: Infinity,
+  });
+}
+
+/** Creates the pack's activities and rules for apps already seen; resolves to what changed. */
+export function useApplyPresetMutation() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (key: string) => unwrap(commands.presetsApply(key)),
+    onSuccess: () => invalidateClassification(client),
+  });
+}
+
+/** Apps seen in the history that no rule covers, with the activity each would go under. */
+export function useSuggestionsQuery() {
+  return useQuery({
+    queryKey: queryKeys.suggestions,
+    queryFn: () => unwrap(commands.suggestionsList()),
+  });
+}
+
+/** Accepting creates an app rule, which reclassifies history: refresh everything derived. */
+export function useAcceptSuggestionMutation() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (appId: string) => unwrap(commands.suggestionsAccept(appId)),
+    onSuccess: () => invalidateClassification(client),
+  });
+}
+
+export function useDismissSuggestionMutation() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (appId: string) => unwrap(commands.suggestionsDismiss(appId)),
+    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.suggestions }),
   });
 }
 

@@ -22,12 +22,14 @@ import type {
   RuleInputDto,
   SettingsDto,
   SettingsPatchDto,
+  SuggestionDto,
   TimelineItemDto,
   TrackingStateDto,
   TrackingStatusDto,
   UpdateInfoDto,
 } from "@/shared/ipc";
 
+import { matchPreset, mockPresets } from "./mockPresets";
 import { buildSeed, type MockData, type MockSegment } from "./seed";
 
 const SYSTEM_ACTIVITY = 1;
@@ -39,6 +41,8 @@ export interface MockOptions {
   update?: UpdateInfoDto | null;
   /** Announce it at startup (like the daily background check) instead of only on a manual check. */
   announceUpdate?: boolean;
+  /** Start with only the system activity and no rules (first-run preset choice). */
+  emptyActivities?: boolean;
   now?: () => number;
 }
 
@@ -71,6 +75,11 @@ function compilePattern(pattern: string): RegExp {
 export function installMockBackend(options: MockOptions = {}): void {
   const clock = options.now ?? (() => Date.now());
   const data: MockData = buildSeed(clock());
+  if (options.emptyActivities) {
+    data.activities = data.activities.filter((a) => a.id === SYSTEM_ACTIVITY);
+    data.rules = [];
+  }
+  const dismissedSuggestions = new Set<string>();
   let permission: PermissionStateDto = options.permission ?? "granted";
   let tracking: TrackingStateDto = "running";
   let settings: SettingsDto = {
@@ -249,6 +258,38 @@ export function installMockBackend(options: MockOptions = {}): void {
     }
   };
 
+  /** Apps in the history, most used first (like `ReportRepository::seen_apps`). */
+  const seenApps = () => {
+    const totals = new Map<string, { app_id: string; app_name: string; ms: number }>();
+    for (const segment of data.segments) {
+      if (!segment.app_id) continue;
+      const row = totals.get(segment.app_id) ?? { app_id: segment.app_id, app_name: segment.app_name ?? segment.app_id, ms: 0 };
+      row.ms += (segment.ended_at ?? clock()) - segment.started_at;
+      totals.set(segment.app_id, row);
+    }
+    return [...totals.values()].sort((a, b) => b.ms - a.ms);
+  };
+  const covered = (appId: string) =>
+    data.rules.some((r) => r.spec.app_id === appId);
+  const findOrCreateActivity = (wanted: { key: string; name: string; color: string; productivity: ProductivityDto }) => {
+    const existing =
+      data.activities.find((a) => a.preset_key === wanted.key) ??
+      data.activities.find((a) => a.name.toLowerCase() === wanted.name.toLowerCase());
+    if (existing) return { activity: existing, created: false };
+    const activity: ActivityDto = {
+      id: data.nextIds.activity++,
+      name: wanted.name,
+      color: wanted.color,
+      sort_order: data.activities.length,
+      productivity: wanted.productivity,
+      preset_key: wanted.key,
+    };
+    data.activities.push(activity);
+    return { activity, created: true };
+  };
+  const addAppRule = (activityId: number, appId: string) =>
+    data.rules.push({ id: data.nextIds.rule++, activity_id: activityId, spec: { kind: "app", app_id: appId }, priority: 0 });
+
   const issueToken = () => {
     const token = `mock-token-${++tokenCounter}`;
     liveTokens.add(token);
@@ -289,7 +330,7 @@ export function installMockBackend(options: MockOptions = {}): void {
       resolveGap(args.id as number, args.resolution as IdleResolutionDto);
       return null;
     },
-    activities_list: () => data.activities,
+    activities_list: () => [...data.activities],
     activities_create: (args) => {
       const name = String(args.name).trim();
       if (!name) fail({ kind: "invalid", message: "the activity name cannot be empty" });
@@ -327,7 +368,7 @@ export function installMockBackend(options: MockOptions = {}): void {
       }
       return null;
     },
-    rules_list: () => data.rules,
+    rules_list: () => [...data.rules],
     rules_upsert: (args) => {
       const rule = args.rule as RuleInputDto;
       validateRule(rule);
@@ -342,6 +383,59 @@ export function installMockBackend(options: MockOptions = {}): void {
     },
     rules_delete: (args) => {
       data.rules = data.rules.filter((r) => r.id !== args.id);
+      return null;
+    },
+    presets_list: () => mockPresets(),
+    presets_apply: (args) => {
+      const pack = mockPresets().find((p) => p.key === args.key);
+      if (!pack) fail({ kind: "not_found" });
+      let activitiesCreated = 0;
+      let rulesCreated = 0;
+      const resolved = new Map<string, number>();
+      for (const wanted of pack.activities) {
+        const { activity, created } = findOrCreateActivity(wanted);
+        resolved.set(wanted.key, activity.id);
+        if (created) activitiesCreated++;
+      }
+      for (const app of seenApps()) {
+        if (covered(app.app_id)) continue;
+        const match = matchPreset(app.app_id, app.app_name, [pack.key]);
+        const activityId = match ? resolved.get(match.activity.key) : undefined;
+        if (activityId === undefined) continue;
+        addAppRule(activityId, app.app_id);
+        rulesCreated++;
+      }
+      return { activities_created: activitiesCreated, rules_created: rulesCreated };
+    },
+    suggestions_list: (): SuggestionDto[] =>
+      seenApps().flatMap((app) => {
+        if (covered(app.app_id) || dismissedSuggestions.has(app.app_id)) return [];
+        const match = matchPreset(app.app_id, app.app_name);
+        if (!match) return [];
+        const existing = data.activities.find(
+          (a) => a.preset_key === match.activity.key || a.name.toLowerCase() === match.activity.name.toLowerCase(),
+        );
+        return [
+          {
+            app_id: app.app_id,
+            app_name: app.app_name,
+            pack_key: match.pack,
+            activity_key: match.activity.key,
+            activity_name: match.activity.name,
+            activity_id: existing?.id ?? null,
+          },
+        ];
+      }),
+    suggestions_accept: (args) => {
+      const app = seenApps().find((a) => a.app_id === args.appId);
+      const match = app ? matchPreset(app.app_id, app.app_name) : null;
+      if (!app || !match) fail({ kind: "not_found" });
+      if (covered(app.app_id)) return null;
+      addAppRule(findOrCreateActivity(match.activity).activity.id, app.app_id);
+      return null;
+    },
+    suggestions_dismiss: (args) => {
+      dismissedSuggestions.add(String(args.appId));
       return null;
     },
     privacy_list: () => ({

@@ -12,6 +12,12 @@ use crate::ports::{PortError, PortResult, SettingsRepository};
 /// Key of the [`UiSettings`] blob.
 pub const KEY_UI: &str = "ui";
 
+/// Key of the [`SuggestionSettings`] blob.
+pub const KEY_SUGGESTIONS: &str = "suggestions";
+
+/// Most dismissed apps remembered; the oldest fall off first.
+pub const MAX_DISMISSED_APPS: usize = 500;
+
 /// Most intros the blob may remember (there is one per dashboard section).
 const MAX_DISMISSED_INTROS: usize = 64;
 const MAX_INTRO_ID_LEN: usize = 64;
@@ -68,6 +74,25 @@ impl UiSettings {
         let mut seen = std::collections::HashSet::new();
         self.dismissed_intros.retain(|id| seen.insert(id.clone()));
         self
+    }
+}
+
+/// App suggestions the user declined; they never come back.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct SuggestionSettings {
+    pub dismissed_apps: Vec<String>,
+}
+
+impl SuggestionSettings {
+    /// Records a dismissal (once), dropping the oldest ones beyond the cap.
+    pub fn dismiss(&mut self, app_id: &str) {
+        if self.dismissed_apps.iter().any(|a| a == app_id) {
+            return;
+        }
+        self.dismissed_apps.push(app_id.to_owned());
+        let excess = self.dismissed_apps.len().saturating_sub(MAX_DISMISSED_APPS);
+        self.dismissed_apps.drain(..excess);
     }
 }
 
@@ -129,5 +154,19 @@ mod tests {
             dismissed_intros: vec!["a".into(), "b".into(), "a".into()],
         };
         assert_eq!(dup.normalized().dismissed_intros, ["a", "b"]);
+    }
+
+    #[test]
+    fn dismissals_are_unique_and_capped() {
+        let mut s = SuggestionSettings::default();
+        s.dismiss("a");
+        s.dismiss("a");
+        assert_eq!(s.dismissed_apps, ["a"]);
+        for i in 0..(MAX_DISMISSED_APPS + 5) {
+            s.dismiss(&format!("app{i}"));
+        }
+        assert_eq!(s.dismissed_apps.len(), MAX_DISMISSED_APPS);
+        assert_eq!(s.dismissed_apps.last().unwrap(), "app504");
+        assert!(!s.dismissed_apps.contains(&"a".to_owned()));
     }
 }

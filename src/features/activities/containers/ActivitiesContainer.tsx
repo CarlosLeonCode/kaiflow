@@ -2,7 +2,13 @@ import { SectionIntroContainer } from "@/features/shell/containers/SectionIntroC
 import { useMemo, useState } from "react";
 
 import {
+  useAcceptSuggestionMutation,
   useActivitiesQuery,
+  useApplyPresetMutation,
+  useDismissedIntros,
+  useDismissSuggestionMutation,
+  usePresetsQuery,
+  useSuggestionsQuery,
   useCreateActivityMutation,
   useDeleteActivityMutation,
   useDeleteRuleMutation,
@@ -12,12 +18,14 @@ import {
   useUpsertRulesMutation,
   errorMessage,
 } from "@/shared/ipc";
+import { UNASSIGNED_ID } from "@/shared/lib/labels";
 import { appOptions, RECENT_APP_DAYS } from "@/shared/lib/apps";
 import { useIsDark } from "@/shared/lib/theme";
 import { addLocalDays } from "@/shared/lib/time";
 import { useNow } from "@/features/tracking/hooks/useNow";
 
 import { ActivitiesView } from "../components/ActivitiesView";
+import { applySummary, PRESET_CHOICE_ID } from "../lib/presets";
 import { toSubmitResult, type SubmitResult } from "../lib/submit";
 
 async function attempt(action: () => Promise<unknown>): Promise<SubmitResult> {
@@ -42,6 +50,13 @@ export function ActivitiesContainer() {
   const recent = useReportQuery(range);
   const dark = useIsDark();
   const [actionError, setActionError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const presets = usePresetsQuery();
+  const suggestions = useSuggestionsQuery();
+  const choice = useDismissedIntros();
+  const applyPreset = useApplyPresetMutation();
+  const accept = useAcceptSuggestionMutation();
+  const dismissSuggestion = useDismissSuggestionMutation();
 
   const create = useCreateActivityMutation();
   const update = useUpdateActivityMutation();
@@ -61,6 +76,10 @@ export function ActivitiesContainer() {
   }, [ruleList]);
 
   const failure = activities.error ?? rules.error;
+  // Only a brand new setup (nothing but the system activity) is offered the packs.
+  const onlySystem = (activities.data ?? []).every((activity) => activity.id === UNASSIGNED_ID);
+  const showChoice =
+    !activities.isPending && onlySystem && choice.ready && !choice.isDismissed(PRESET_CHOICE_ID) && presets.data;
 
   return (
     <ActivitiesView
@@ -72,6 +91,19 @@ export function ActivitiesContainer() {
       apps={apps}
       ruleCounts={ruleCounts}
       dark={dark}
+      packs={showChoice ? presets.data : null}
+      suggestions={suggestions.data ?? []}
+      notice={notice}
+      onApplyPreset={async (key) => {
+        const name = presets.data?.find((pack) => pack.key === key)?.name ?? "Pack";
+        const result = await attempt(async () => setNotice(applySummary(name, await applyPreset.mutateAsync(key))));
+        if (!result) choice.dismiss(PRESET_CHOICE_ID);
+        return result;
+      }}
+      onStartEmpty={() => choice.dismiss(PRESET_CHOICE_ID)}
+      onAcceptSuggestion={(appId) => attempt(() => accept.mutateAsync(appId))}
+      onDismissSuggestion={(appId) => attempt(() => dismissSuggestion.mutateAsync(appId))}
+      onDismissNotice={() => setNotice(null)}
       onCreate={(value) => attempt(() => create.mutateAsync(value))}
       onUpdate={(activity) => attempt(() => update.mutateAsync(activity))}
       onDeleteActivity={(id) => attempt(() => remove.mutateAsync(id))}

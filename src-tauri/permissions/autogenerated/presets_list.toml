@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-presets-list"
+description = "Enables the presets_list command without any pre-configured scope."
+commands.allow = ["presets_list"]
+
+[[permission]]
+identifier = "deny-presets-list"
+description = "Denies the presets_list command without any pre-configured scope."
+commands.deny = ["presets_list"]

@@ -17,7 +17,7 @@ export const INTROS: Record<SectionId, IntroCopy> = {
   },
   activities: {
     title: "Organize time into activities",
-    body: "Create an activity for each project, client or kind of task, then add rules so apps and window titles are sorted automatically. Anything without a rule stays Unassigned.",
+    body: "An activity is a label for what you were doing: a project, a client or a kind of task. Rules say which apps and window titles belong to each one, so your time is sorted for you, past time included. Anything without a rule stays Unassigned.",
   },
   privacy: {
     title: "You decide what is stored",

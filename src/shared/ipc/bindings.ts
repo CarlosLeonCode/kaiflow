@@ -22,6 +22,14 @@ export const commands = {
 	/**  Validates the title pattern first (R9.4): a bad regex is `AppError::InvalidPattern`. */
 	rulesUpsert: (rule: RuleInputDto) => typedError<number, AppError>(__TAURI_INVOKE("rules_upsert", { rule })),
 	rulesDelete: (id: number) => typedError<null, AppError>(__TAURI_INVOKE("rules_delete", { id })),
+	/**  The preset catalog; read-only, nothing is created by listing it. */
+	presetsList: () => typedError<PresetDto[], AppError>(__TAURI_INVOKE("presets_list")),
+	/**  Creates the pack's activities and rules for apps already in the history (idempotent). */
+	presetsApply: (key: string) => typedError<ApplyPresetResultDto, AppError>(__TAURI_INVOKE("presets_apply", { key })),
+	suggestionsList: () => typedError<SuggestionDto[], AppError>(__TAURI_INVOKE("suggestions_list")),
+	/**  Files the app under its suggested activity with an app rule (reclassifies history). */
+	suggestionsAccept: (appId: string) => typedError<null, AppError>(__TAURI_INVOKE("suggestions_accept", { appId })),
+	suggestionsDismiss: (appId: string) => typedError<null, AppError>(__TAURI_INVOKE("suggestions_dismiss", { appId })),
 	privacyList: () => typedError<PrivacyRulesDto, AppError>(__TAURI_INVOKE("privacy_list")),
 	/**  `mode: null` removes the app's rule. */
 	privacySet: (appId: string, mode: "exclude" | "redact_title" | null) => typedError<null, AppError>(__TAURI_INVOKE("privacy_set", { appId, mode })),
@@ -129,6 +137,12 @@ export type AppTotalDto = {
 	total_ms: number,
 };
 
+/**  What applying a pack changed. */
+export type ApplyPresetResultDto = {
+	activities_created: number,
+	rules_created: number,
+};
+
 export type BucketTotalDto = {
 	range: RangeDto,
 	total_ms: number,
@@ -190,6 +204,24 @@ export type PermissionChanged = {
 };
 
 export type PermissionStateDto = "granted" | "denied";
+
+/**  One activity a preset pack would create. */
+export type PresetActivityDto = {
+	key: string,
+	name: string,
+	color: string,
+	productivity: ProductivityDto,
+	/**  A few recognisable app names this activity covers, for the preview. */
+	example_apps: string[],
+};
+
+/**  A pack of preset activities (opt-in; nothing is created until it is applied). */
+export type PresetDto = {
+	key: string,
+	name: string,
+	description: string,
+	activities: PresetActivityDto[],
+};
 
 export type PrivacyModeDto = "exclude" | "redact_title";
 
@@ -278,6 +310,17 @@ export type ShortcutStatusDto = { kind: "registered"; shortcut: string } | { kin
 /**  A persistence call failed; the engine keeps running (the frontend may show a notice). */
 export type StorageFailed = {
 	message: string,
+};
+
+/**  An app that could be filed under a preset activity. Never applied automatically. */
+export type SuggestionDto = {
+	app_id: string,
+	app_name: string,
+	pack_key: string,
+	activity_key: string,
+	activity_name: string,
+	/**  The existing activity it would use; `null` when accepting creates it. */
+	activity_id: number | null,
 };
 
 export type TimelineItemDto = {

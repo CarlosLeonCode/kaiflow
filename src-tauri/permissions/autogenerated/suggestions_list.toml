@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-suggestions-list"
+description = "Enables the suggestions_list command without any pre-configured scope."
+commands.allow = ["suggestions_list"]
+
+[[permission]]
+identifier = "deny-suggestions-list"
+description = "Denies the suggestions_list command without any pre-configured scope."
+commands.deny = ["suggestions_list"]

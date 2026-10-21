@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-presets-apply"
+description = "Enables the presets_apply command without any pre-configured scope."
+commands.allow = ["presets_apply"]
+
+[[permission]]
+identifier = "deny-presets-apply"
+description = "Denies the presets_apply command without any pre-configured scope."
+commands.deny = ["presets_apply"]

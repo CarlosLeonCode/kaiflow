@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Mutex, TryLockError};
 
 use application::ports::{PortError, PortResult, ReportRepository};
-use domain::{ActivityId, Segment, SegmentId, SegmentSource, UtcMs};
+use domain::{ActivityId, SeenApp, Segment, SegmentId, SegmentSource, UtcMs};
 use rusqlite::{Connection, OpenFlags, Row};
 
 use crate::db::{DbError, port_err};
@@ -89,6 +89,30 @@ impl ReportRepository for SqliteReportRepository {
                 .query_map([from.0, to.0], segment_from_row)
                 .map_err(port_err)?;
             rows.map(|row| row.map_err(port_err)?).collect()
+        })
+    }
+
+    fn seen_apps(&self) -> PortResult<Vec<SeenApp>> {
+        self.with_conn(|conn| {
+            let mut stmt = conn
+                .prepare_cached(
+                    "SELECT app_id, coalesce(max(app_name), app_id)
+                     FROM segments
+                     WHERE app_id IS NOT NULL
+                     GROUP BY app_id
+                     ORDER BY sum(coalesce(ended_at, heartbeat_at) - started_at) DESC, app_id
+                     LIMIT 500",
+                )
+                .map_err(port_err)?;
+            let rows = stmt
+                .query_map([], |r| {
+                    Ok(SeenApp {
+                        app_id: r.get(0)?,
+                        app_name: r.get(1)?,
+                    })
+                })
+                .map_err(port_err)?;
+            rows.map(|row| row.map_err(port_err)).collect()
         })
     }
 
@@ -181,6 +205,21 @@ mod tests {
         assert_eq!(all[0].end_reason, Some(EndReason::Idle));
         assert_eq!(all[1].ended_at, None);
         assert_eq!(all[1].window_title.as_deref(), Some("t"));
+    }
+
+    #[test]
+    fn seen_apps_are_distinct_and_most_used_first() {
+        let (_dir, mut w, r) = fixture();
+        closed(&mut w, "short", 0, 10);
+        closed(&mut w, "long", 20, 120);
+        closed(&mut w, "short", 130, 140);
+        let apps: Vec<_> = r
+            .seen_apps()
+            .unwrap()
+            .into_iter()
+            .map(|a| a.app_id)
+            .collect();
+        assert_eq!(apps, ["long", "short"]);
     }
 
     #[test]

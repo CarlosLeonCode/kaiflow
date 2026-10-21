@@ -44,6 +44,40 @@ fn rule_from_row(
     }
 }
 
+impl SqliteActivityRepository {
+    fn insert(
+        &self,
+        name: &str,
+        color: &str,
+        productivity: Productivity,
+        preset_key: Option<&str>,
+    ) -> PortResult<Activity> {
+        let conn = lock(&self.conn, "activity")?;
+        conn.execute(
+            "INSERT INTO activities(name, color, sort_order, productivity, preset_key)
+             VALUES (?1, ?2, (SELECT coalesce(max(sort_order), 0) + 1 FROM activities), ?3, ?4)",
+            params![name, color, productivity.as_str(), preset_key],
+        )
+        .map_err(port_err)?;
+        let id = conn.last_insert_rowid();
+        let sort_order = conn
+            .query_row(
+                "SELECT sort_order FROM activities WHERE id = ?1",
+                [id],
+                |r| r.get(0),
+            )
+            .map_err(port_err)?;
+        Ok(Activity {
+            id: ActivityId(id),
+            name: name.into(),
+            color: color.into(),
+            sort_order,
+            productivity,
+            preset_key: preset_key.map(Into::into),
+        })
+    }
+}
+
 impl ActivityRepository for SqliteActivityRepository {
     fn list(&self) -> PortResult<Vec<Activity>> {
         let conn = lock(&self.conn, "activity")?;
@@ -69,29 +103,17 @@ impl ActivityRepository for SqliteActivityRepository {
     }
 
     fn create(&self, name: &str, color: &str, productivity: Productivity) -> PortResult<Activity> {
-        let conn = lock(&self.conn, "activity")?;
-        conn.execute(
-            "INSERT INTO activities(name, color, sort_order, productivity)
-             VALUES (?1, ?2, (SELECT coalesce(max(sort_order), 0) + 1 FROM activities), ?3)",
-            params![name, color, productivity.as_str()],
-        )
-        .map_err(port_err)?;
-        let id = conn.last_insert_rowid();
-        let sort_order = conn
-            .query_row(
-                "SELECT sort_order FROM activities WHERE id = ?1",
-                [id],
-                |r| r.get(0),
-            )
-            .map_err(port_err)?;
-        Ok(Activity {
-            id: ActivityId(id),
-            name: name.into(),
-            color: color.into(),
-            sort_order,
-            productivity,
-            preset_key: None,
-        })
+        self.insert(name, color, productivity, None)
+    }
+
+    fn create_with_preset(
+        &self,
+        name: &str,
+        color: &str,
+        productivity: Productivity,
+        preset_key: &str,
+    ) -> PortResult<Activity> {
+        self.insert(name, color, productivity, Some(preset_key))
     }
 
     fn update(&self, activity: &Activity) -> PortResult<()> {
@@ -247,6 +269,26 @@ mod tests {
             r.create("Work", "#333333", Productivity::Neutral).is_err(),
             "names are unique"
         );
+    }
+
+    #[test]
+    fn preset_key_is_stored_and_listed() {
+        let r = repo();
+        let made = r
+            .create_with_preset(
+                "Browsing",
+                "#64748b",
+                Productivity::Neutral,
+                "general.browsing",
+            )
+            .unwrap();
+        assert_eq!(made.preset_key.as_deref(), Some("general.browsing"));
+        let listed = r.list().unwrap();
+        assert_eq!(
+            listed.last().unwrap().preset_key.as_deref(),
+            Some("general.browsing")
+        );
+        assert_eq!(listed[0].preset_key, None, "the system activity has none");
     }
 
     #[test]

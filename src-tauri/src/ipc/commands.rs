@@ -9,9 +9,10 @@ use tauri_plugin_dialog::DialogExt;
 use tauri_specta::Event;
 
 use super::dto::{
-    ActivityDto, DeleteOpDto, IdleGapDto, IdleResolutionDto, PermissionStateDto, PrivacyModeDto,
-    PrivacyRulesDto, ProductivityDto, RangeDto, ReportDto, RuleDto, RuleInputDto, SettingsDto,
-    SettingsPatchDto, TimelineItemDto, TrackingStatusDto, UpdateInfoDto,
+    ActivityDto, ApplyPresetResultDto, DeleteOpDto, IdleGapDto, IdleResolutionDto,
+    PermissionStateDto, PresetDto, PrivacyModeDto, PrivacyRulesDto, ProductivityDto, RangeDto,
+    ReportDto, RuleDto, RuleInputDto, SettingsDto, SettingsPatchDto, SuggestionDto,
+    TimelineItemDto, TrackingStatusDto, UpdateInfoDto,
 };
 use super::events::{DataChanged, DataKindDto};
 use crate::composition::AppState;
@@ -155,6 +156,42 @@ pub async fn rules_upsert(state: Shared<'_>, rule: RuleInputDto) -> Result<i64, 
 #[specta::specta]
 pub async fn rules_delete(state: Shared<'_>, id: i64) -> Result<(), AppError> {
     run(state, move |s| s.rules_delete(id)).await
+}
+
+/// The preset catalog; read-only, nothing is created by listing it.
+#[tauri::command]
+#[specta::specta]
+pub async fn presets_list(state: Shared<'_>) -> Result<Vec<PresetDto>, AppError> {
+    run(state, AppState::presets_list).await
+}
+
+/// Creates the pack's activities and rules for apps already in the history (idempotent).
+#[tauri::command]
+#[specta::specta]
+pub async fn presets_apply(
+    state: Shared<'_>,
+    key: String,
+) -> Result<ApplyPresetResultDto, AppError> {
+    run(state, move |s| s.presets_apply(&key)).await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn suggestions_list(state: Shared<'_>) -> Result<Vec<SuggestionDto>, AppError> {
+    run(state, AppState::suggestions_list).await
+}
+
+/// Files the app under its suggested activity with an app rule (reclassifies history).
+#[tauri::command]
+#[specta::specta]
+pub async fn suggestions_accept(state: Shared<'_>, app_id: String) -> Result<(), AppError> {
+    run(state, move |s| s.suggestions_accept(&app_id)).await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn suggestions_dismiss(state: Shared<'_>, app_id: String) -> Result<(), AppError> {
+    run(state, move |s| s.suggestions_dismiss(&app_id)).await
 }
 
 #[tauri::command]

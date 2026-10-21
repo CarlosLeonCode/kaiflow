@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-suggestions-dismiss"
+description = "Enables the suggestions_dismiss command without any pre-configured scope."
+commands.allow = ["suggestions_dismiss"]
+
+[[permission]]
+identifier = "deny-suggestions-dismiss"
+description = "Denies the suggestions_dismiss command without any pre-configured scope."
+commands.deny = ["suggestions_dismiss"]

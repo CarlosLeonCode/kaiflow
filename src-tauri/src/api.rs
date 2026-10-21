@@ -10,9 +10,10 @@ use domain::{Activity, ActivityId, GapId};
 use crate::composition::AppState;
 use crate::error::AppError;
 use crate::ipc::dto::{
-    ActivityDto, DeleteOpDto, IdleGapDto, IdleResolutionDto, PermissionStateDto, PrivacyModeDto,
-    PrivacyRulesDto, ProductivityDto, RangeDto, ReportDto, RuleDto, RuleInputDto, SettingsDto,
-    SettingsPatchDto, ShortcutStatusDto, TimelineItemDto, TrackingStatusDto,
+    ActivityDto, ApplyPresetResultDto, DeleteOpDto, IdleGapDto, IdleResolutionDto,
+    PermissionStateDto, PresetDto, PrivacyModeDto, PrivacyRulesDto, ProductivityDto, RangeDto,
+    ReportDto, RuleDto, RuleInputDto, SettingsDto, SettingsPatchDto, ShortcutStatusDto,
+    SuggestionDto, TimelineItemDto, TrackingStatusDto,
 };
 
 impl AppState {
@@ -142,6 +143,34 @@ impl AppState {
 
     pub fn rules_delete(&self, id: i64) -> Result<(), AppError> {
         Ok(self.commands.delete_rule(id)?)
+    }
+
+    pub fn presets_list(&self) -> Result<Vec<PresetDto>, AppError> {
+        Ok(self.presets.packs().iter().map(Into::into).collect())
+    }
+
+    /// Creates the pack's activities and rules for apps already in the history; idempotent.
+    pub fn presets_apply(&self, key: &str) -> Result<ApplyPresetResultDto, AppError> {
+        Ok(self.presets.apply(key)?.into())
+    }
+
+    pub fn suggestions_list(&self) -> Result<Vec<SuggestionDto>, AppError> {
+        Ok(self
+            .presets
+            .suggestions()?
+            .into_iter()
+            .map(Into::into)
+            .collect())
+    }
+
+    /// Accepting files the app under the suggested activity with an app rule; history is
+    /// classified at read time, so past segments follow it.
+    pub fn suggestions_accept(&self, app_id: &str) -> Result<(), AppError> {
+        Ok(self.presets.accept(app_id)?)
+    }
+
+    pub fn suggestions_dismiss(&self, app_id: &str) -> Result<(), AppError> {
+        Ok(self.presets.dismiss(app_id)?)
     }
 
     pub fn privacy_list(&self) -> Result<PrivacyRulesDto, AppError> {
@@ -391,6 +420,95 @@ mod tests {
             })
             .unwrap_err();
         assert!(matches!(err, AppError::InvalidPattern { .. }), "{err:?}");
+        assert!(rig.state.rules_list().unwrap().is_empty());
+        rig.state.shutdown();
+    }
+
+    #[test]
+    fn accepting_a_suggestion_reclassifies_history_and_dismissals_stick() {
+        let rig = rig();
+        assert!(rig.state.suggestions_list().unwrap().is_empty());
+        rig.window.set(Some(safari()));
+        rig.state.start().unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        rig.state.stop().unwrap();
+
+        let range = around_now(&rig.state);
+        let names = |state: &AppState| -> Vec<String> {
+            state
+                .get_report(range, vec![])
+                .unwrap()
+                .by_activity
+                .into_iter()
+                .map(|a| a.name)
+                .collect()
+        };
+        assert_eq!(names(&rig.state), ["Unassigned"]);
+
+        let suggestions = rig.state.suggestions_list().unwrap();
+        assert_eq!(suggestions.len(), 1);
+        assert_eq!(suggestions[0].activity_name, "Browsing");
+        assert!(
+            rig.state
+                .activities_list()
+                .unwrap()
+                .iter()
+                .all(|a| a.preset_key.is_none())
+        );
+
+        rig.state.suggestions_accept("com.apple.Safari").unwrap();
+        assert_eq!(
+            names(&rig.state),
+            ["Browsing"],
+            "past time follows the new rule"
+        );
+        assert!(rig.state.suggestions_list().unwrap().is_empty());
+        let browsing = rig
+            .state
+            .activities_list()
+            .unwrap()
+            .into_iter()
+            .find(|a| a.name == "Browsing")
+            .unwrap();
+        assert_eq!(browsing.preset_key.as_deref(), Some("general.browsing"));
+        rig.state.shutdown();
+    }
+
+    #[test]
+    fn presets_apply_is_opt_in_and_idempotent() {
+        let rig = rig();
+        assert!(!rig.state.presets_list().unwrap().is_empty());
+        assert_eq!(
+            rig.state.activities_list().unwrap().len(),
+            1,
+            "only the system activity"
+        );
+        rig.window.set(Some(safari()));
+        rig.state.start().unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        rig.state.stop().unwrap();
+
+        let first = rig.state.presets_apply("general").unwrap();
+        assert_eq!((first.activities_created, first.rules_created), (4, 1));
+        let second = rig.state.presets_apply("general").unwrap();
+        assert_eq!((second.activities_created, second.rules_created), (0, 0));
+        assert!(rig.state.presets_apply("nope").is_err());
+
+        rig.window.set(Some(safari()));
+        rig.state.suggestions_dismiss("anything").unwrap();
+        rig.state.shutdown();
+    }
+
+    #[test]
+    fn dismissing_hides_the_suggestion_without_a_rule() {
+        let rig = rig();
+        rig.window.set(Some(safari()));
+        rig.state.start().unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        rig.state.stop().unwrap();
+        assert_eq!(rig.state.suggestions_list().unwrap().len(), 1);
+        rig.state.suggestions_dismiss("com.apple.Safari").unwrap();
+        assert!(rig.state.suggestions_list().unwrap().is_empty());
         assert!(rig.state.rules_list().unwrap().is_empty());
         rig.state.shutdown();
     }

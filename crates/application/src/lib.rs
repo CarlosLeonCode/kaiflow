@@ -8,5 +8,6 @@ pub mod engine;
 pub mod fakes;
 pub mod idle_policy;
 pub mod ports;
+pub mod presets;
 pub mod queries;
 pub mod settings_blobs;

@@ -8,8 +8,8 @@ use std::sync::{Arc, Mutex};
 use crossbeam_channel::Sender;
 use domain::{
     Activity, ActivityId, ActivityRule, AssignedSpan, EndReason, FocusSnapshot, GapId, GapStatus,
-    IdleGap, PermissionState, PrivacyPolicy, Productivity, Segment, SegmentId, SegmentSource,
-    UtcMs,
+    IdleGap, PermissionState, PrivacyPolicy, Productivity, SeenApp, Segment, SegmentId,
+    SegmentSource, UtcMs,
 };
 
 use crate::ports::*;
@@ -277,6 +277,22 @@ impl ReportRepository for FakeStore {
             .cloned()
             .collect())
     }
+
+    fn seen_apps(&self) -> PortResult<Vec<SeenApp>> {
+        let s = self.0.lock().unwrap();
+        let mut apps: Vec<SeenApp> = Vec::new();
+        for g in &s.segments {
+            if let Some(id) = &g.app_id
+                && !apps.iter().any(|a| &a.app_id == id)
+            {
+                apps.push(SeenApp {
+                    app_id: id.clone(),
+                    app_name: g.app_name.clone().unwrap_or_else(|| id.clone()),
+                });
+            }
+        }
+        Ok(apps)
+    }
 }
 
 impl RetentionRepository for FakeStore {
@@ -329,11 +345,14 @@ struct Activities {
 #[derive(Clone, Default)]
 pub struct FakeActivities(Arc<Mutex<Activities>>);
 
-impl ActivityRepository for FakeActivities {
-    fn list(&self) -> PortResult<Vec<Activity>> {
-        Ok(self.0.lock().unwrap().activities.clone())
-    }
-    fn create(&self, name: &str, color: &str, productivity: Productivity) -> PortResult<Activity> {
+impl FakeActivities {
+    fn insert(
+        &self,
+        name: &str,
+        color: &str,
+        productivity: Productivity,
+        preset_key: Option<&str>,
+    ) -> PortResult<Activity> {
         let mut s = self.0.lock().unwrap();
         s.next_id += 1;
         let activity = Activity {
@@ -342,10 +361,28 @@ impl ActivityRepository for FakeActivities {
             color: color.into(),
             sort_order: 0,
             productivity,
-            preset_key: None,
+            preset_key: preset_key.map(Into::into),
         };
         s.activities.push(activity.clone());
         Ok(activity)
+    }
+}
+
+impl ActivityRepository for FakeActivities {
+    fn list(&self) -> PortResult<Vec<Activity>> {
+        Ok(self.0.lock().unwrap().activities.clone())
+    }
+    fn create(&self, name: &str, color: &str, productivity: Productivity) -> PortResult<Activity> {
+        self.insert(name, color, productivity, None)
+    }
+    fn create_with_preset(
+        &self,
+        name: &str,
+        color: &str,
+        productivity: Productivity,
+        preset_key: &str,
+    ) -> PortResult<Activity> {
+        self.insert(name, color, productivity, Some(preset_key))
     }
     fn update(&self, activity: &Activity) -> PortResult<()> {
         let mut s = self.0.lock().unwrap();

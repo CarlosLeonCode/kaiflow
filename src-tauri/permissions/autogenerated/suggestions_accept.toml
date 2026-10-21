@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-suggestions-accept"
+description = "Enables the suggestions_accept command without any pre-configured scope."
+commands.allow = ["suggestions_accept"]
+
+[[permission]]
+identifier = "deny-suggestions-accept"
+description = "Denies the suggestions_accept command without any pre-configured scope."
+commands.deny = ["suggestions_accept"]

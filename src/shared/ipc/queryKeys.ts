@@ -7,6 +7,8 @@ export const queryKeys = {
   permission: ["permission"] as const,
   activities: ["activities"] as const,
   rules: ["rules"] as const,
+  presets: ["presets"] as const,
+  suggestions: ["suggestions"] as const,
   privacy: ["privacy"] as const,
   idleGaps: ["idle-gaps"] as const,
   /** The update the backend announced (written by the `update-available` event, never fetched). */
