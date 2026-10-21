@@ -1,10 +1,11 @@
+import { LINKS } from "../lib/links";
 import type { Content } from "./types";
 
 export const en: Content = {
   meta: {
     title: "Kaiflow: see where your day actually goes",
     description:
-      "A private, local-first menu bar time tracker for macOS, with Windows and Linux coming soon. Automatic tracking by app and window, goals, focus sessions and a weekly review. Free, open source (MIT) and easy to fork and customize with AI coding agents.",
+      "A private, local-first menu bar time tracker for macOS, with Windows and Linux in beta. Automatic tracking by app and window, goals, focus sessions and a weekly review. Free, open source (MIT) and easy to fork and customize with AI coding agents.",
     ogAlt: "Kaiflow: improve your focus, one day at a time. A private time tracker that lives in your menu bar.",
   },
   a11y: {
@@ -25,11 +26,12 @@ export const en: Content = {
     lead:
       "Kaiflow quietly records which app and window you are using, then shows your day as a clear timeline. No timers to start, no account to create, and nothing leaves your computer.",
     primary: "Download for macOS",
-    secondaryLabel: "Coming soon:",
+    secondaryLabel: "Also for",
     secondary: [
-      { label: "Windows", href: "#platforms" },
-      { label: "Linux", href: "#platforms" },
+      { label: "Windows", href: LINKS.download },
+      { label: "Linux", href: LINKS.download },
     ],
+    betaBadge: "Beta",
     note: "Requires macOS 13 or later. Universal build for Apple silicon and Intel.",
     notice: "Free. Not notarized by Apple — the first time, open it from System Settings → Privacy & Security.",
     noticeLink: "See the install steps",
@@ -210,7 +212,7 @@ export const en: Content = {
   },
   platforms: {
     title: "Platform support",
-    lead: "Released for macOS. Windows and Linux are implemented and tracking already; ready-made downloads are coming soon.",
+    lead: "Released for macOS. Windows and Linux are available as beta downloads: they track the same way, but have had less testing.",
     feature: "Capability",
     columns: ["macOS", "Windows", "Linux (X11)", "Linux (Wayland)"],
     rows: [
@@ -236,11 +238,11 @@ export const en: Content = {
       },
       {
         label: "Ready-made download",
-        cells: [["yes", "DMG on GitHub Releases"], ["partial", "Coming soon. Build from source for now"], ["partial", "Coming soon. Build from source for now"], ["partial", "Coming soon. Build from source for now"]],
+        cells: [["yes", "DMG on GitHub Releases"], ["yes", "Beta: installer (.exe) or MSI"], ["yes", "Beta: AppImage or .deb"], ["yes", "Beta: AppImage or .deb"]],
       },
     ],
     note: "Wayland does not let apps see which window is in front, so only idle, lock and sleep are recorded there. Log in to an X11 session (for example GNOME on Xorg) for full tracking.",
-    sourceLink: "Build for Windows or Linux",
+    sourceLink: "Build from source",
   },
   faq: {
     title: "Questions and answers",
@@ -321,15 +323,34 @@ export const en: Content = {
     advancedBody: "Only if you trust the download. This removes the quarantine flag, which skips the Gatekeeper check for this app:",
     permissionTitle: "Then allow window titles",
     permissionBody: "When Kaiflow asks, turn it on in System Settings → Privacy & Security → Accessibility. Without it, Kaiflow still records app names.",
+    beta: {
+      title: "Windows and Linux",
+      lead: "Both are beta downloads on the same release page as macOS. They track the same way but have had less testing, so please report anything that looks wrong.",
+      badge: "Beta",
+      windowsTitle: "Windows 10 and 11",
+      windowsSteps: [
+        "Download the installer ending in -setup.exe (installs for your user, no administrator rights) or the .msi.",
+        "The installer is not code-signed, so SmartScreen may say Windows protected your PC. Click More info → Run anyway.",
+        "Kaiflow lives in the system tray, next to the clock. Window titles are recorded without any extra permission.",
+      ],
+      linuxTitle: "Linux",
+      linuxLead: "Use the AppImage on any recent distribution, or the .deb on Ubuntu 22.04, Debian 12 or later.",
+      appImageLabel: "AppImage",
+      debLabel: ".deb",
+      linuxNote: "Full tracking on X11. On Wayland, window tracking is unavailable; idle, lock and sleep still work. On GNOME, the tray icon needs the AppIndicator extension.",
+      report: "Report an issue",
+      download: "Download the beta",
+    },
   },
   availability: {
     title: "Availability",
     available: "Available",
+    beta: "Beta",
     soon: "Coming soon",
     items: [
       { name: "macOS", status: "available", detail: "Universal DMG for macOS 13 or later" },
-      { name: "Windows", status: "soon", detail: "Implemented. Build from source today" },
-      { name: "Linux", status: "soon", detail: "Implemented for X11. Build from source today" },
+      { name: "Windows", status: "beta", detail: "Installer (.exe) or MSI for Windows 10 and 11" },
+      { name: "Linux", status: "beta", detail: "AppImage or .deb. Full tracking on X11" },
     ],
     watch: "Watch releases",
     vote: "Ask for your platform",

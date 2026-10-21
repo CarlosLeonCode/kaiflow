@@ -9,6 +9,9 @@ interface Props {
 
 const { t } = Astro.props;
 const QUARANTINE_COMMAND = 'xattr -dr com.apple.quarantine "/Applications/Kaiflow.app"';
+const APPIMAGE_COMMAND = "chmod +x Kaiflow_*.AppImage\n./Kaiflow_*.AppImage";
+const DEB_COMMAND = "sudo apt install ./Kaiflow_*.deb";
+const beta = t.install.beta;
 ---
 
 <section id="install" aria-labelledby="install-title" class="py-20 sm:py-28">
@@ -78,5 +81,39 @@ const QUARANTINE_COMMAND = 'xattr -dr com.apple.quarantine "/Applications/Kaiflo
         <p class="mt-1 text-[15px] leading-relaxed text-fg-muted">{t.install.permissionBody}</p>
       </div>
     </div>
+
+    <h3 id="install-beta" class="mt-14 flex items-center gap-3 text-xl font-semibold tracking-tight">
+      {beta.title}
+      <span class="rounded-full border border-warning px-2.5 py-0.5 text-xs font-medium text-warning">{beta.badge}</span>
+    </h3>
+    <p class="mt-2 max-w-3xl text-[15px] leading-relaxed text-fg-muted">{beta.lead}</p>
+
+    <div class="mt-6 grid gap-6 md:grid-cols-2">
+      <div class="rounded-2xl border border-line bg-bg-subtle p-6">
+        <h4 class="font-semibold tracking-tight">{beta.windowsTitle}</h4>
+        <ol class="mt-4 list-decimal space-y-2 pl-5 text-[15px] leading-relaxed text-fg-muted marker:font-semibold marker:text-fg">
+          {beta.windowsSteps.map((step) => <li>{step}</li>)}
+        </ol>
+      </div>
+      <div class="min-w-0 rounded-2xl border border-line bg-bg-subtle p-6">
+        <h4 class="font-semibold tracking-tight">{beta.linuxTitle}</h4>
+        <p class="mt-4 text-[15px] leading-relaxed text-fg-muted">{beta.linuxLead}</p>
+        <p class="mt-4 text-sm font-medium">{beta.appImageLabel}</p>
+        <pre class="mt-2 overflow-x-auto rounded-xl border border-line bg-surface p-4 text-sm" tabindex="0"><code>{APPIMAGE_COMMAND}</code></pre>
+        <p class="mt-4 text-sm font-medium">{beta.debLabel}</p>
+        <pre class="mt-2 overflow-x-auto rounded-xl border border-line bg-surface p-4 text-sm" tabindex="0"><code>{DEB_COMMAND}</code></pre>
+        <p class="mt-4 text-[15px] leading-relaxed text-fg-muted">{beta.linuxNote}</p>
+      </div>
+    </div>
+    <p class="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3">
+      <a href={LINKS.download} class="btn btn-secondary w-full px-5 sm:w-auto">
+        <Icon name="download" size={18} />
+        {beta.download}
+      </a>
+      <a href={LINKS.issues} class="inline-flex items-center gap-1.5 py-1 text-sm text-accent underline-offset-4 hover:underline">
+        <Icon name="github" size={16} />
+        {beta.report}
+      </a>
+    </p>
   </div>
 </section>

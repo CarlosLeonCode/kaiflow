@@ -34,13 +34,6 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "linux": {
-      "deb": {
-        "depends": [
-          "libayatana-appindicator3-1"
-        ]
-      }
-    },
     "macOS": {
       "minimumSystemVersion": "13.0",
       "hardenedRuntime": true,

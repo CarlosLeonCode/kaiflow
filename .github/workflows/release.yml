@@ -1,16 +1,28 @@
 name: Release
 
-# Pushing a tag such as v0.2.0 builds the universal macOS app and publishes the DMG to a GitHub
-# Release. Everything is optional and free by default (no paid Apple Developer account):
+# Pushing a tag such as v0.2.0 builds Kaiflow and publishes it to a GitHub Release:
 #
-# - Signing, in order of preference:
+# - macOS: universal DMG (the primary download).
+# - Windows (beta): NSIS installer (.exe) and MSI. Unsigned: SmartScreen warns on first run.
+# - Linux (beta): AppImage and .deb, built on Ubuntu 22.04. Unsigned.
+#
+# Everything is optional and free by default (no paid Apple Developer account):
+#
+# - macOS signing, in order of preference:
 #     1. Developer ID + notarization, when every APPLE_* secret exists.
 #     2. A stable self-signed identity, when MACOS_SELF_SIGNED_CERT_P12 and
 #        MACOS_SELF_SIGNED_CERT_PASSWORD exist. macOS then keeps the Accessibility permission
 #        across updates because the designated requirement does not change.
 #     3. Ad-hoc. Users must re-grant Accessibility after each update (the notes say so).
-# - Updater: signed updater artifacts and latest.json only when TAURI_SIGNING_PRIVATE_KEY
-#   exists and plugins.updater.pubkey is a real key. Otherwise the in-app updater stays off.
+# - Updater: signed updater artifacts (every platform) and one latest.json covering all of them,
+#   only when TAURI_SIGNING_PRIVATE_KEY exists and plugins.updater.pubkey is a real key.
+#   Otherwise the in-app updater stays off on every platform.
+#
+# Flow: `prepare` validates the tag, decides the modes and creates ONE draft release. The build
+# jobs upload into that release by id (no job creates its own release, so there is no race).
+# `publish` writes latest.json from the uploaded signatures and publishes the release only when
+# every build succeeded, so `releases/latest` (the updater endpoint) never points at a partial
+# or unverified release.
 #
 # Setup and certificate generation: docs/release.md.
 on:
@@ -30,11 +42,16 @@ env:
   # variable if your certificate uses another name.
   SELF_SIGNED_IDENTITY: ${{ vars.MACOS_SELF_SIGNED_IDENTITY || 'Kaiflow Release' }}
   APP_PATH_IN_APPLICATIONS: /Applications/Kaiflow.app
+  ISSUES_URL: https://github.com/CarlosLeonCode/kaiflow/issues
 
 jobs:
-  macos:
-    name: macOS universal (${{ github.ref_name }})
-    runs-on: macos-latest
+  prepare:
+    name: Prepare the release (${{ github.ref_name }})
+    runs-on: ubuntu-latest
+    outputs:
+      updater: ${{ steps.config.outputs.updater }}
+      signing_mode: ${{ steps.config.outputs.signing_mode }}
+      release_id: ${{ steps.release.outputs.id }}
     steps:
       - uses: actions/checkout@v4
 
@@ -60,22 +77,17 @@ jobs:
             exit 1
           fi
 
-          # 2. Updater: on only with a real public key AND the private signing key.
-          override="${RUNNER_TEMP}/release-overrides.json"
+          # 2. Updater: on only with a real public key AND the private signing key. The same
+          #    decision applies to every platform (each build job writes the matching overrides).
           if grep -q "REPLACE_WITH_" src-tauri/tauri.conf.json || [ -z "${TAURI_SIGNING_PRIVATE_KEY}" ]; then
             updater="false"
-            # No updater artifacts, and the placeholder key keeps the in-app updater disabled
-            # (src-tauri/src/updater.rs) even if a real pubkey is committed without its secret.
-            echo '{"bundle":{"createUpdaterArtifacts":false},"plugins":{"updater":{"pubkey":"REPLACE_WITH_UPDATER_PUBLIC_KEY"}}}' > "${override}"
             echo "::notice title=Updater off::No updater key configured. The app is built without automatic updates. See docs/release.md to enable them (free)."
           else
             updater="true"
-            echo '{}' > "${override}"
           fi
-          echo "UPDATER=${updater}" >> "$GITHUB_ENV"
-          echo "OVERRIDES=${override}" >> "$GITHUB_ENV"
+          echo "updater=${updater}" >> "$GITHUB_OUTPUT"
 
-          # 3. Signing mode.
+          # 3. macOS signing mode.
           apple_missing=""
           for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
             if [ -z "${!name}" ]; then apple_missing="${apple_missing} ${name}"; fi
@@ -87,10 +99,10 @@ jobs:
           else
             mode="adhoc"
           fi
-          echo "SIGNING_MODE=${mode}" >> "$GITHUB_ENV"
+          echo "signing_mode=${mode}" >> "$GITHUB_OUTPUT"
           echo "::notice title=Signing mode::${mode}"
 
-          # 4. Release notes with first-open instructions.
+          # 4. Release notes with first-open instructions for every platform.
           notes="${RUNNER_TEMP}/release-notes.md"
           {
             echo "## Install on macOS"
@@ -123,28 +135,99 @@ jobs:
                 echo "> This build is signed with the project's stable self-signed certificate, so the Accessibility permission is kept across updates." ;;
             esac
             echo
+            echo "## Windows (beta)"
+            echo
+            echo "> **Beta:** less tested than the macOS build. Please [report issues](${ISSUES_URL}) with your Windows version."
+            echo
+            echo "1. Download **\`Kaiflow_${app_version}_x64-setup.exe\`** (recommended: installs for your user, no administrator rights) or the \`.msi\` below. Windows 10 or 11, 64-bit."
+            echo "2. The installer is **not code-signed**, so Microsoft Defender SmartScreen may say *Windows protected your PC*. Click **More info → Run anyway**."
+            echo "3. Kaiflow lives in the system tray (next to the clock; it may be hidden under the **^** arrow). Window titles are recorded without any extra permission."
+            echo
+            echo "## Linux (beta)"
+            echo
+            echo "> **Beta:** less tested than the macOS build. Please [report issues](${ISSUES_URL}) with your distribution, desktop and session type (\`echo \$XDG_SESSION_TYPE\`)."
+            echo
+            echo "- **AppImage** (any recent distribution):"
+            echo
+            echo "  \`\`\`sh"
+            echo "  chmod +x Kaiflow_*.AppImage"
+            echo "  ./Kaiflow_*.AppImage"
+            echo "  \`\`\`"
+            echo "- **\`.deb\`** (Ubuntu 22.04 or later, Debian 12 or later):"
+            echo
+            echo "  \`\`\`sh"
+            echo "  sudo apt install ./Kaiflow_*.deb"
+            echo "  \`\`\`"
+            echo
+            echo "Kaiflow works fully on **X11** sessions. On **Wayland**, window tracking is unavailable (Wayland does not let apps see the window in front); idle, lock and sleep are still recorded. Choose an X11 session at login (for example *GNOME on Xorg*) for full tracking. On GNOME, the tray icon needs the **AppIndicator** extension (preinstalled on Ubuntu)."
+            echo
+            echo "## Updates"
+            echo
             if [ "${updater}" = "true" ]; then
               echo "Installed copies update themselves (Settings → Updates)."
             else
               echo "Automatic updates are not enabled for this build: download new versions from this page."
             fi
-            echo
-            echo "Windows and Linux builds are coming soon; meanwhile you can build from source (see the README)."
           } > "${notes}"
-          {
-            echo "notes<<RELEASE_NOTES_EOF"
-            cat "${notes}"
-            echo "RELEASE_NOTES_EOF"
-          } >> "$GITHUB_OUTPUT"
+          echo "notes_file=${notes}" >> "$GITHUB_OUTPUT"
 
           {
             echo "### Release configuration"
-            echo "- Signing: **${mode}**"
+            echo "- macOS signing: **${mode}**"
             if [ "${mode}" != "notarized" ] && [ -n "${apple_missing}" ]; then
               echo "- Notarization skipped (missing:${apple_missing})."
             fi
+            echo "- Windows and Linux (beta): **unsigned**"
             echo "- Updater: **${updater}**"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # One draft release for every build job. Re-running the workflow reuses it.
+      - name: Create the draft release
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NOTES_FILE: ${{ steps.config.outputs.notes_file }}
+        run: |
+          set -euo pipefail
+          id="$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+            --jq "map(select(.tag_name == \"${GITHUB_REF_NAME}\")) | .[0].id // empty")"
+          if [ -z "${id}" ]; then
+            id="$(gh api -X POST "repos/${GITHUB_REPOSITORY}/releases" \
+              -f tag_name="${GITHUB_REF_NAME}" \
+              -f name="Kaiflow ${GITHUB_REF_NAME}" \
+              -F body=@"${NOTES_FILE}" \
+              -F draft=true \
+              -F prerelease=false \
+              --jq .id)"
+          else
+            echo "::notice title=Release exists::Reusing release ${id} for ${GITHUB_REF_NAME}."
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/releases/${id}" -F body=@"${NOTES_FILE}" --silent
+          fi
+          echo "id=${id}" >> "$GITHUB_OUTPUT"
+
+  macos:
+    name: macOS universal (${{ github.ref_name }})
+    needs: prepare
+    runs-on: macos-latest
+    env:
+      UPDATER: ${{ needs.prepare.outputs.updater }}
+      SIGNING_MODE: ${{ needs.prepare.outputs.signing_mode }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write the build overrides
+        shell: bash
+        run: |
+          set -euo pipefail
+          override="${RUNNER_TEMP}/release-overrides.json"
+          if [ "${UPDATER}" = "true" ]; then
+            echo '{}' > "${override}"
+          else
+            # No updater artifacts, and the placeholder key keeps the in-app updater disabled
+            # (src-tauri/src/updater.rs) even if a real pubkey is committed without its secret.
+            echo '{"bundle":{"createUpdaterArtifacts":false},"plugins":{"updater":{"pubkey":"REPLACE_WITH_UPDATER_PUBLIC_KEY"}}}' > "${override}"
+          fi
+          echo "OVERRIDES=${override}" >> "$GITHUB_ENV"
 
       # Mode 2: import the self-signed certificate into a temporary keychain. The identity is
       # referenced by its SHA-1 hash, so codesign finds it even though no CA trusts it.
@@ -200,9 +283,10 @@ jobs:
 
       - run: npm ci
 
-      - name: Build, sign and upload (draft)
+      - name: Build, sign and upload to the draft release
         id: tauri
-        uses: tauri-apps/tauri-action@v0
+        # v0.6.2, pinned by commit.
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Updater signature. Ignored when the overrides turn updater artifacts off.
@@ -219,15 +303,9 @@ jobs:
           APPLE_PASSWORD: ${{ env.SIGNING_MODE == 'notarized' && secrets.APPLE_PASSWORD || '' }}
           APPLE_TEAM_ID: ${{ env.SIGNING_MODE == 'notarized' && secrets.APPLE_TEAM_ID || '' }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: Kaiflow ${{ github.ref_name }}
-          releaseBody: ${{ steps.config.outputs.notes }}
-          # Always a draft first: it is published only after the checks below pass, so
-          # `releases/latest` (the updater endpoint) never points at an unverified build.
-          releaseDraft: true
-          prerelease: false
-          # Uploads latest.json (the updater manifest) next to the DMG and the .app.tar.gz.sig.
-          includeUpdaterJson: ${{ env.UPDATER == 'true' }}
+          releaseId: ${{ needs.prepare.outputs.release_id }}
+          # latest.json is written once, for every platform, by the publish job.
+          includeUpdaterJson: false
           args: --target universal-apple-darwin --config ${{ env.OVERRIDES }}
 
       - name: Verify the signature
@@ -254,11 +332,195 @@ jobs:
             xcrun stapler validate "${app}"
           fi
 
-      - name: Publish the release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release edit "${GITHUB_REF_NAME}" --draft=false
-
       - name: Remove the temporary keychain
         if: always() && env.RELEASE_KEYCHAIN != ''
         run: security delete-keychain "${RELEASE_KEYCHAIN}" || true
+
+  windows-linux:
+    name: ${{ matrix.name }} beta (${{ github.ref_name }})
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+            bundles: nsis,msi
+          - name: Linux
+            # The oldest supported Ubuntu keeps the AppImage and .deb compatible with more
+            # distributions (glibc and WebKitGTK are linked dynamically).
+            os: ubuntu-22.04
+            bundles: appimage,deb
+    runs-on: ${{ matrix.os }}
+    env:
+      UPDATER: ${{ needs.prepare.outputs.updater }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Same overrides as macOS. Forward slashes on Windows so the Tauri CLI reads the path as is.
+      - name: Write the build overrides
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir="${RUNNER_TEMP}"
+          if command -v cygpath >/dev/null 2>&1; then dir="$(cygpath -m "${dir}")"; fi
+          override="${dir}/release-overrides.json"
+          if [ "${UPDATER}" = "true" ]; then
+            echo '{}' > "${override}"
+          else
+            echo '{"bundle":{"createUpdaterArtifacts":false},"plugins":{"updater":{"pubkey":"REPLACE_WITH_UPDATER_PUBLIC_KEY"}}}' > "${override}"
+          fi
+          echo "OVERRIDES=${override}" >> "$GITHUB_ENV"
+
+      # WebKitGTK, AppIndicator (tray), librsvg and xdo for Tauri; patchelf and FUSE for the
+      # AppImage tooling.
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev \
+            libssl-dev build-essential pkg-config patchelf file libfuse2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # Toolchain version comes from rust-toolchain.toml.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.93"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: ". -> target"
+
+      - run: npm ci
+
+      # Unsigned: no code-signing secrets on Windows or Linux. Only the updater key is used,
+      # and only when the updater is on.
+      - name: Build and upload to the draft release
+        # v0.6.2, pinned by commit.
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ env.UPDATER == 'true' && secrets.TAURI_SIGNING_PRIVATE_KEY || '' }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ env.UPDATER == 'true' && secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '' }}
+        with:
+          releaseId: ${{ needs.prepare.outputs.release_id }}
+          includeUpdaterJson: false
+          args: --bundles ${{ matrix.bundles }} --config ${{ env.OVERRIDES }}
+
+  publish:
+    name: Publish the release (${{ github.ref_name }})
+    # Every build must succeed: the release stays a draft otherwise. Re-run the failed job and
+    # this one runs again.
+    needs: [prepare, macos, windows-linux]
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
+      UPDATER: ${{ needs.prepare.outputs.updater }}
+    steps:
+      - name: Check the uploaded assets
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}/assets?per_page=100" --paginate \
+            --jq '.[] | [.id, .name] | @tsv' > "${RUNNER_TEMP}/assets.tsv"
+          {
+            echo "### Release assets"
+            cut -f2 "${RUNNER_TEMP}/assets.tsv" | sed 's/^/- /'
+          } >> "$GITHUB_STEP_SUMMARY"
+          missing=""
+          for pattern in '\.dmg$' '-setup\.exe$' '\.msi$' '\.AppImage$' '\.deb$'; do
+            if ! cut -f2 "${RUNNER_TEMP}/assets.tsv" | grep -Eq -- "${pattern}"; then
+              missing="${missing} ${pattern}"
+            fi
+          done
+          if [ -n "${missing}" ]; then
+            echo "::error::The release is missing assets matching:${missing}"
+            exit 1
+          fi
+
+      # One manifest for every platform, built from the uploaded .sig files after all builds
+      # finished (parallel jobs merging latest.json themselves could overwrite each other).
+      # Keys follow tauri-plugin-updater: "<os>-<arch>-<bundle>" first, then "<os>-<arch>".
+      - name: Upload the updater manifest (latest.json)
+        if: env.UPDATER == 'true'
+        run: |
+          set -euo pipefail
+          work="${RUNNER_TEMP}/updater"
+          mkdir -p "${work}/sigs"
+          while IFS=$'\t' read -r id name; do
+            case "${name}" in
+              *.sig)
+                gh api -H "Accept: application/octet-stream" \
+                  "repos/${GITHUB_REPOSITORY}/releases/assets/${id}" > "${work}/sigs/${name}" ;;
+            esac
+          done < "${RUNNER_TEMP}/assets.tsv"
+
+          python3 - "${work}" "${RUNNER_TEMP}/assets.tsv" <<'PY'
+          import datetime, json, os, sys, urllib.parse
+
+          work, assets_file = sys.argv[1], sys.argv[2]
+          repo, tag = os.environ["GITHUB_REPOSITORY"], os.environ["GITHUB_REF_NAME"]
+          names = {line.split("\t", 1)[1].strip() for line in open(assets_file) if "\t" in line}
+
+          def arches(name, default):
+              lower = name.lower()
+              if "universal" in lower:
+                  return ["aarch64", "x86_64"]
+              if "aarch64" in lower or "arm64" in lower:
+                  return ["aarch64"]
+              if "x64" in lower or "x86_64" in lower or "amd64" in lower:
+                  return ["x86_64"]
+              return default
+
+          # (suffix, os, bundle key, also the generic "<os>-<arch>" entry, default arches)
+          kinds = [
+              (".app.tar.gz", "darwin", "app", True, ["aarch64", "x86_64"]),
+              ("-setup.exe", "windows", "nsis", True, ["x86_64"]),
+              (".msi", "windows", "msi", False, ["x86_64"]),
+              (".AppImage", "linux", "appimage", True, ["x86_64"]),
+              (".deb", "linux", "deb", False, ["x86_64"]),
+          ]
+          platforms = {}
+          for sig in sorted(os.listdir(os.path.join(work, "sigs"))):
+              artifact = sig[: -len(".sig")]
+              if artifact not in names:
+                  sys.exit(f"{sig} has no matching asset {artifact}")
+              kind = next((k for k in kinds if artifact.endswith(k[0])), None)
+              if kind is None:
+                  print(f"::warning::Ignoring unknown updater signature {sig}")
+                  continue
+              _, os_name, bundle, generic, default = kind
+              entry = {
+                  "signature": open(os.path.join(work, "sigs", sig)).read().strip(),
+                  "url": f"https://github.com/{repo}/releases/download/{tag}/{urllib.parse.quote(artifact)}",
+              }
+              for arch in arches(artifact, default):
+                  platforms[f"{os_name}-{arch}-{bundle}"] = entry
+                  if generic:
+                      platforms[f"{os_name}-{arch}"] = entry
+
+          required = ["darwin-aarch64", "darwin-x86_64", "windows-x86_64", "linux-x86_64"]
+          missing = [key for key in required if key not in platforms]
+          if missing:
+              sys.exit(f"latest.json would miss {missing}: check the updater signatures of each build")
+
+          manifest = {
+              "version": tag.removeprefix("v"),
+              "notes": f"https://github.com/{repo}/releases/tag/{tag}",
+              "pub_date": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "platforms": dict(sorted(platforms.items())),
+          }
+          with open(os.path.join(work, "latest.json"), "w") as out:
+              json.dump(manifest, out, indent=2)
+          print(json.dumps(manifest["platforms"], indent=2))
+          PY
+
+          gh release upload "${GITHUB_REF_NAME}" "${work}/latest.json" --clobber --repo "${GITHUB_REPOSITORY}"
+          echo "- Updater manifest: \`latest.json\` with $(python3 -c "import json,sys; print(len(json.load(open(sys.argv[1]))['platforms']))" "${work}/latest.json") platform entries" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish the release
+        run: gh release edit "${GITHUB_REF_NAME}" --draft=false --repo "${GITHUB_REPOSITORY}"

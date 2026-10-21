@@ -6,6 +6,18 @@ de 2 s) es la misma en los tres sistemas y vive en `crates/adapters-common`; cad
 aporta como leer la ventana activa, su titulo, el contador de inactividad y los avisos de
 suspension y bloqueo.
 
+## Descargas
+
+| Sistema | Estado | Paquetes en GitHub Releases |
+|---|---|---|
+| macOS 13+ | Publicado | DMG universal |
+| Windows 10/11 (x64) | **Beta** | Instalador NSIS (`*_x64-setup.exe`, por usuario) y MSI, sin firma de codigo |
+| Linux x86_64 | **Beta** | AppImage y `.deb` (compilados en Ubuntu 22.04), sin firma |
+
+"Beta" significa que se compilan y prueban en CI igual que macOS, pero se han probado menos en
+equipos reales. Las listas de prueba manual estan en `docs/checklists/beta-windows.md` y
+`docs/checklists/beta-linux.md`.
+
 | Crate | Sistema |
 |---|---|
 | `crates/adapters-macos` | macOS: NSWorkspace, Accesibilidad (AX), CGEventSource |

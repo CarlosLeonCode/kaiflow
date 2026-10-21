@@ -7,7 +7,7 @@
 
 [![CI](https://github.com/CarlosLeonCode/kaiflow/actions/workflows/ci.yml/badge.svg)](https://github.com/CarlosLeonCode/kaiflow/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Platform: macOS](https://img.shields.io/badge/platform-macOS%2013%2B-lightgrey.svg)](#platform-status)
+[![Platforms: macOS, Windows (beta), Linux (beta)](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20beta%20%7C%20Linux%20beta-lightgrey.svg)](#platform-status)
 
 **A local-first time tracker you can fork and customize, by hand or with AI coding agents
 (Claude Code, Antigravity, Cursor, etc.).**
@@ -97,17 +97,32 @@ Each release's notes say whether that build keeps the Accessibility permission a
 and whether it updates itself. See [docs/release.md](docs/release.md) for how releases are
 signed.
 
+## Install (Windows and Linux, beta)
+
+Windows and Linux builds are **beta**: they track the same way as macOS but have had less
+testing. Download them from the same
+[release page](https://github.com/CarlosLeonCode/kaiflow/releases/latest) and please
+[report issues](https://github.com/CarlosLeonCode/kaiflow/issues).
+
+- **Windows 10/11:** run the `*_x64-setup.exe` installer (per user, no administrator rights) or
+  the `.msi`. The installer is not code-signed, so SmartScreen may say *Windows protected your
+  PC*: click **More info → Run anyway**.
+- **Linux:** `chmod +x Kaiflow_*.AppImage && ./Kaiflow_*.AppImage`, or
+  `sudo apt install ./Kaiflow_*.deb` (Ubuntu 22.04+, Debian 12+). Full tracking on X11; on
+  Wayland only idle, lock and sleep are recorded. On GNOME the tray icon needs the
+  AppIndicator extension.
+
 ## Platform status
 
 | Platform | Status |
 |---|---|
 | macOS 13+ (Apple silicon and Intel) | **Released**: universal DMG on GitHub Releases |
-| Windows 10/11 | Implemented, **coming soon** as a download. Build from source today. |
-| Linux (X11) | Implemented, **coming soon** as a download. Build from source today. |
-| Linux (Wayland) | Partial: idle, lock and sleep only (Wayland hides the active window) |
+| Windows 10/11 (x64) | **Beta** download: NSIS installer (`.exe`) or MSI, unsigned |
+| Linux (X11, x86_64) | **Beta** download: AppImage or `.deb` |
+| Linux (Wayland) | **Beta**, partial: idle, lock and sleep only (Wayland hides the active window) |
 
-Details per capability: [docs/platform-support.md](docs/platform-support.md). Want a Windows or
-Linux build sooner? Say so in [Issues](https://github.com/CarlosLeonCode/kaiflow/issues).
+Details per capability: [docs/platform-support.md](docs/platform-support.md). Found a problem
+on Windows or Linux? Say so in [Issues](https://github.com/CarlosLeonCode/kaiflow/issues).
 
 ## Build from source
 

@@ -6,24 +6,31 @@ está en `src-tauri/src/updater.rs`.
 
 Decisión del proyecto: **no se usa una cuenta de Apple Developer de pago**. La app de macOS se
 distribuye gratis desde GitHub Releases **sin notarizar**. Todo lo demás (firma estable,
-actualizaciones automáticas) también es gratuito y opcional. Windows y Linux están
-implementados, pero todavía no se publican (próximamente).
+actualizaciones automáticas) también es gratuito y opcional. Windows y Linux se publican en la
+misma release como descargas **beta**, sin firma de código.
 
 ## Cómo funciona
 
 1. Se sube una etiqueta `vX.Y.Z` (debe coincidir con `version` de `src-tauri/tauri.conf.json`).
-2. El flujo elige el **modo de firma** según los secretos disponibles (tabla abajo) y decide
-   si se activa el **actualizador**.
-3. GitHub Actions compila la app universal (`aarch64` + `x86_64`) con `tauri-action`, la firma
-   y sube el DMG a una release en **borrador**, con notas que explican cómo abrirla la primera
-   vez.
-4. Se verifica la firma (`codesign`). El requisito designado (*designated requirement*) queda en
-   el resumen del job: si no cambia entre versiones, macOS conserva el permiso de Accesibilidad.
-5. La release se **publica** (deja de ser borrador). Así `releases/latest` nunca apunta a una
-   compilación sin verificar.
+2. El job `prepare` elige el **modo de firma** de macOS según los secretos disponibles (tabla
+   abajo), decide si se activa el **actualizador** y crea **una sola** release en **borrador**,
+   con notas que explican cómo instalar y abrir la app en cada sistema.
+3. En paralelo, con `tauri-action` (fijado por commit) y subiendo a esa release por su id:
+   - `macos`: app universal (`aarch64` + `x86_64`), firmada, y DMG.
+   - `windows-linux` (matriz): en `windows-latest`, instalador NSIS (`.exe`) y MSI; en
+     `ubuntu-22.04`, AppImage y `.deb`. Sin firma de código y sin secretos, salvo la clave del
+     actualizador cuando está activo.
+4. En macOS se verifica la firma (`codesign`). El requisito designado (*designated
+   requirement*) queda en el resumen del job: si no cambia entre versiones, macOS conserva el
+   permiso de Accesibilidad.
+5. El job `publish` comprueba que están todos los paquetes (DMG, `-setup.exe`, MSI, AppImage,
+   `.deb`), genera `latest.json` con todas las plataformas si el actualizador está activo y
+   **publica** la release. Si falla cualquier compilación, la release queda en borrador:
+   reejecuta el job fallido y `publish` se ejecuta de nuevo. Así `releases/latest` nunca apunta a
+   una release incompleta o sin verificar.
 
-Sin ningún secreto configurado, el flujo funciona igual: firma ad-hoc, sin actualizador y release
-publicada.
+Sin ningún secreto configurado, el flujo funciona igual: firma ad-hoc en macOS, Windows y Linux
+sin firma, sin actualizador y release publicada.
 
 ## Modos de firma
 
@@ -99,9 +106,17 @@ partir de ahí se conserva.
 ## Actualizaciones automáticas (opcional, gratis)
 
 El actualizador de Tauri verifica cada actualización con una firma propia (no tiene que ver con
-Apple). Si no se configura, la app se publica **sin actualizador**: el flujo compila con
-`createUpdaterArtifacts: false`, no sube `latest.json` y la app no hace ninguna petición de
-actualización. Los usuarios descargan las nuevas versiones desde Releases.
+Apple). Si no se configura, la app se publica **sin actualizador** en los tres sistemas: el
+flujo compila con `createUpdaterArtifacts: false`, no sube firmas `.sig` ni `latest.json` y la
+app no hace ninguna petición de actualización. Los usuarios descargan las nuevas versiones desde
+Releases.
+
+Con el actualizador activo, cada job sube sus paquetes firmados (`.sig`) y el job `publish`
+escribe **un único** `latest.json` a partir de ellos (los jobs en paralelo no lo editan, para
+que no se pisen). Incluye `darwin-aarch64` y `darwin-x86_64` (el `.app.tar.gz` universal),
+`windows-x86_64` (NSIS; además `-nsis` y `-msi`) y `linux-x86_64` (AppImage; además
+`-appimage` y `-deb` si el `.deb` viene firmado). Si falta alguna plataforma, el job falla y la
+release no se publica.
 
 Para activarlo:
 
@@ -188,70 +203,30 @@ xattr -dr com.apple.quarantine "/Applications/Kaiflow.app"
 
 3. Seguir la ejecución en la pestaña Actions. El resumen del job muestra el modo de firma, si el
    actualizador está activo y el requisito designado.
-4. Antes de anunciarla, repasar `docs/checklists/release-clean-mac.md` en un Mac limpio.
+4. Antes de anunciarla, repasar `docs/checklists/release-clean-mac.md` en un Mac limpio y, para
+   las betas, `docs/checklists/beta-windows.md` y `docs/checklists/beta-linux.md`.
 
-## Windows y Linux (próximamente)
+## Windows y Linux (beta)
 
-La app compila y registra en Windows y Linux (ver `docs/platform-support.md`) y CI la prueba en
-los tres sistemas, pero `release.yml` todavía publica solo macOS. `bundle.targets` en
-`src-tauri/tauri.conf.json` ya incluye todos los formatos; cada sistema genera solo los suyos:
+Se publican en la misma release que macOS. `bundle.targets` en `src-tauri/tauri.conf.json`
+incluye todos los formatos y el flujo pasa `--bundles` en cada sistema:
 
-| Sistema | Paquetes | Actualización automática |
-|---|---|---|
-| macOS | `.app` y DMG | Sí, si el actualizador está configurado (`.app.tar.gz` + `.sig`) |
-| Windows | MSI (WiX) e instalador NSIS (`.exe`, por usuario, sin permisos de administrador) | Sí (el instalador + `.sig`) |
-| Linux | AppImage y `.deb` | Solo AppImage (+ `.sig`); el `.deb` se actualiza reinstalando |
+| Sistema | Paquetes | Firma | Actualización automática |
+|---|---|---|---|
+| macOS | `.app` y DMG | Ad-hoc, autofirmado o Developer ID | Sí, si el actualizador está configurado (`.app.tar.gz` + `.sig`) |
+| Windows | Instalador NSIS (`*_x64-setup.exe`, por usuario, sin permisos de administrador) y MSI (WiX) | Ninguna | Sí, si el actualizador está configurado (el instalador + `.sig`) |
+| Linux | AppImage y `.deb` (compilados en Ubuntu 22.04) | Ninguna | Sí para el AppImage (+ `.sig`); el `.deb` solo si la CLI de Tauri lo firma |
 
-Para publicarlos, agregar a `release.yml` un segundo job con una matriz y mover el paso
-"Publish the release" a un job propio con `needs: [macos, windows-linux]`, de modo que la
-release siga en borrador hasta que terminen todos:
-
-```yaml
-  windows-linux:
-    name: ${{ matrix.os }} (${{ github.ref_name }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, ubuntu-22.04]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Linux dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
-            librsvg2-dev libxdo-dev libssl-dev build-essential pkg-config
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: "1.93"
-      - uses: Swatinem/rust-cache@v2
-      - run: npm ci
-      - uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: Kaiflow ${{ github.ref_name }}
-          releaseDraft: true
-          includeUpdaterJson: true
-```
-
-- Reutilizar el mismo archivo de configuración adicional (`--config`) que el job de macOS
-  cuando el actualizador está desactivado.
-- `tauri-action` agrega cada plataforma al mismo `latest.json`, así que el actualizador de cada
-  sistema encuentra su entrada.
-- **Windows sin firma de código**: SmartScreen avisará al instalar ("editor desconocido"). Para
-  evitarlo hace falta un certificado de firma de código (o Azure Trusted Signing) configurado en
+- **Windows sin firma de código**: SmartScreen avisa al instalar ("Windows protegió su PC").
+  Las notas de la release explican **Más información → Ejecutar de todas formas**. Para evitarlo
+  hace falta un certificado de firma de código (o Azure Trusted Signing) configurado en
   `bundle.windows`.
-- **Linux**: el AppImage y el `.deb` no llevan firma del sistema. El `.deb` declara
-  `libayatana-appindicator3-1` como dependencia para el icono de la bandeja.
+- **Linux**: el AppImage y el `.deb` no llevan firma del sistema. Las dependencias del `.deb`
+  (`libwebkit2gtk-4.1-0`, `libgtk-3-0` y `libayatana-appindicator3-1` para la bandeja) las
+  añade la CLI de Tauri automáticamente; no hace falta declararlas en `bundle.linux.deb`.
+- **Versiones**: el MSI solo acepta versiones numéricas (`X.Y.Z`, sin sufijos como `-beta.1`).
+- Antes de anunciar una versión, repasar `docs/checklists/beta-windows.md` y
+  `docs/checklists/beta-linux.md` en una máquina virtual (UTM o Parallels).
 
 ## Endurecimiento pendiente
 

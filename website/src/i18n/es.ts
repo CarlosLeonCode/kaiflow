@@ -1,10 +1,11 @@
+import { LINKS } from "../lib/links";
 import type { Content } from "./types";
 
 export const es: Content = {
   meta: {
     title: "Kaiflow: descubre en qué se va tu día",
     description:
-      "Un registro de tiempo privado y local que vive en la barra de menús de macOS, con Windows y Linux próximamente. Seguimiento automático por app y ventana, objetivos, sesiones de enfoque y revisión semanal. Gratis, de código abierto (MIT) y fácil de adaptar con agentes de programación con IA.",
+      "Un registro de tiempo privado y local que vive en la barra de menús de macOS, con Windows y Linux en beta. Seguimiento automático por app y ventana, objetivos, sesiones de enfoque y revisión semanal. Gratis, de código abierto (MIT) y fácil de adaptar con agentes de programación con IA.",
     ogAlt: "Kaiflow: mejora tu enfoque, un día a la vez. Un registro de tiempo privado que vive en la barra de menús.",
   },
   a11y: {
@@ -25,11 +26,12 @@ export const es: Content = {
     lead:
       "Kaiflow registra en segundo plano qué app y qué ventana estás usando y te muestra el día en una línea de tiempo clara. Sin cronómetros que iniciar, sin cuentas que crear y sin que nada salga de tu equipo.",
     primary: "Descargar para macOS",
-    secondaryLabel: "Próximamente:",
+    secondaryLabel: "También para",
     secondary: [
-      { label: "Windows", href: "#platforms" },
-      { label: "Linux", href: "#platforms" },
+      { label: "Windows", href: LINKS.download },
+      { label: "Linux", href: LINKS.download },
     ],
+    betaBadge: "Beta",
     note: "Requiere macOS 13 o posterior. Compilación universal para Apple silicon e Intel.",
     notice: "Gratis. Sin notarización de Apple: la primera vez, ábrela desde Ajustes del Sistema → Privacidad y seguridad.",
     noticeLink: "Ver los pasos de instalación",
@@ -210,7 +212,7 @@ export const es: Content = {
   },
   platforms: {
     title: "Compatibilidad por plataforma",
-    lead: "Disponible para macOS. Windows y Linux ya están implementados y registran tu tiempo; las descargas listas para instalar llegarán pronto.",
+    lead: "Disponible para macOS. Windows y Linux ya tienen descargas en beta: registran el tiempo de la misma forma, pero se han probado menos.",
     feature: "Función",
     columns: ["macOS", "Windows", "Linux (X11)", "Linux (Wayland)"],
     rows: [
@@ -236,11 +238,11 @@ export const es: Content = {
       },
       {
         label: "Descarga lista para instalar",
-        cells: [["yes", "DMG en GitHub Releases"], ["partial", "Próximamente. Por ahora, compilar desde el código"], ["partial", "Próximamente. Por ahora, compilar desde el código"], ["partial", "Próximamente. Por ahora, compilar desde el código"]],
+        cells: [["yes", "DMG en GitHub Releases"], ["yes", "Beta: instalador (.exe) o MSI"], ["yes", "Beta: AppImage o .deb"], ["yes", "Beta: AppImage o .deb"]],
       },
     ],
     note: "Wayland no permite que las apps vean qué ventana está activa, así que allí solo se registran la inactividad, el bloqueo y el reposo. Inicia una sesión X11 (por ejemplo, GNOME sobre Xorg) para un seguimiento completo.",
-    sourceLink: "Compilar para Windows o Linux",
+    sourceLink: "Compilar desde el código",
   },
   faq: {
     title: "Preguntas frecuentes",
@@ -321,15 +323,34 @@ export const es: Content = {
     advancedBody: "Solo si confías en la descarga. Este comando quita la marca de cuarentena, lo que omite la comprobación de Gatekeeper para esta app:",
     permissionTitle: "Después, permite los títulos de ventana",
     permissionBody: "Cuando Kaiflow lo pida, actívala en Ajustes del Sistema → Privacidad y seguridad → Accesibilidad. Sin ese permiso, Kaiflow registra igualmente el nombre de las apps.",
+    beta: {
+      title: "Windows y Linux",
+      lead: "Ambas son descargas en beta, en la misma página de versiones que macOS. Registran el tiempo de la misma forma, pero se han probado menos: si algo no funciona como esperas, avísanos.",
+      badge: "Beta",
+      windowsTitle: "Windows 10 y 11",
+      windowsSteps: [
+        "Descarga el instalador que termina en -setup.exe (se instala para tu usuario, sin permisos de administrador) o el .msi.",
+        "El instalador no tiene firma de código, así que SmartScreen puede indicar que Windows protegió tu PC. Pulsa Más información → Ejecutar de todas formas.",
+        "Kaiflow vive en la bandeja del sistema, junto al reloj. Los títulos de ventana se registran sin permisos adicionales.",
+      ],
+      linuxTitle: "Linux",
+      linuxLead: "Usa el AppImage en cualquier distribución reciente o el .deb en Ubuntu 22.04, Debian 12 o posteriores.",
+      appImageLabel: "AppImage",
+      debLabel: ".deb",
+      linuxNote: "Seguimiento completo en X11. En Wayland no se puede registrar la ventana activa; la inactividad, el bloqueo y el reposo sí funcionan. En GNOME, el icono de la bandeja necesita la extensión AppIndicator.",
+      report: "Informar de un problema",
+      download: "Descargar la beta",
+    },
   },
   availability: {
     title: "Disponibilidad",
     available: "Disponible",
+    beta: "Beta",
     soon: "Próximamente",
     items: [
       { name: "macOS", status: "available", detail: "DMG universal para macOS 13 o posterior" },
-      { name: "Windows", status: "soon", detail: "Implementado. Hoy puedes compilarlo desde el código" },
-      { name: "Linux", status: "soon", detail: "Implementado para X11. Hoy puedes compilarlo desde el código" },
+      { name: "Windows", status: "beta", detail: "Instalador (.exe) o MSI para Windows 10 y 11" },
+      { name: "Linux", status: "beta", detail: "AppImage o .deb. Seguimiento completo en X11" },
     ],
     watch: "Seguir las versiones",
     vote: "Pide tu plataforma",

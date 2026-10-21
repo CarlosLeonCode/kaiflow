@@ -38,8 +38,11 @@ export interface Content {
     title: string;
     lead: string;
     primary: string;
+    /** Text before the Windows and Linux beta links, e.g. "Also for". */
     secondaryLabel: string;
     secondary: { label: string; href: string }[];
+    /** Small badge after the Windows and Linux links. */
+    betaBadge: string;
     note: string;
     /** "Free. Not notarized by Apple..." line, followed by a link to the Install section. */
     notice: string;
@@ -93,12 +96,27 @@ export interface Content {
     advancedBody: string;
     permissionTitle: string;
     permissionBody: string;
+    beta: {
+      title: string;
+      lead: string;
+      badge: string;
+      windowsTitle: string;
+      windowsSteps: string[];
+      linuxTitle: string;
+      linuxLead: string;
+      appImageLabel: string;
+      debLabel: string;
+      linuxNote: string;
+      report: string;
+      download: string;
+    };
   };
   availability: {
     title: string;
     available: string;
+    beta: string;
     soon: string;
-    items: { name: string; status: "available" | "soon"; detail: string }[];
+    items: { name: string; status: "available" | "beta" | "soon"; detail: string }[];
     watch: string;
     vote: string;
   };

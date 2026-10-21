@@ -9,6 +9,12 @@ interface Props {
 
 const { t } = Astro.props;
 
+const BADGE = {
+  available: { tone: "border-positive text-positive", label: t.availability.available },
+  beta: { tone: "border-warning text-warning", label: t.availability.beta },
+  soon: { tone: "border-line text-fg-muted", label: t.availability.soon },
+} as const;
+
 const MARK: Record<Support, { icon: IconName; tone: string; label: string }> = {
   yes: { icon: "check", tone: "text-positive", label: t.a11y.yes },
   partial: { icon: "minus", tone: "text-warning", label: t.a11y.partial },
@@ -28,12 +34,8 @@ const MARK: Record<Support, { icon: IconName; tone: string; label: string }> = {
           <li class="rounded-2xl border border-line bg-surface p-5">
             <div class="flex items-center justify-between gap-3">
               <span class="font-semibold tracking-tight">{item.name}</span>
-              <span
-                class={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${
-                  item.status === "available" ? "border-positive text-positive" : "border-line text-fg-muted"
-                }`}
-              >
-                {item.status === "available" ? t.availability.available : t.availability.soon}
+              <span class={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${BADGE[item.status].tone}`}>
+                {BADGE[item.status].label}
               </span>
             </div>
             <p class="mt-2 text-sm leading-relaxed text-fg-muted">{item.detail}</p>
@@ -76,7 +78,7 @@ const MARK: Record<Support, { icon: IconName; tone: string; label: string }> = {
     <p class="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm">
       <a href={LINKS.download} class="inline-flex items-center gap-1.5 py-1 text-accent underline-offset-4 hover:underline">
         <Icon name="download" size={16} />
-        {t.nav.download} (macOS)
+        {t.nav.download}
       </a>
       <a href={LINKS.buildFromSource} class="inline-flex items-center gap-1.5 py-1 text-accent underline-offset-4 hover:underline">
         <Icon name="github" size={16} />
