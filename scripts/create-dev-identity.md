@@ -10,6 +10,13 @@ macOS stores the Accessibility grant (TCC) against the app's code requirement. W
 ad-hoc signature the requirement changes on every build, so the grant is lost each time. A
 self-signed certificate that does not change keeps the same requirement across builds.
 
+This identity is for your own machine only. Published releases use a separate certificate,
+**TimeTrack Release**, stored as a GitHub secret: see
+[docs/release.md](../docs/release.md#certificado-autofirmado-de-release-una-sola-vez-gratis).
+Keep them separate so a leaked dev certificate can never sign a release. Because the two
+identities differ, switching the same Mac between a dev build and a release build asks for
+Accessibility again.
+
 ## Steps
 
 1. Open **Keychain Access** (Spotlight: "Keychain Access").
@@ -56,4 +63,5 @@ offers a restart after granting).
 
 To keep the same identity on another Mac, export it from Keychain Access as a `.p12`
 (right-click the certificate > Export) and import it there. Store the file securely; never
-commit it.
+commit it. The same rule applies to the release certificate (`.p12` in repository secrets
+only).

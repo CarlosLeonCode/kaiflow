@@ -1,107 +1,210 @@
-# Publicar una version (firma, notarizacion y actualizaciones)
+# Publicar una versión (gratis, sin cuenta de Apple de pago)
 
-Este documento describe como se publica Time Track Copilot y que hay que configurar una sola
-vez. El flujo esta en `.github/workflows/release.yml`; la logica de actualizacion de la app
-esta en `src-tauri/src/updater.rs`.
+Este documento describe cómo se publica Time Track Copilot y qué hay que configurar una sola
+vez. El flujo está en `.github/workflows/release.yml`; la lógica de actualización de la app
+está en `src-tauri/src/updater.rs`.
 
-## Como funciona
+Decisión del proyecto: **no se usa una cuenta de Apple Developer de pago**. La app de macOS se
+distribuye gratis desde GitHub Releases **sin notarizar**. Todo lo demás (firma estable,
+actualizaciones automáticas) también es gratuito y opcional. Windows y Linux están
+implementados, pero todavía no se publican (próximamente).
+
+## Cómo funciona
 
 1. Se sube una etiqueta `vX.Y.Z` (debe coincidir con `version` de `src-tauri/tauri.conf.json`).
-2. GitHub Actions compila la app universal (`aarch64` + `x86_64`) con `tauri-action`.
-3. Con los secretos de Apple presentes, la app se firma con Developer ID, con hardened runtime
-   y se notariza. Despues se verifican `codesign`, Gatekeeper (`spctl`) y el ticket grapado
-   (`stapler`).
-4. Se generan el DMG, el archivo de actualizacion (`.app.tar.gz` + `.sig`, firmado con la clave
-   del actualizador) y `latest.json`.
-5. La release se crea como **borrador** y solo se publica cuando las verificaciones pasan. Asi
-   `releases/latest/download/latest.json` (el endpoint del actualizador) nunca apunta a una
-   compilacion sin verificar.
+2. El flujo elige el **modo de firma** según los secretos disponibles (tabla abajo) y decide
+   si se activa el **actualizador**.
+3. GitHub Actions compila la app universal (`aarch64` + `x86_64`) con `tauri-action`, la firma
+   y sube el DMG a una release en **borrador**, con notas que explican cómo abrirla la primera
+   vez.
+4. Se verifica la firma (`codesign`). El requisito designado (*designated requirement*) queda en
+   el resumen del job: si no cambia entre versiones, macOS conserva el permiso de Accesibilidad.
+5. La release se **publica** (deja de ser borrador). Así `releases/latest` nunca apunta a una
+   compilación sin verificar.
 
-La app comprueba actualizaciones al iniciar (tras 30 s) y cada 24 horas, y desde
-Ajustes > Updates con "Check now". Esa peticion a `latest.json` y la descarga del archivo
-firmado son el unico trafico de red de la app. Instalar reinicia la app; el seguimiento se
-reanuda solo.
+Sin ningún secreto configurado, el flujo funciona igual: firma ad-hoc, sin actualizador y release
+publicada.
 
-## Secretos del repositorio
+## Modos de firma
 
-Se configuran en GitHub: Settings > Secrets and variables > Actions > New repository secret.
-Ningun secreto se guarda en el repositorio.
+| Modo | Secretos necesarios | Gatekeeper la primera vez | Permiso de Accesibilidad al actualizar |
+|---|---|---|---|
+| **Ad-hoc** (por defecto) | Ninguno | Aviso: hay que abrirla desde Ajustes del Sistema | **Se pierde**: hay que concederlo de nuevo. Las notas de la release lo indican. |
+| **Autofirmado estable** (recomendado) | `MACOS_SELF_SIGNED_CERT_P12`, `MACOS_SELF_SIGNED_CERT_PASSWORD` | Aviso: hay que abrirla desde Ajustes del Sistema | **Se conserva**, siempre que el certificado no cambie |
+| **Developer ID + notarización** (opcional, de pago) | Los seis `APPLE_*` | Sin aviso | Se conserva |
 
-| Secreto | Para que sirve | Como obtenerlo |
-|---|---|---|
-| `TAURI_SIGNING_PRIVATE_KEY` | Firma los archivos de actualizacion. **Obligatorio**: sin el, la compilacion falla. | Contenido del archivo generado en "Clave del actualizador" (abajo). |
-| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Contrasena de esa clave (vacio si no se puso). | La que se eligio al generarla. |
-| `APPLE_CERTIFICATE` | Certificado "Developer ID Application" en base64. | Exportar el certificado con su clave privada desde Acceso a Llaveros como `.p12` y ejecutar `base64 -i certificado.p12 \| pbcopy`. |
-| `APPLE_CERTIFICATE_PASSWORD` | Contrasena del `.p12`. | La elegida al exportarlo. |
-| `APPLE_SIGNING_IDENTITY` | Nombre de la identidad de firma. | `security find-identity -v -p codesigning`, por ejemplo `Developer ID Application: Nombre Apellido (ABCDE12345)`. |
-| `APPLE_ID` | Apple ID de la cuenta de desarrollador. | El correo de la cuenta. |
-| `APPLE_PASSWORD` | Contrasena **especifica de aplicacion** para notarizar. | appleid.apple.com > Inicio de sesion y seguridad > Contrasenas especificas de apps. |
-| `APPLE_TEAM_ID` | Identificador del equipo (10 caracteres). | developer.apple.com > Cuenta > Membresia. |
+Por qué importa: macOS guarda el permiso de Accesibilidad (TCC) asociado al requisito designado
+de la firma. Con firma ad-hoc ese requisito cambia en cada compilación; con un certificado
+autofirmado que no cambia, el requisito es el mismo (`certificate leaf = H"..."`) en todas las
+versiones.
 
-Si falta alguno de los seis secretos de Apple, el flujo **no falla**: genera una app con firma
-ad-hoc, sin notarizar, deja la release como borrador y muestra un aviso visible (anotacion de
-la ejecucion y resumen del job). Esa compilacion sirve para probar, no para distribuir: macOS
-mostrara avisos de Gatekeeper y el permiso de Accesibilidad no se conservara entre versiones
-porque la identidad de firma cambia.
+## Certificado autofirmado de release (una sola vez, gratis)
 
-## Clave del actualizador (una sola vez)
+Se crea un certificado de firma de código llamado **TimeTrack Release** y se guarda como
+secreto del repositorio. Es distinto de la identidad de desarrollo "TimeTrack Dev"
+(`scripts/create-dev-identity.md`), que solo se usa en tu Mac.
 
-La clave publica va en la configuracion; la privada nunca sale de los secretos y de una copia
-fuera de linea.
+> **Nunca subas el `.p12` ni la clave privada al repositorio.** Guarda una copia cifrada fuera
+> de línea (gestor de contraseñas). Si pierdes el certificado y creas otro, todos los usuarios
+> tendrán que conceder Accesibilidad otra vez.
+
+### Opción A: Acceso a Llaveros
+
+1. Abre **Acceso a Llaveros** > menú **Acceso a Llaveros > Asistente de certificados > Crear un
+   certificado...**
+2. **Nombre**: `TimeTrack Release` (si usas otro, crea la variable del repositorio
+   `MACOS_SELF_SIGNED_IDENTITY` con ese nombre). **Tipo de identidad**: Raíz autofirmada.
+   **Tipo de certificado**: Firma de código. Marca **Permitirme anular los valores por
+   omisión** y pon una validez larga (por ejemplo, 3650 días).
+3. En **Mis certificados**, haz clic derecho en `TimeTrack Release` > **Exportar...**, formato
+   **Intercambio de información personal (.p12)**, y elige una contraseña.
+
+### Opción B: OpenSSL
+
+```sh
+openssl req -x509 -newkey rsa:2048 -sha256 -days 3650 -nodes \
+  -keyout release.key -out release.crt \
+  -subj "/CN=TimeTrack Release" \
+  -addext "basicConstraints=critical,CA:false" \
+  -addext "keyUsage=critical,digitalSignature" \
+  -addext "extendedKeyUsage=critical,codeSigning"
+
+openssl pkcs12 -export -inkey release.key -in release.crt \
+  -name "TimeTrack Release" -out release.p12
+```
+
+Con OpenSSL 3 (por ejemplo, el de Homebrew) añade `-legacy` al segundo comando: el
+`security import` de macOS no lee el cifrado por defecto de OpenSSL 3. El `openssl` incluido en
+macOS (LibreSSL) no lo necesita. Borra `release.key` cuando tengas el `.p12` guardado.
+
+### Guardar los secretos
+
+```sh
+base64 -i release.p12 | pbcopy
+```
+
+En GitHub: **Settings > Secrets and variables > Actions > New repository secret**:
+
+| Secreto | Valor |
+|---|---|
+| `MACOS_SELF_SIGNED_CERT_P12` | El `.p12` en base64 (lo que copió el comando anterior). |
+| `MACOS_SELF_SIGNED_CERT_PASSWORD` | La contraseña del `.p12`. |
+
+El flujo importa el certificado en un llavero temporal, firma con él (lo referencia por su huella
+SHA-1, así que no hace falta que macOS confíe en él) y borra el llavero al terminar.
+
+Al pasar de ad-hoc a autofirmado, los usuarios conceden Accesibilidad **una última vez**; a
+partir de ahí se conserva.
+
+## Actualizaciones automáticas (opcional, gratis)
+
+El actualizador de Tauri verifica cada actualización con una firma propia (no tiene que ver con
+Apple). Si no se configura, la app se publica **sin actualizador**: el flujo compila con
+`createUpdaterArtifacts: false`, no sube `latest.json` y la app no hace ninguna petición de
+actualización. Los usuarios descargan las nuevas versiones desde Releases.
+
+Para activarlo:
 
 ```sh
 npx tauri signer generate -w ~/.tauri/time-track-copilot.key
 ```
 
-1. Elegir una contrasena cuando la pida (o dejarla vacia).
-2. Copiar la **clave publica** que imprime el comando (tambien queda en `~/.tauri/time-track-copilot.key.pub`)
-   en `src-tauri/tauri.conf.json`, sustituyendo el marcador:
+1. Elige una contraseña cuando la pida (o déjala vacía).
+2. Copia la **clave pública** que imprime el comando (también queda en
+   `~/.tauri/time-track-copilot.key.pub`) en `src-tauri/tauri.conf.json`, en lugar del marcador
+   `REPLACE_WITH_UPDATER_PUBLIC_KEY`:
 
    ```json
-   "plugins": { "updater": { "pubkey": "<clave publica>", "endpoints": [ ... ] } }
+   "plugins": { "updater": { "pubkey": "<clave pública>", "endpoints": [ ... ] } }
    ```
 
-3. Guardar el contenido de `~/.tauri/time-track-copilot.key` en el secreto
-   `TAURI_SIGNING_PRIVATE_KEY` y la contrasena en `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
-4. Guardar una copia de la clave privada fuera de linea (gestor de contrasenas o disco
-   cifrado).
+   El test `the_committed_config_ships_the_placeholder_and_the_release_endpoint` de
+   `src-tauri/src/updater.rs` comprueba el marcador: actualízalo en el mismo cambio.
+3. Guarda el contenido de `~/.tauri/time-track-copilot.key` en el secreto
+   `TAURI_SIGNING_PRIVATE_KEY` y la contraseña en `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
+4. Guarda una copia de la clave privada fuera de línea.
 
-Mientras `pubkey` sea el marcador `REPLACE_WITH_UPDATER_PUBLIC_KEY`, la app **no hace ninguna
-peticion de actualizacion** y el flujo de release se detiene con un error explicito.
+El actualizador solo se activa con **las dos cosas**: clave pública real en la configuración y
+clave privada en los secretos. Si falta una, el flujo compila sin actualizador (y fuerza el
+marcador en esa compilación para que la app no consulte un `latest.json` inexistente).
 
-> **Perder la clave privada** impide publicar actualizaciones que las versiones ya instaladas
-> acepten: habria que distribuir una nueva version a mano. Cambiar la clave publica tiene el
-> mismo efecto sobre las instalaciones existentes. No la cambies sin necesidad.
+> **Perder la clave privada** impide publicar actualizaciones que las versiones instaladas
+> acepten: habría que distribuir una nueva versión a mano. Cambiar la clave pública tiene el
+> mismo efecto. No la cambies sin necesidad.
 
-## Publicar una version
+La app comprueba actualizaciones al iniciar (tras 30 s) y cada 24 horas, y desde
+Ajustes > Updates con "Check now". Esa petición y la descarga del archivo firmado son el único
+tráfico de red de la app, aparte de la revisión semanal con IA si el usuario la activa.
 
-1. Subir la version en `src-tauri/tauri.conf.json`, `Cargo.toml` (`[workspace.package]`) y
-   `package.json`.
-2. Confirmar que `main` esta verde (CI) y crear la etiqueta:
+## Notarización con Apple (opcional, de pago)
+
+Si en algún momento hay cuenta de Apple Developer, basta con añadir estos secretos; el flujo
+pasa solo al modo notarizado y además comprueba Gatekeeper (`spctl`) y el ticket grapado
+(`stapler`):
+
+| Secreto | Cómo obtenerlo |
+|---|---|
+| `APPLE_CERTIFICATE` | Certificado "Developer ID Application" exportado como `.p12`, en base64 (`base64 -i certificado.p12 \| pbcopy`). |
+| `APPLE_CERTIFICATE_PASSWORD` | Contraseña del `.p12`. |
+| `APPLE_SIGNING_IDENTITY` | `security find-identity -v -p codesigning`, por ejemplo `Developer ID Application: Nombre Apellido (ABCDE12345)`. |
+| `APPLE_ID` | Correo de la cuenta de desarrollador. |
+| `APPLE_PASSWORD` | Contraseña específica de app (appleid.apple.com > Inicio de sesión y seguridad). |
+| `APPLE_TEAM_ID` | Identificador del equipo (10 caracteres). |
+
+Cambiar de autofirmado a Developer ID cambia el requisito designado: los usuarios conceden
+Accesibilidad una vez más.
+
+## Primera apertura en macOS (lo que ven los usuarios)
+
+Las notas de cada release y la web incluyen estos pasos:
+
+1. Abrir el DMG y arrastrar **Time Track Copilot** a **Aplicaciones**.
+2. Abrir la app una vez. macOS avisa de que no puede verificar al desarrollador. Pulsar
+   **Listo** (o **Cancelar**) y luego:
+   - **macOS 15 (Sequoia) o posterior**: **Ajustes del Sistema > Privacidad y seguridad**,
+     bajar hasta **Seguridad**, pulsar **Abrir igualmente** junto al mensaje sobre Time Track
+     Copilot y confirmar con **Abrir igualmente** y la contraseña.
+   - **macOS 13 y 14**: en Finder, **Aplicaciones**, clic derecho (o Control + clic) en
+     **Time Track Copilot** > **Abrir**, y de nuevo **Abrir** en el diálogo.
+3. Conceder **Accesibilidad** cuando la app lo pida.
+
+Alternativa **avanzada**, solo si se confía en la descarga (omite la comprobación de
+Gatekeeper para esta app):
+
+```sh
+xattr -dr com.apple.quarantine "/Applications/Time Track Copilot.app"
+```
+
+## Publicar una versión
+
+1. Subir la versión en `src-tauri/tauri.conf.json`, `Cargo.toml` (`[workspace.package]`) y
+   `package.json` (la pantalla Ajustes > About muestra la de `package.json`).
+2. Confirmar que `main` está en verde (CI) y crear la etiqueta:
 
    ```sh
    git tag v0.2.0
    git push origin v0.2.0
    ```
 
-3. Seguir la ejecucion en la pestana Actions. Al terminar, la release pasa de borrador a
-   publicada y las instalaciones existentes la detectan en su siguiente comprobacion.
+3. Seguir la ejecución en la pestaña Actions. El resumen del job muestra el modo de firma, si el
+   actualizador está activo y el requisito designado.
 4. Antes de anunciarla, repasar `docs/checklists/release-clean-mac.md` en un Mac limpio.
 
-## Windows y Linux
+## Windows y Linux (próximamente)
 
-La app compila y rastrea en Windows y Linux (ver `docs/platform-support.md`) y CI la prueba en
-los tres sistemas, pero `release.yml` todavia publica solo macOS. `bundle.targets` en
+La app compila y registra en Windows y Linux (ver `docs/platform-support.md`) y CI la prueba en
+los tres sistemas, pero `release.yml` todavía publica solo macOS. `bundle.targets` en
 `src-tauri/tauri.conf.json` ya incluye todos los formatos; cada sistema genera solo los suyos:
 
-| Sistema | Paquetes | Actualizacion automatica |
+| Sistema | Paquetes | Actualización automática |
 |---|---|---|
-| macOS | `.app` y DMG (sin cambios: firma Developer ID y notarizacion como arriba) | Si (`.app.tar.gz` + `.sig`) |
-| Windows | MSI (WiX) e instalador NSIS (`.exe`, por usuario, sin permisos de administrador) | Si (el instalador + `.sig`) |
+| macOS | `.app` y DMG | Sí, si el actualizador está configurado (`.app.tar.gz` + `.sig`) |
+| Windows | MSI (WiX) e instalador NSIS (`.exe`, por usuario, sin permisos de administrador) | Sí (el instalador + `.sig`) |
 | Linux | AppImage y `.deb` | Solo AppImage (+ `.sig`); el `.deb` se actualiza reinstalando |
 
-Para publicarlos, agregar a `release.yml` un segundo job con una matriz y hacer que el paso
-que publica la release espere a todos los jobs:
+Para publicarlos, agregar a `release.yml` un segundo job con una matriz y mover el paso
+"Publish the release" a un job propio con `needs: [macos, windows-linux]`, de modo que la
+release siga en borrador hasta que terminen todos:
 
 ```yaml
   windows-linux:
@@ -140,34 +243,31 @@ que publica la release espere a todos los jobs:
           includeUpdaterJson: true
 ```
 
-- `tauri-action` agrega cada plataforma al mismo `latest.json` de la release, asi que el
-  actualizador de cada sistema encuentra su entrada. Por eso la release debe seguir siendo un
-  borrador hasta que terminen todos los jobs: el paso "Publish the release" del job de macOS
-  pasa a un job propio con `needs: [macos, windows-linux]`.
-- Se usa la misma clave del actualizador (`TAURI_SIGNING_PRIVATE_KEY`) en los tres sistemas.
-- **Windows sin firma de codigo**: SmartScreen avisara al instalar ("editor desconocido")
-  hasta que el instalador se firme. Para firmarlo hace falta un certificado de firma de codigo
-  (o Azure Trusted Signing) configurado en `bundle.windows` (`certificateThumbprint` o
-  `signCommand`). La firma de macOS no cambia.
+- Reutilizar el mismo archivo de configuración adicional (`--config`) que el job de macOS
+  cuando el actualizador está desactivado.
+- `tauri-action` agrega cada plataforma al mismo `latest.json`, así que el actualizador de cada
+  sistema encuentra su entrada.
+- **Windows sin firma de código**: SmartScreen avisará al instalar ("editor desconocido"). Para
+  evitarlo hace falta un certificado de firma de código (o Azure Trusted Signing) configurado en
+  `bundle.windows`.
 - **Linux**: el AppImage y el `.deb` no llevan firma del sistema. El `.deb` declara
   `libayatana-appindicator3-1` como dependencia para el icono de la bandeja.
-- El job de macOS no cambia: sigue compilando la app universal, firmando y notarizando con los
-  mismos secretos.
 
 ## Endurecimiento pendiente
 
 El plugin ofrece `requireSignedVersion` (en `plugins.updater`): exige que la firma lleve la
-version para la que se firmo y evita que un `latest.json` manipulado fuerce una version
-antigua pero legitima. No esta activado porque exige que la CLI de Tauri registre la version en
-el comentario firmado y eso no se ha podido comprobar sin generar claves. Tras publicar la
-primera release de prueba, activarlo y comprobar que la actualizacion N a N+1 sigue
-funcionando.
+versión para la que se firmó y evita que un `latest.json` manipulado fuerce una versión antigua
+pero legítima. Activarlo tras la primera release con actualizador y comprobar que la
+actualización de N a N+1 sigue funcionando.
 
 ## Notas
 
 - Los permisos del actualizador no se conceden a ninguna ventana: la interfaz solo usa los
-  comandos `update_check` y `update_install` (R6.5).
+  comandos `update_check` y `update_install`.
 - `tauri build` puede reescribir las `features` de `tauri-build` en `src-tauri/Cargo.toml`.
   Revertir ese cambio antes de hacer commit.
-- Endpoint: `https://github.com/CarlosLeonCode/time-track-copilot/releases/latest/download/latest.json`.
-  Si el repositorio cambia de dueno o nombre, actualizarlo en `src-tauri/tauri.conf.json`.
+- La salida de compilación está en `target/` en la raíz (espacio de trabajo de Cargo), no en
+  `src-tauri/target/`.
+- Endpoint del actualizador:
+  `https://github.com/CarlosLeonCode/time-track-copilot/releases/latest/download/latest.json`.
+  En un fork, cámbialo en `src-tauri/tauri.conf.json` (ver `docs/forking.md`).

@@ -6,26 +6,30 @@ local) en un Mac donde la app nunca se haya instalado, o tras borrar:
 y la entrada de la app en Ajustes del Sistema > Privacidad y seguridad > Accesibilidad.
 
 Marcar cada punto con `[x]` y anotar fecha, version de macOS y observaciones. Requisitos que
-cubre: R11.1 (firma y notarizacion), R11.4 (actualizaciones) y R10.1 (sin red salvo el
-actualizador).
+cubre: R11.1 (instalacion y primera apertura), R11.4 (actualizaciones) y R10.1 (sin red salvo
+el actualizador). Las releases son gratuitas y **no estan notarizadas** salvo que existan los
+secretos de Apple (ver `docs/release.md`); anotar el modo de firma que muestra el resumen del
+job (ad-hoc, autofirmado o notarizado).
 
-- Version N: ____ / Version N+1: ____ / macOS: ____ / Equipo: ____ / Fecha: ____
+- Version N: ____ / Version N+1: ____ / Modo de firma: ____ / macOS: ____ / Equipo: ____ / Fecha: ____
 
-## 1. Gatekeeper sin avisos (R11.1)
+## 1. Primera apertura (R11.1)
 
 - [ ] Descargar el DMG desde la pagina de la release con el navegador (para que lleve la
       cuarentena) y abrirlo.
-- [ ] Arrastrar la app a Aplicaciones y abrirla con doble clic: **no** aparece "no se puede
-      abrir porque el desarrollador no puede ser verificado" ni "esta danada".
-- [ ] A lo sumo aparece el aviso estandar "descargada de Internet, ¿seguro que quieres
-      abrirla?" una sola vez.
-- [ ] `spctl --assess --type execute --verbose=4 "/Applications/Time Track Copilot.app"` responde
-      `accepted` con `source=Notarized Developer ID`.
+- [ ] Arrastrar la app a Aplicaciones y abrirla con doble clic.
+- [ ] Sin notarizar: macOS avisa de que no puede verificar al desarrollador. Seguir los pasos de
+      las notas de la release y comprobar que funcionan tal cual:
+  - [ ] macOS 15 o posterior: Ajustes del Sistema > Privacidad y seguridad > "Abrir
+        igualmente".
+  - [ ] macOS 13 o 14: clic derecho > Abrir > Abrir.
+- [ ] Notarizada (solo modo notarizado): no aparece el aviso del desarrollador y
+      `spctl --assess --type execute --verbose=4 "/Applications/Time Track Copilot.app"`
+      responde `accepted` con `source=Notarized Developer ID`.
 - [ ] `codesign --verify --deep --strict --verbose=2 "/Applications/Time Track Copilot.app"` no
-      muestra errores y `codesign -dv --verbose=4 ...` indica los flags `runtime`.
-- [ ] `xcrun stapler validate "/Applications/Time Track Copilot.app"` responde
-      `The validate action worked!`.
-- [ ] Se abre sin conexion a Internet (el ticket de notarizacion esta grapado).
+      muestra errores.
+- [ ] Las notas de la release describen bien el modo de firma (aviso de Accesibilidad en
+      ad-hoc) y si hay actualizaciones automaticas.
 
 ## 2. Permiso conservado de N a N+1 (R11.4, R5.2)
 
@@ -38,9 +42,11 @@ actualizador).
 - [ ] Tras la actualizacion, Ajustes del Sistema > Accesibilidad sigue mostrando la app
       **activada**; no vuelve a pedirse el permiso ni aparece el banner de modo degradado.
 - [ ] Los datos de N siguen ahi (Hoy e Historial) y la version mostrada es N+1.
-- [ ] `codesign -dv --verbose=4` de N y de N+1 muestra el mismo `Authority=Developer ID
-      Application: ...` y el mismo `TeamIdentifier` (si cambia, macOS pedira el permiso otra
-      vez).
+- [ ] `codesign -d -r-` de N y de N+1 muestra el mismo requisito designado (si cambia,
+      macOS pedira el permiso otra vez). En modo ad-hoc es esperable que cambie: comprobar que
+      las notas lo advierten.
+- [ ] Esta seccion solo aplica si el actualizador esta configurado; si no, instalar N+1 a mano
+      desde el DMG y comprobar el permiso igualmente.
 
 ## 3. Red solo del actualizador (R10.1)
 
