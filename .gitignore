@@ -165,9 +165,6 @@ typings/
 # Vite
 .vite/
 
-# Electron-Forge
-out/
-
 # Rust
 target/
 

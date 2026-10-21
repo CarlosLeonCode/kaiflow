@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Time tracking application for improving productivity and focus.",
+  "description": "Local-first time tracker you can fork and customize, by hand or with AI coding agents.",
   "scripts": {
     "dev": "vite",
     "dev:mock": "vite --mode mock",
@@ -21,6 +21,11 @@
     "email": "carlosleoncode@gmail.com"
   },
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CarlosLeonCode/time-track-copilot.git"
+  },
+  "homepage": "https://github.com/CarlosLeonCode/time-track-copilot#readme",
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",
     "@eslint/js": "^10.0.1",

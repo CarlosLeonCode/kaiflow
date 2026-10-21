@@ -1,113 +1,109 @@
-# Contributing to Time-Track-Copilot
+# Contributing to Time Track Copilot
 
-Thank you for considering contributing to this project! Your help is appreciated 🙌
+Thanks for your interest. Bug reports, fixes, docs and well-scoped features are all welcome.
+This project is also meant to be forked and customized; if you only want your own variant,
+see [docs/forking.md](../docs/forking.md) instead.
 
-Please take a moment to review this guide to make the contribution process smooth for everyone.
+By participating you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
+Security problems go through [SECURITY.md](SECURITY.md), never public issues.
 
----
+## Before you start
 
-## Table of Contents
+- **Small fixes** (typos, obvious bugs, docs): open a pull request directly.
+- **Features or behavior changes**: open an issue first (Feature request template) so we can
+  agree on scope before you invest time. Privacy-sensitive changes (anything that reads more
+  from the OS or sends data off the device) always need an issue first.
 
-- [Contributing to Time-Track-Copilot](#contributing-to-time-track-copilot)
-  - [Table of Contents](#table-of-contents)
-  - [Code of Conduct](#code-of-conduct)
-  - [How to Contribute](#how-to-contribute)
-  - [Development Setup](#development-setup)
-  - [Coding Guidelines](#coding-guidelines)
-  - [Submitting Changes](#submitting-changes)
-  - [Issue Reporting](#issue-reporting)
-  - [Feature Requests](#feature-requests)
-  - [Pull Request Checklist](#pull-request-checklist)
-  - [License](#license)
+## Development setup
 
----
+Requirements:
 
-## Code of Conduct
-
-Please read and follow our [Code of Conduct](CODE_OF_CONDUCT.md) to foster a welcoming and respectful community.
-
----
-
-## How to Contribute
-
-- Fork the repository.
-- Create a new branch: `git checkout -b feature/my-feature`.
-- Make your changes.
-- Push to your fork: `git push origin feature/my-feature`.
-- Submit a Pull Request.
-
----
-
-## Development Setup
+- Rust 1.93 or newer (`rust-toolchain.toml` pins it), with `clippy` and `rustfmt`
+- Node.js 22.12 or newer and npm
+- macOS: Xcode command line tools. Linux: the WebKitGTK packages listed in
+  [docs/platform-support.md](../docs/platform-support.md). Windows: WebView2 and the MSVC
+  build tools.
 
 ```bash
-# Clone the repo
-git clone https://github.com/your-username/your-project.git
-cd your-project
-
-# Install dependencies
-npm installhttps://gitmoji.dev/****
-
-# Run the project
-npm run dev
+git clone https://github.com/<you>/time-track-copilot.git
+cd time-track-copilot
+npm install
+npm run tauri dev      # full app (Rust + UI)
+npm run dev:mock       # UI only, in-memory backend, no Rust build
 ```
 
-Update the above based on your tech stack (e.g., Ruby, Python, etc.).
+With `dev:mock`, open `http://localhost:1420/main.html` or `http://localhost:1420/popover.html`.
 
----
+On macOS the Accessibility grant is tied to the app signature, so under `tauri dev` it goes to
+your terminal. To test permissions, use a signed build: see
+[scripts/create-dev-identity.md](../scripts/create-dev-identity.md).
 
-## Coding Guidelines
+## Architecture
 
-- Follow the project's existing code style.
-- Use meaningful commit messages. We use [gitmoji](https://gitmoji.dev/) at the bigining of the commit message, like: "✨ feat: new modal"
-- Write tests for new features or bug fixes.
-- Use English for all code and comments.
-****
----
+Read [AGENTS.md](../AGENTS.md) before your first change. It is written for AI coding agents
+but is the best map for humans too: crate boundaries, invariants, and the end-to-end recipe
+for adding a feature (migration, domain, application, adapter, IPC, UI, tests).
 
-## Submitting Changes
+## Gates to run before opening a pull request
 
-- Test your changes locally before submitting.
-- Make sure your branch is up to date with `main` before creating a PR.
-- Open a draft PR early if you want feedback.
+All of these run in CI; run them locally first:
 
----
+```bash
+cargo fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+cargo build -p time-track-app
+npx tsc --noEmit
+npm run lint
+npm test
+npm run build
+npm run e2e            # when the UI changed (needs `npx playwright install chromium` once)
+```
 
-## Issue Reporting
+If you changed an IPC command or DTO, regenerate the TypeScript bindings and commit them:
 
-When reporting a bug, please include:
+```bash
+UPDATE_BINDINGS=1 cargo test -p time-track-app generated_bindings
+```
 
-- Clear title and description.
-- Steps to reproduce.
-- Expected and actual behavior.
-- Screenshots (if applicable).
-- System/browser/environment info.
+If you changed the landing page:
 
----
+```bash
+npm --prefix website run check
+npm --prefix website run build
+```
 
-## Feature Requests
+## Commit convention
 
-Include:
+We use [Conventional Commits](https://www.conventionalcommits.org/):
 
-- What problem the feature solves.
-- Suggested implementation (if any).
-- Alternatives considered.
+```
+<type>(<optional scope>): <imperative summary>
+```
 
----
+Types: `feat`, `fix`, `docs`, `refactor`, `test`, `perf`, `build`, `ci`, `chore`. Scopes
+usually match an area: `engine`, `ui`, `focus`, `goals`, `review`, `website`, `release`...
 
-## Pull Request Checklist
+Examples: `fix(engine): close the open segment on sleep`,
+`docs(readme): explain first-open steps on macOS`.
 
-✅ Descriptive title  
-✅ Related issue linked (if applicable)  
-✅ Follows coding guidelines  
-✅ Tests added/updated  
-✅ Linter passes  
-✅ Ready for review
+Keep each commit a reviewable unit: code, tests and docs for one change travel together.
 
----
+## Pull requests
+
+1. Fork, then branch from `main` (`feat/short-name` or `fix/short-name`).
+2. Keep the pull request focused; split unrelated changes.
+3. Add or update tests: domain and application logic in Rust unit tests, UI behavior in
+   Vitest, user flows in Playwright (`e2e/`).
+4. Fill in the pull request template, including the gates you ran.
+5. English for code, comments, UI copy and docs.
+
+## Reporting bugs and requesting features
+
+Use the issue templates. For bugs, include your OS and version, the app version, and the
+Accessibility permission state (macOS) because many tracking issues depend on it.
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the [MIT License](../LICENSE).
-
----
+By contributing, you agree that your contributions are licensed under the
+[MIT License](../LICENSE).
