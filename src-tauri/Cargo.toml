@@ -61,7 +61,21 @@ objc2-app-kit = { version = "0.3", default-features = false, features = [
   "NSStatusBarButton",
   "NSStatusItem",
   "NSView",
+  # Whether Kaiflow is the app in front (macOS shows no banner for it) and popover Spaces.
+  "NSRunningApplication",
+  "NSWindow",
 ] }
+# The real notification permission and settings (the plugin reports "granted" on desktop).
+# Already in the tree through the notification plugin's dependencies.
+objc2-user-notifications = { version = "0.3", default-features = false, features = [
+  "std",
+  "bitflags",
+  "block2",
+  "UNNotificationSettings",
+  "UNUserNotificationCenter",
+] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSError"] }
+block2 = "0.6"
 
 [target.'cfg(windows)'.dependencies]
 adapters-windows = { path = "../crates/adapters-windows" }

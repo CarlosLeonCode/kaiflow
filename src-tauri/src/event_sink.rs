@@ -71,7 +71,11 @@ impl TauriShell {
 impl Shell for TauriShell {
     fn perform(&self, action: ShellAction) {
         match action {
-            ShellAction::ShowPopover => windows::show_popover(&self.app),
+            // The idle-return notification is posted just before this; opening the popover
+            // at once makes Kaiflow the front app and macOS files the notification silently.
+            ShellAction::ShowPopover => {
+                windows::show_popover_after(&self.app, crate::focus_watcher::NOTIFICATION_SETTLE)
+            }
             ShellAction::TrackingState(kind) => tray::set_tracking_state(&self.app, kind),
             // Non-blocking: the worker thread does the reading and the main-thread hop.
             ShellAction::RefreshTrayText => {

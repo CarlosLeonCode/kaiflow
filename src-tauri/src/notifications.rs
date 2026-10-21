@@ -2,6 +2,11 @@
 //! amended): the notification is only an extra alert for the idle-return card, and when the
 //! user has not granted it the popover (opened by the event sink) is the whole experience.
 //! Everything is best effort; a failing notification never reaches the engine.
+//!
+//! The end of a focus block relies on knowing whether its notification really reached the
+//! user: when it did not (permission denied or undecided, banners or sounds off, or Kaiflow is
+//! the app in front, for which macOS presents nothing), the popover chimes instead. Every
+//! notification that is not presented is logged with the reason.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -22,8 +27,12 @@ pub enum Authorization {
 /// Seam over the OS notification service; faked in tests.
 pub trait Toaster: Send {
     fn authorization(&self) -> Authorization;
-    /// Asks the user (the system shows its dialog at most once).
-    fn request_authorization(&self) -> Authorization;
+    /// Asks the user (the system shows its dialog at most once). The answer may arrive later:
+    /// callers read [`Self::authorization`] again.
+    fn request_authorization(&self);
+    /// Whether a notification posted now would be presented to the user (a banner, with its
+    /// sound when `sound` is set); `Err` says why not.
+    fn presentable(&self, sound: bool) -> Result<(), String>;
     /// `sound` asks for the system alert sound (end of a focus block).
     fn show(&self, title: &str, body: &str, sound: bool) -> Result<(), String>;
 }
@@ -31,6 +40,8 @@ pub trait Toaster: Send {
 pub struct SystemNotifier<T: Toaster> {
     toaster: T,
     revocation_sent: AtomicBool,
+    /// The permission was requested in this run (the system dialog shows at most once).
+    asked: AtomicBool,
 }
 
 impl<T: Toaster> SystemNotifier<T> {
@@ -38,28 +49,59 @@ impl<T: Toaster> SystemNotifier<T> {
         Self {
             toaster,
             revocation_sent: AtomicBool::new(false),
+            asked: AtomicBool::new(false),
         }
     }
 
-    /// Asks only the first time a notification is actually wanted, in context.
-    fn authorized(&self) -> bool {
+    /// Asks for the permission when it was never decided (a focus block just started, so
+    /// its end alert can ring). Does not wait for the answer.
+    pub fn prepare(&self) {
+        let _ = self.authorization();
+    }
+
+    /// The permission, asked for (once per run) when it was never decided. The answer may come
+    /// later, so it is read again right away and may still be undecided.
+    fn authorization(&self) -> Authorization {
         match self.toaster.authorization() {
-            Authorization::Granted => true,
-            Authorization::Denied => false,
-            Authorization::Undetermined => {
-                self.toaster.request_authorization() == Authorization::Granted
+            Authorization::Undetermined if !self.asked.swap(true, Ordering::SeqCst) => {
+                self.toaster.request_authorization();
+                self.toaster.authorization()
             }
+            known => known,
         }
+    }
+
+    /// Posts the notification unless it is denied. `Err` says why it may not have reached
+    /// the user: an undecided permission is left to the system (it may still show it), but
+    /// is not counted on.
+    fn deliver(&self, title: &str, body: &str, sound: bool) -> Result<(), String> {
+        let state = self.authorization();
+        if state == Authorization::Denied {
+            return Err("notifications are not allowed for Kaiflow".into());
+        }
+        let presentable = self.toaster.presentable(sound);
+        self.toaster.show(title, body, sound)?;
+        if state == Authorization::Undetermined {
+            return Err("posted, but the notification permission is not decided yet".into());
+        }
+        presentable
     }
 
     fn notify(&self, title: &str, body: &str) {
         self.notify_with(title, body, false);
     }
 
-    /// `true` when the notification was shown.
+    /// `true` when the notification reached the user (presented, with its sound if asked).
+    /// One that would not be presented is still posted, so it waits in Notification Center.
     fn notify_with(&self, title: &str, body: &str, sound: bool) -> bool {
-        // Best effort by design: the popover fallback already covers a failure.
-        self.authorized() && self.toaster.show(title, body, sound).is_ok()
+        match self.deliver(title, body, sound) {
+            Ok(()) => true,
+            Err(reason) => {
+                // Best effort by design: callers that need it fall back (popover, chime).
+                eprintln!("notification \"{title}\" was not presented: {reason}");
+                false
+            }
+        }
     }
 }
 
@@ -245,18 +287,49 @@ fn map_state(state: PermissionState) -> Authorization {
 }
 
 impl Toaster for TauriToaster {
+    /// On macOS the real permission (the plugin always reports "granted" on desktop).
     fn authorization(&self) -> Authorization {
+        #[cfg(target_os = "macos")]
+        if let Some(settings) = crate::macos_notifications::settings() {
+            return match settings.status {
+                crate::macos_notifications::Status::Allowed => Authorization::Granted,
+                crate::macos_notifications::Status::Denied => Authorization::Denied,
+                crate::macos_notifications::Status::NotDetermined => Authorization::Undetermined,
+            };
+        }
         self.app
             .notification()
             .permission_state()
             .map_or(Authorization::Denied, map_state)
     }
 
-    fn request_authorization(&self) -> Authorization {
-        self.app
-            .notification()
-            .request_permission()
-            .map_or(Authorization::Denied, map_state)
+    fn request_authorization(&self) {
+        #[cfg(target_os = "macos")]
+        if crate::macos_notifications::request_authorization() {
+            return;
+        }
+        let _ = self.app.notification().request_permission();
+    }
+
+    fn presentable(&self, sound: bool) -> Result<(), String> {
+        #[cfg(target_os = "macos")]
+        {
+            use crate::macos_notifications as mac;
+            if mac::app_is_active() {
+                return Err("Kaiflow is the app in front, macOS shows no banner for it".into());
+            }
+            // Only a decided permission has meaningful banner and sound settings.
+            if let Some(settings) = mac::settings().filter(|s| s.status == mac::Status::Allowed) {
+                if !settings.banners {
+                    return Err("banners are turned off for Kaiflow".into());
+                }
+                if sound && !settings.sound {
+                    return Err("notification sounds are turned off for Kaiflow".into());
+                }
+            }
+        }
+        let _ = sound;
+        Ok(())
     }
 
     fn show(&self, title: &str, body: &str, sound: bool) -> Result<(), String> {
@@ -284,6 +357,10 @@ mod tests {
         shown: Arc<Mutex<Vec<(String, String)>>>,
         sounds: Arc<Mutex<Vec<bool>>>,
         fail_show: bool,
+        /// Why a notification would not be presented now (app in front, banners off).
+        unpresentable: Option<&'static str>,
+        /// The answer to a request arrives later (macOS): the state stays undetermined.
+        answer_later: bool,
     }
 
     impl FakeToaster {
@@ -295,6 +372,8 @@ mod tests {
                 shown: Arc::new(Mutex::new(Vec::new())),
                 sounds: Arc::new(Mutex::new(Vec::new())),
                 fail_show: false,
+                unpresentable: None,
+                answer_later: false,
             }
         }
     }
@@ -303,15 +382,20 @@ mod tests {
         fn authorization(&self) -> Authorization {
             *self.state.lock().unwrap()
         }
-        fn request_authorization(&self) -> Authorization {
+        fn request_authorization(&self) {
             *self.requests.lock().unwrap() += 1;
+            if self.answer_later {
+                return;
+            }
             let next = if self.grant_on_request {
                 Authorization::Granted
             } else {
                 Authorization::Denied
             };
             *self.state.lock().unwrap() = next;
-            next
+        }
+        fn presentable(&self, _sound: bool) -> Result<(), String> {
+            self.unpresentable.map_or(Ok(()), |why| Err(why.into()))
         }
         fn show(&self, title: &str, body: &str, sound: bool) -> Result<(), String> {
             if self.fail_show {
@@ -440,6 +524,58 @@ mod tests {
             "the popover chimes instead"
         );
         assert!(denied.shown.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn an_end_alert_the_system_would_not_present_asks_for_the_fallback() {
+        // Kaiflow in front: macOS files the toast silently, so the popover must chime.
+        let mut toaster = FakeToaster::new(Authorization::Granted, false);
+        toaster.unpresentable = Some("app in front");
+        let notifier = SystemNotifier::new(toaster.clone());
+        assert!(!notifier.focus_finished(&end(FocusKind::Timer, "a", None, false)));
+        // Still posted: it waits in Notification Center.
+        assert_eq!(toaster.shown.lock().unwrap().len(), 1);
+
+        // A failing toast also falls back.
+        let mut failing = FakeToaster::new(Authorization::Granted, false);
+        failing.fail_show = true;
+        assert!(!SystemNotifier::new(failing).focus_finished(&end(
+            FocusKind::Focus,
+            "a",
+            None,
+            false
+        )));
+    }
+
+    #[test]
+    fn an_undecided_permission_is_asked_once_and_the_end_alert_also_chimes() {
+        let mut toaster = FakeToaster::new(Authorization::Undetermined, true);
+        toaster.answer_later = true;
+        let notifier = SystemNotifier::new(toaster.clone());
+        // Posted (the system may still show it) but not counted on: the popover chimes too.
+        assert!(!notifier.focus_finished(&end(FocusKind::Timer, "a", None, false)));
+        assert!(!notifier.focus_finished(&end(FocusKind::Timer, "a", None, false)));
+        assert_eq!(*toaster.requests.lock().unwrap(), 1, "asked once per run");
+        assert_eq!(toaster.shown.lock().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn starting_a_block_asks_for_the_permission_only_when_undecided() {
+        let undecided = FakeToaster::new(Authorization::Undetermined, true);
+        let notifier = SystemNotifier::new(undecided.clone());
+        notifier.prepare();
+        notifier.prepare();
+        assert_eq!(*undecided.requests.lock().unwrap(), 1);
+        assert!(
+            undecided.shown.lock().unwrap().is_empty(),
+            "asking shows nothing"
+        );
+
+        for state in [Authorization::Granted, Authorization::Denied] {
+            let decided = FakeToaster::new(state, true);
+            SystemNotifier::new(decided.clone()).prepare();
+            assert_eq!(*decided.requests.lock().unwrap(), 0);
+        }
     }
 
     fn end(

@@ -6,11 +6,15 @@ pub mod backup_worker;
 pub mod calendar;
 pub mod composition;
 pub mod data_migration;
+#[cfg(debug_assertions)]
+pub mod debug_focus;
 pub mod error;
 pub mod event_sink;
 pub mod focus_watcher;
 pub mod goal_watcher;
 pub mod ipc;
+#[cfg(target_os = "macos")]
+pub mod macos_notifications;
 pub mod notifications;
 pub mod placeholders;
 pub mod platform;
@@ -119,6 +123,8 @@ pub fn run() {
                 focus_watcher,
             );
             updater::spawn_schedule(&handle);
+            #[cfg(debug_assertions)]
+            debug_focus::start_from_env(&handle, &state);
 
             // Spec R6.3 scenario: after login the app registers on its own. Before the
             // onboarding is done there is no permission yet, so tracking waits for it.

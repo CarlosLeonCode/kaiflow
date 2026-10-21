@@ -2,6 +2,8 @@
 //! start, hide on blur, hide instead of close) lives next to the specs. Webview pages are
 //! the Vite multi-page entries `popover.html`, `main.html` and `onboarding.html`.
 
+use std::time::Duration;
+
 use tauri::{
     AppHandle, Manager, PhysicalPosition, Rect, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
     WindowEvent, Wry,
@@ -64,6 +66,8 @@ pub const ONBOARDING_SPEC: WindowSpec = WindowSpec {
 pub fn create_all(app: &AppHandle<Wry>, show_onboarding: bool) -> tauri::Result<()> {
     let popover = build(app, &POPOVER_SPEC)?;
     hide_when_unfocused(&popover);
+    #[cfg(target_os = "macos")]
+    follow_the_active_space(&popover);
     let main = build(app, &MAIN_SPEC)?;
     hide_instead_of_closing(&main);
     if show_onboarding {
@@ -98,6 +102,24 @@ fn build(app: &AppHandle<Wry>, spec: &WindowSpec) -> tauri::Result<WebviewWindow
         .resizable(spec.resizable)
         .visible(false)
         .build()
+}
+
+/// The popover opens on the Space the user is on, a full-screen app's included, instead of
+/// the Space it was created on (where an end card would go unseen).
+#[cfg(target_os = "macos")]
+fn follow_the_active_space(window: &WebviewWindow<Wry>) {
+    use objc2_app_kit::{NSWindow, NSWindowCollectionBehavior};
+    let Ok(ptr) = window.ns_window() else {
+        return;
+    };
+    // SAFETY: windows are created in `setup`, on the main thread, and `ptr` is the live
+    // NSWindow behind `window`.
+    let ns_window = unsafe { &*ptr.cast::<NSWindow>() };
+    ns_window.setCollectionBehavior(
+        ns_window.collectionBehavior()
+            | NSWindowCollectionBehavior::CanJoinAllSpaces
+            | NSWindowCollectionBehavior::FullScreenAuxiliary,
+    );
 }
 
 fn hide_when_unfocused(window: &WebviewWindow<Wry>) {
@@ -145,6 +167,29 @@ pub fn show_popover(app: &AppHandle<Wry>) {
             .and_then(|tray| tray.rect().ok().flatten());
         place_and_show(&window, rect);
     });
+}
+
+/// [`show_popover`] once `delay` has passed, without blocking the caller.
+///
+/// Showing the popover makes Kaiflow the front app, and macOS files a notification of the app
+/// in front in Notification Center without a banner or its sound. It decides when it delivers
+/// the notification, about 100 ms after it is posted, so the popover waits for that.
+pub fn show_popover_after(app: &AppHandle<Wry>, delay: Duration) {
+    if delay.is_zero() {
+        show_popover(app);
+        return;
+    }
+    let handle = app.clone();
+    let spawned = std::thread::Builder::new()
+        .name("popover-delay".into())
+        .spawn(move || {
+            std::thread::sleep(delay);
+            show_popover(&handle);
+        });
+    if let Err(error) = spawned {
+        eprintln!("could not delay the popover, opening it now: {error}");
+        show_popover(app);
+    }
 }
 
 fn place_and_show(window: &WebviewWindow<Wry>, tray_rect: Option<Rect>) {

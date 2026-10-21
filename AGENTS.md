@@ -136,6 +136,24 @@ Opens Vite with the in-memory backend (`.env.mock` sets `VITE_MOCK_IPC=1`). Visi
 loop for UI work and is what the E2E suite uses. The production build refuses to run with
 `VITE_MOCK_IPC`, and CI checks the bundle has no mock code.
 
+## Testing the end of a focus block (debug builds only)
+
+`KAIFLOW_DEBUG_FOCUS_SECS=<n>` starts a timer at launch (raised to the one-minute minimum), so
+the end alert (notification, popover end card, chime) can be watched without clicking through
+the UI. It lives in `src-tauri/src/debug_focus.rs` behind `#[cfg(debug_assertions)]`: release
+builds do not contain it. It writes a real session to the app's database.
+
+```bash
+pkill -f Kaiflow.app
+npx tauri build --debug --bundles app   # then revert its change to the tauri-build line
+KAIFLOW_DEBUG_FOCUS_SECS=20 target/debug/bundle/macos/Kaiflow.app/Contents/MacOS/kaiflow
+/usr/bin/log show --last 3m --predicate 'process == "NotificationCenter" AND eventMessage CONTAINS "kaiflow"'
+```
+
+Notifications only behave like the real app from the bundle (a bare `tauri dev` binary posts as
+Terminal). In the log, "displaying as banner" and "Playing notification sound" mean it rang;
+"added to history" alone means macOS filed it silently (Kaiflow was the app in front).
+
 ## Verifying Linux from macOS (Docker)
 
 The Linux adapters only compile on Linux. To check them without a Linux machine:
