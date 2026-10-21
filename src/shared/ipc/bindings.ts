@@ -71,10 +71,47 @@ export const commands = {
 	purgeOlderThan: (days: number, confirmToken: string) => typedError<number, AppError>(__TAURI_INVOKE("purge_older_than", { days, confirmToken })),
 	deleteAll: (confirmToken: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_all", { confirmToken })),
 	/**
-	 *  Asks where to save (native dialog, from Rust) and writes the CSV there. Returns the
-	 *  chosen path, or `null` when the user cancelled.
+	 *  Asks where to save (native dialog, from Rust) and writes the JSON export there. Returns
+	 *  the chosen path, or `null` when the user cancelled (nothing is written then).
 	 */
-	exportCsv: (range: RangeDto) => typedError<string | null, AppError>(__TAURI_INVOKE("export_csv", { range })),
+	exportJson: (range: RangeDto) => typedError<string | null, AppError>(__TAURI_INVOKE("export_json", { range })),
+	backupStatus: () => typedError<BackupStatusDto, AppError>(__TAURI_INVOKE("backup_status")),
+	backupSetEnabled: (enabled: boolean) => typedError<BackupStatusDto, AppError>(__TAURI_INVOKE("backup_set_enabled", { enabled })),
+	/**
+	 *  Lets the user pick the backup folder (native dialog, from Rust). Cancelling keeps the
+	 *  current folder. Returns the resulting status either way.
+	 */
+	backupChooseDir: () => typedError<BackupStatusDto, AppError>(__TAURI_INVOKE("backup_choose_dir")),
+	/**  Goes back to the default backup folder. */
+	backupResetDir: () => typedError<BackupStatusDto, AppError>(__TAURI_INVOKE("backup_reset_dir")),
+	backupNow: () => typedError<BackupReportDto, AppError>(__TAURI_INVOKE("backup_now")),
+	/**
+	 *  Step one of a restore: asks for a backup or export file (native dialog, from Rust),
+	 *  validates it and returns a preview with a confirmation token. `null` when the user
+	 *  cancelled. Nothing is modified.
+	 */
+	restorePrepare: () => typedError<{
+	/**  Single-use token `restore_apply` must send back within a minute. */
+	token: string,
+	file_name: string,
+	kind: DocumentKindDto,
+	app_version: string,
+	exported_at: string,
+	activities: number,
+	rules: number,
+	segments: number,
+	idle_gaps: number,
+	/**  First start and last end of the tracked time in the file (UTC ms). */
+	first_at: number | null,
+	last_at: number | null,
+} | null, AppError>(__TAURI_INVOKE("restore_prepare")),
+	/**
+	 *  Step two: with the token from `restore_prepare`, copies the database aside and replaces
+	 *  every piece of data in one transaction.
+	 */
+	restoreApply: (token: string) => typedError<RestoreResultDto, AppError>(__TAURI_INVOKE("restore_apply", { token })),
+	/**  Dry run of "delete data older than N days", for the confirmation text. */
+	retentionImpact: (days: number) => typedError<RetentionImpactDto, AppError>(__TAURI_INVOKE("retention_impact", { days })),
 	/**
 	 *  Asks the update server for a newer signed release. Returns it (and announces it with
 	 *  `update-available`), or `null` when the app is current or updates are not configured.
@@ -91,6 +128,7 @@ export const commands = {
 
 /** Events */
 export const events = {
+	backupFinished: makeEvent<BackupFinished>("backup-finished"),
 	currentSegmentChanged: makeEvent<CurrentSegmentChanged>("current-segment-changed"),
 	dataChanged: makeEvent<DataChanged>("data-changed"),
 	idleGapPending: makeEvent<IdleGapPending>("idle-gap-pending"),
@@ -145,6 +183,36 @@ export type AppTotalDto = {
 export type ApplyPresetResultDto = {
 	activities_created: number,
 	rules_created: number,
+};
+
+/**
+ *  A backup run finished. Sent on every success and on the first failure of a streak, so
+ *  the UI can show a one-time notice; the details stay in `backup_status`.
+ */
+export type BackupFinished = {
+	ok: boolean,
+	/**  The file written, or the reason it failed. */
+	message: string,
+};
+
+export type BackupReportDto = {
+	path: string,
+	/**  Older backups the retention policy removed. */
+	removed: number,
+};
+
+/**  Daily backup configuration and the outcome of the last run (Settings > Data). */
+export type BackupStatusDto = {
+	enabled: boolean,
+	/**  The folder the user picked; `null` while the default folder is used. */
+	custom_dir: string | null,
+	/**  The folder backups go to right now. */
+	dir: string,
+	last_backup_at: number | null,
+	/**  Message of the last failed run; cleared by the next success. */
+	last_error: string | null,
+	/**  Backups currently stored in `dir`. */
+	stored: number,
 };
 
 export type BucketActivityDto = {
@@ -204,6 +272,8 @@ export type DegradedReasonDto =
 
 /**  Destructive operation to confirm with `prepare_delete`. */
 export type DeleteOpDto = { kind: "range"; range: RangeDto } | { kind: "older_than_days"; days: number } | { kind: "all" };
+
+export type DocumentKindDto = "backup" | "export";
 
 export type EndReasonDto = "focus_change" | "idle" | "sleep" | "lock" | "pause" | "stop" | "shutdown" | "recovered";
 
@@ -290,6 +360,35 @@ export type ReportDto = {
 	by_bucket: BucketTotalDto[],
 	total_ms: number,
 	auto_discarded_gaps: number,
+};
+
+/**  What a backup or export file contains, shown before the user confirms a restore. */
+export type RestorePreviewDto = {
+	/**  Single-use token `restore_apply` must send back within a minute. */
+	token: string,
+	file_name: string,
+	kind: DocumentKindDto,
+	app_version: string,
+	exported_at: string,
+	activities: number,
+	rules: number,
+	segments: number,
+	idle_gaps: number,
+	/**  First start and last end of the tracked time in the file (UTC ms). */
+	first_at: number | null,
+	last_at: number | null,
+};
+
+export type RestoreResultDto = {
+	/**  Complete copy of the data as it was before the restore. */
+	safety_copy: string,
+};
+
+/**  What a retention purge would delete, so the confirmation can say so first. */
+export type RetentionImpactDto = {
+	segments: number,
+	/**  Days of an active goal streak the purge would cut; `null` when it cuts none. */
+	streak_days_cut: number | null,
 };
 
 /**  How a patch changes retention; a tagged enum avoids the `Option<Option<_>>` ambiguity. */

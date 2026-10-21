@@ -30,6 +30,18 @@ impl RetentionRepository for SqliteRetentionRepository {
         .map_err(port_err)
     }
 
+    fn count_older_than(&self, cutoff: UtcMs) -> PortResult<usize> {
+        let conn = lock(&self.conn, "retention")?;
+        let n: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM segments WHERE ended_at IS NOT NULL AND ended_at < ?1",
+                [cutoff.0],
+                |row| row.get(0),
+            )
+            .map_err(port_err)?;
+        Ok(usize::try_from(n).unwrap_or(0))
+    }
+
     fn purge_older_than(&self, cutoff: UtcMs) -> PortResult<usize> {
         let mut conn = lock(&self.conn, "retention")?;
         let tx = conn.transaction().map_err(port_err)?;
@@ -124,6 +136,8 @@ mod tests {
         w.insert_gap(&gap(0, 12, GapStatus::Pending)).unwrap();
         w.insert_gap(&gap(50, 60, GapStatus::Expired)).unwrap();
         // Segments end at 15, 25, 35: cutoff 26 drops the first two.
+        assert_eq!(r.count_older_than(UtcMs(26)).unwrap(), 2, "dry run matches");
+        assert_eq!(count(&path, "segments"), 4, "counting deletes nothing");
         assert_eq!(r.purge_older_than(UtcMs(26)).unwrap(), 2);
         assert_eq!(count(&path, "segments"), 2);
         // Old pending gap survives, old expired one goes, recent one stays.

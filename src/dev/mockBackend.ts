@@ -12,6 +12,7 @@ import type {
   AppTotalDto,
   ActivityDto,
   ActivityTotalDto,
+  BackupStatusDto,
   FocusDto,
   IdleResolutionDto,
   PermissionStateDto,
@@ -46,6 +47,8 @@ export interface MockOptions {
   emptyActivities?: boolean;
   /** Start without any tracked time (empty states of Today and Overview). */
   emptyHistory?: boolean;
+  /** The automatic backup has failed (Settings > Data shows the error, "Back up now" fails). */
+  backupFails?: boolean;
   now?: () => number;
 }
 
@@ -102,6 +105,15 @@ export function installMockBackend(options: MockOptions = {}): void {
     onboarding_completed: true,
     tray_display: "today_total",
     ui: { dismissed_intros: [] },
+  };
+  const MOCK_BACKUP_DIR = "/Users/demo/Library/Application Support/Time Track Copilot/backups";
+  let backup: BackupStatusDto = {
+    enabled: true,
+    custom_dir: null,
+    dir: MOCK_BACKUP_DIR,
+    last_backup_at: options.backupFails ? null : clock() - 5 * 3_600_000,
+    last_error: options.backupFails ? "could not write the backup: permission denied." : null,
+    stored: options.backupFails ? 0 : 3,
   };
   let tokenCounter = 0;
   const liveTokens = new Set<string>();
@@ -506,7 +518,59 @@ export function installMockBackend(options: MockOptions = {}): void {
       data.segments = data.segments.filter((s) => s.ended_at === null);
       return null;
     },
-    export_csv: () => "/Users/demo/Downloads/time-track.csv",
+    export_json: () => "/Users/demo/Downloads/time-track-export.json",
+    backup_status: () => backup,
+    backup_set_enabled: (args) => {
+      backup = { ...backup, enabled: Boolean(args.enabled) };
+      return backup;
+    },
+    // The real command opens a native folder picker; the mock "picks" a fixed folder.
+    backup_choose_dir: () => {
+      backup = { ...backup, custom_dir: "/Volumes/Backups/Time Track", dir: "/Volumes/Backups/Time Track", last_error: null };
+      return backup;
+    },
+    backup_reset_dir: () => {
+      backup = { ...backup, custom_dir: null, dir: MOCK_BACKUP_DIR, last_error: null };
+      return backup;
+    },
+    backup_now: () => {
+      if (options.backupFails) {
+        backup = { ...backup, last_error: "could not write the backup: permission denied." };
+        fail({ kind: "storage", message: "could not write the backup: permission denied." });
+      }
+      backup = { ...backup, last_backup_at: clock(), last_error: null, stored: backup.stored + 1 };
+      return { path: `${backup.dir}/timetrack-backup-today.json.gz`, removed: 0 };
+    },
+    // The real command opens a native file picker and previews the chosen file.
+    restore_prepare: () => {
+      const starts = data.segments.map((s) => s.started_at);
+      return {
+        token: issueToken(),
+        file_name: "timetrack-backup-yesterday.json.gz",
+        kind: "backup",
+        app_version: "0.1.0",
+        exported_at: new Date(clock() - 86_400_000).toISOString().replace(/\.\d+Z$/, "Z"),
+        activities: data.activities.length,
+        rules: data.rules.length,
+        segments: data.segments.length,
+        idle_gaps: data.gaps.length,
+        first_at: starts.length > 0 ? Math.min(...starts) : null,
+        last_at: starts.length > 0 ? Math.max(...starts) : null,
+      };
+    },
+    // Restoring brings back the seeded data, so edits made since "the backup" disappear.
+    restore_apply: (args) => {
+      consumeToken(String(args.token));
+      Object.assign(data, buildSeed(clock()));
+      return { safety_copy: "/Users/demo/Library/Application Support/Time Track Copilot/timetrack.db.pre-restore-1" };
+    },
+    retention_impact: (args) => {
+      const cutoff = clock() - (args.days as number) * 86_400_000;
+      return {
+        segments: data.segments.filter((s) => s.ended_at !== null && s.ended_at < cutoff).length,
+        streak_days_cut: null,
+      };
+    },
     update_check: () => offeredUpdate,
     // The real app downloads and relaunches: the UI stays on "Installing..." until it exits.
     update_install: () => new Promise(() => {}),

@@ -2,6 +2,7 @@
 //! surface and owns the tray and windows (design sections 1, 8 and 10).
 
 pub mod api;
+pub mod backup_worker;
 pub mod calendar;
 pub mod composition;
 pub mod error;
@@ -95,6 +96,7 @@ pub fn run() {
             tray::install(&handle)?;
             let tray_text = tray_text::TrayText::spawn(&handle);
             app.manage(tray_text.clone());
+            app.manage(backup_worker::BackupWorker::spawn(&handle, state.clone()));
             apply_outside_settings(&handle, &state, &shortcut, &settings, tray_text);
             updater::spawn_schedule(&handle);
 
@@ -118,6 +120,9 @@ pub fn run() {
         RunEvent::Exit => {
             if let Some(tray_text) = handle.try_state::<tray_text::TrayText>() {
                 tray_text.stop();
+            }
+            if let Some(worker) = handle.try_state::<backup_worker::BackupWorker>() {
+                worker.stop();
             }
             if let Some(state) = handle.try_state::<Arc<AppState>>() {
                 state.shutdown();

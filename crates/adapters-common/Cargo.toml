@@ -11,3 +11,6 @@ description = "Platform-neutral adapter logic shared by the macOS, Windows and L
 domain.workspace = true
 application.workspace = true
 crossbeam-channel.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

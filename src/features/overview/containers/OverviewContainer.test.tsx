@@ -257,16 +257,16 @@ describe("OverviewContainer", () => {
     await waitFor(() => expect(screen.queryByRole("grid")).not.toBeInTheDocument());
   });
 
-  it("exports the visible range as CSV and shows where it was saved", async () => {
+  it("exports the visible range as JSON and shows where it was saved", async () => {
     const user = userEvent.setup();
-    const { calls } = backend({ export_csv: () => "/Users/me/Downloads/time-track.csv" });
+    const { calls } = backend({ export_json: () => "/Users/me/Downloads/time-track-export.json" });
     renderWithProviders(<OverviewContainer />);
     await screen.findByTestId("overview-total");
 
-    await user.click(screen.getByRole("button", { name: /Export CSV/ }));
+    await user.click(screen.getByRole("button", { name: /Export JSON/ }));
 
-    await waitFor(() => expect(calls.find((c) => c.cmd === "export_csv")?.args).toEqual({ range: WEEK }));
-    expect(await screen.findByText("Exported to /Users/me/Downloads/time-track.csv")).toBeInTheDocument();
+    await waitFor(() => expect(calls.find((c) => c.cmd === "export_json")?.args).toEqual({ range: WEEK }));
+    expect(await screen.findByText("Exported to /Users/me/Downloads/time-track-export.json")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Dismiss" }));
     expect(screen.queryByText(/Exported to/)).not.toBeInTheDocument();
   });
@@ -275,7 +275,7 @@ describe("OverviewContainer", () => {
     const user = userEvent.setup();
     let answer: string | null = null;
     backend({
-      export_csv: () => {
+      export_json: () => {
         if (answer === null) return null;
         throw { kind: "internal", message: "disk is read-only" };
       },
@@ -283,13 +283,13 @@ describe("OverviewContainer", () => {
     renderWithProviders(<OverviewContainer />);
     await screen.findByTestId("overview-total");
 
-    await user.click(screen.getByRole("button", { name: /Export CSV/ }));
-    await waitFor(() => expect(screen.getByRole("button", { name: /Export CSV/ })).toBeEnabled());
+    await user.click(screen.getByRole("button", { name: /Export JSON/ }));
+    await waitFor(() => expect(screen.getByRole("button", { name: /Export JSON/ })).toBeEnabled());
     expect(screen.queryByText(/Exported to/)).not.toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 
     answer = "fail";
-    await user.click(screen.getByRole("button", { name: /Export CSV/ }));
+    await user.click(screen.getByRole("button", { name: /Export JSON/ }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Could not export: disk is read-only");
   });
 

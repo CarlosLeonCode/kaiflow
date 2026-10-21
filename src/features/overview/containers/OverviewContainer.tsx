@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 
 import { SectionIntroContainer } from "@/features/shell/containers/SectionIntroContainer";
 import { useNow } from "@/features/tracking/hooks/useNow";
-import { errorMessage, useDashboardQuery, useExportCsvMutation } from "@/shared/ipc";
+import { errorMessage, useDashboardQuery, useExportJsonMutation } from "@/shared/ipc";
 import { useIsDark } from "@/shared/lib/theme";
 
 import { OverviewView } from "../components/OverviewView";
@@ -46,7 +46,7 @@ export function OverviewContainer() {
   const dashboard = useDashboardQuery(range, buckets, previous);
   const data = dashboard.data;
 
-  const exportCsv = useExportCsvMutation();
+  const exportJson = useExportJsonMutation();
   const [exportedTo, setExportedTo] = useState<string | null>(null);
 
   const bars = useMemo(() => (data ? bucketBars(period, data) : []), [period, data]);
@@ -55,7 +55,7 @@ export function OverviewContainer() {
 
   function clearExport() {
     setExportedTo(null);
-    exportCsv.reset();
+    exportJson.reset();
   }
 
   function move(delta: number) {
@@ -94,10 +94,10 @@ export function OverviewContainer() {
       activities={activityRows(data?.by_activity ?? [], totalMs)}
       apps={appRows(data?.by_app ?? [], totalMs)}
       titles={titleRows(data?.top_titles ?? [], totalMs)}
-      exporting={exportCsv.isPending}
+      exporting={exportJson.isPending}
       exportedTo={exportedTo}
-      exportError={exportCsv.error ? errorMessage(exportCsv.error) : null}
-      onExport={() => exportCsv.mutate(range, { onSuccess: (path) => setExportedTo(path) })}
+      exportError={exportJson.error ? errorMessage(exportJson.error) : null}
+      onExport={() => exportJson.mutate(range, { onSuccess: (path) => setExportedTo(path) })}
       onDismissExport={() => setExportedTo(null)}
     />
   );

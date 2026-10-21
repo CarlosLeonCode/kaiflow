@@ -12,6 +12,9 @@ use crate::ports::{PortError, PortResult, SettingsRepository};
 /// Key of the [`UiSettings`] blob.
 pub const KEY_UI: &str = "ui";
 
+/// Key of the [`BackupSettings`] blob.
+pub const KEY_BACKUP: &str = "backup";
+
 /// Key of the [`SuggestionSettings`] blob.
 pub const KEY_SUGGESTIONS: &str = "suggestions";
 
@@ -96,6 +99,34 @@ impl SuggestionSettings {
     }
 }
 
+/// Daily backup configuration and the outcome of the last run.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct BackupSettings {
+    /// On by default (the user can switch it off).
+    pub enabled: bool,
+    /// Custom folder; `None` means the default folder inside the app data directory.
+    pub dir: Option<String>,
+    /// UTC ms of the last successful backup.
+    pub last_backup_at: Option<i64>,
+    /// Message of the last failed run; cleared by the next success.
+    pub last_error: Option<String>,
+    /// Whether the current failure streak was already announced (the notice shows once).
+    pub failure_notified: bool,
+}
+
+impl Default for BackupSettings {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            dir: None,
+            last_backup_at: None,
+            last_error: None,
+            failure_notified: false,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -131,6 +162,17 @@ mod tests {
             UiSettings::default(),
             "missing fields take defaults"
         );
+    }
+
+    #[test]
+    fn backups_are_on_by_default_and_tolerate_partial_blobs() {
+        let repo = FakeSettings::default();
+        let fresh: BackupSettings = read_blob(&repo, KEY_BACKUP).unwrap();
+        assert!(fresh.enabled && fresh.dir.is_none() && fresh.last_backup_at.is_none());
+        repo.set(KEY_BACKUP, r#"{"dir":"/tmp/x"}"#).unwrap();
+        let partial: BackupSettings = read_blob(&repo, KEY_BACKUP).unwrap();
+        assert!(partial.enabled, "a missing field keeps its default");
+        assert_eq!(partial.dir.as_deref(), Some("/tmp/x"));
     }
 
     #[test]

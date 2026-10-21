@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-backup-choose-dir"
+description = "Enables the backup_choose_dir command without any pre-configured scope."
+commands.allow = ["backup_choose_dir"]
+
+[[permission]]
+identifier = "deny-backup-choose-dir"
+description = "Denies the backup_choose_dir command without any pre-configured scope."
+commands.deny = ["backup_choose_dir"]

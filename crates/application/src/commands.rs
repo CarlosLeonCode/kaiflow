@@ -98,6 +98,15 @@ struct Pending {
     issued_at: UtcMs,
 }
 
+/// What purging data older than some days would touch, shown before the user confirms.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RetentionImpact {
+    /// Closed segments the purge would delete.
+    pub segments: usize,
+    /// Days of an active goal streak the purge would cut; `None` when it cuts none.
+    pub streak_days_cut: Option<u32>,
+}
+
 /// What the menu-bar / tray text next to the icon shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TrayDisplay {
@@ -406,6 +415,22 @@ impl Commands {
             issued_at: now,
         });
         Ok(ConfirmToken(token))
+    }
+
+    /// Dry run of `purge_older_than`: how much it would remove and whether it would cut an
+    /// active streak, so the confirmation can warn first.
+    pub fn retention_impact(&self, days: u32, now: UtcMs) -> Result<RetentionImpact, CommandError> {
+        if days == 0 {
+            return Err(CommandError::Invalid("days must be at least 1".into()));
+        }
+        let segments = self.retention.count_older_than(cutoff(now, days))?;
+        // TODO(goals unit): streaks do not exist yet. Once `GoalService` can report the first
+        // day of each active streak, fill `streak_days_cut` with
+        // `domain::goals::retention_cuts_streak(cutoff, streak.start)`.
+        Ok(RetentionImpact {
+            segments,
+            streak_days_cut: None,
+        })
     }
 
     /// Deletes closed segments that started in the range; returns how many.
@@ -1069,6 +1094,21 @@ mod tests {
             .unwrap();
         assert_eq!(f.cmd.purge_older_than(30, &token, now).unwrap(), 3);
         assert_eq!(f.store.segments().len(), 2);
+    }
+
+    #[test]
+    fn retention_impact_counts_what_a_purge_would_delete_without_deleting() {
+        let f = fixture();
+        let now = UtcMs(100 * DAY);
+        for age in [90, 60, 31, 10, 1] {
+            f.store
+                .seed_segment(closed(now.0 - age * DAY, now.0 - age * DAY + 1_000));
+        }
+        let impact = f.cmd.retention_impact(30, now).unwrap();
+        assert_eq!(impact.segments, 3);
+        assert_eq!(impact.streak_days_cut, None, "no goals exist yet");
+        assert_eq!(f.store.segments().len(), 5);
+        assert!(f.cmd.retention_impact(0, now).is_err());
     }
 
     #[test]

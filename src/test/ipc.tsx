@@ -3,6 +3,7 @@ import { render } from "@testing-library/react";
 import type { ReactElement } from "react";
 
 import type {
+  BackupStatusDto,
   DashboardDto,
   FocusDto,
   ReportDto,
@@ -69,6 +70,18 @@ export function settings(overrides: Partial<SettingsDto> = {}): SettingsDto {
   };
 }
 
+export function backupStatus(overrides: Partial<BackupStatusDto> = {}): BackupStatusDto {
+  return {
+    enabled: true,
+    custom_dir: null,
+    dir: "/data/backups",
+    last_backup_at: null,
+    last_error: null,
+    stored: 0,
+    ...overrides,
+  };
+}
+
 /** What the backend answers to `settings_update`: stored settings with the non-null patch fields applied. */
 export function mergePatch(patch: unknown, base: SettingsDto = settings()): SettingsDto {
   const changes = Object.fromEntries(
@@ -95,7 +108,13 @@ export function mockBackend(handlers: Handlers): { calls: Call[] } {
       if (cmd.startsWith("plugin:event|")) return undefined;
       const payload = (args ?? {}) as Record<string, unknown>;
       calls.push({ cmd, args: payload });
-      const handler = handlers[cmd] ?? (cmd === "settings_get" ? () => settings() : undefined);
+      const handler =
+        handlers[cmd] ??
+        (cmd === "settings_get"
+          ? () => settings()
+          : cmd === "backup_status"
+            ? () => backupStatus()
+            : undefined);
       if (!handler) throw new Error(`unmocked command: ${cmd}`);
       return handler(payload);
     },

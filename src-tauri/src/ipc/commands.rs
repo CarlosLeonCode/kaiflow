@@ -2,6 +2,7 @@
 //! pool so SQLite and engine round trips never stall the main thread, and maps failures to
 //! `AppError`. Plugins (dialog) are only ever called from here, never from a window (R6.5).
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use tauri::{AppHandle, State};
@@ -9,10 +10,11 @@ use tauri_plugin_dialog::DialogExt;
 use tauri_specta::Event;
 
 use super::dto::{
-    ActivityDto, ApplyPresetResultDto, DashboardDto, DeleteOpDto, IdleGapDto, IdleResolutionDto,
-    PermissionStateDto, PresetDto, PrivacyModeDto, PrivacyRulesDto, ProductivityDto, RangeDto,
-    ReportDto, RuleDto, RuleInputDto, SettingsDto, SettingsPatchDto, SuggestionDto,
-    TimelineItemDto, TrackingStatusDto, UpdateInfoDto,
+    ActivityDto, ApplyPresetResultDto, BackupReportDto, BackupStatusDto, DashboardDto, DeleteOpDto,
+    IdleGapDto, IdleResolutionDto, PermissionStateDto, PresetDto, PrivacyModeDto, PrivacyRulesDto,
+    ProductivityDto, RangeDto, ReportDto, RestorePreviewDto, RestoreResultDto, RetentionImpactDto,
+    RuleDto, RuleInputDto, SettingsDto, SettingsPatchDto, SuggestionDto, TimelineItemDto,
+    TrackingStatusDto, UpdateInfoDto,
 };
 use super::events::{DataChanged, DataKindDto};
 use crate::composition::AppState;
@@ -374,38 +376,143 @@ pub async fn delete_all(
     Ok(())
 }
 
-/// Asks where to save (native dialog, from Rust) and writes the CSV there. Returns the
-/// chosen path, or `null` when the user cancelled.
+/// Asks where to save (native dialog, from Rust) and writes the JSON export there. Returns
+/// the chosen path, or `null` when the user cancelled (nothing is written then).
 #[tauri::command]
 #[specta::specta]
-pub async fn export_csv(
+pub async fn export_json(
     app: AppHandle,
     state: Shared<'_>,
     range: RangeDto,
 ) -> Result<Option<String>, AppError> {
-    let csv = run(state, move |s| s.csv_for(range)).await?;
-    tauri::async_runtime::spawn_blocking(move || {
-        let Some(chosen) = app
-            .dialog()
+    let chosen = blocking_dialog(&app, |app| {
+        app.dialog()
             .file()
-            .add_filter("CSV", &["csv"])
-            .set_file_name("time-track.csv")
+            .add_filter("JSON", &["json"])
+            .set_file_name("time-track-export.json")
             .blocking_save_file()
-        else {
-            return Ok(None);
-        };
-        let path = chosen.into_path().map_err(|e| AppError::Internal {
-            message: e.to_string(),
-        })?;
-        std::fs::write(&path, csv).map_err(|e| AppError::Internal {
-            message: e.to_string(),
-        })?;
+    })
+    .await?;
+    let Some(path) = chosen else {
+        return Ok(None);
+    };
+    run(state, move |s| {
+        s.export_json_to(&path, range)?;
         Ok(Some(path.display().to_string()))
+    })
+    .await
+}
+
+/// Runs a native dialog on the blocking pool and turns its answer into a path; `None` when
+/// the user cancelled.
+async fn blocking_dialog<F>(app: &AppHandle, pick: F) -> Result<Option<PathBuf>, AppError>
+where
+    F: FnOnce(&AppHandle) -> Option<tauri_plugin_dialog::FilePath> + Send + 'static,
+{
+    let app = app.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        pick(&app)
+            .map(|chosen| {
+                chosen.into_path().map_err(|e| AppError::Internal {
+                    message: e.to_string(),
+                })
+            })
+            .transpose()
     })
     .await
     .map_err(|e| AppError::Internal {
         message: e.to_string(),
     })?
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn backup_status(state: Shared<'_>) -> Result<BackupStatusDto, AppError> {
+    run(state, AppState::backup_status).await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn backup_set_enabled(
+    state: Shared<'_>,
+    enabled: bool,
+) -> Result<BackupStatusDto, AppError> {
+    run(state, move |s| s.backup_set_enabled(enabled)).await
+}
+
+/// Lets the user pick the backup folder (native dialog, from Rust). Cancelling keeps the
+/// current folder. Returns the resulting status either way.
+#[tauri::command]
+#[specta::specta]
+pub async fn backup_choose_dir(
+    app: AppHandle,
+    state: Shared<'_>,
+) -> Result<BackupStatusDto, AppError> {
+    let chosen = blocking_dialog(&app, |app| app.dialog().file().blocking_pick_folder()).await?;
+    run(state, move |s| match chosen {
+        Some(dir) => s.backup_set_dir(Some(&dir.to_string_lossy())),
+        None => s.backup_status(),
+    })
+    .await
+}
+
+/// Goes back to the default backup folder.
+#[tauri::command]
+#[specta::specta]
+pub async fn backup_reset_dir(state: Shared<'_>) -> Result<BackupStatusDto, AppError> {
+    run(state, |s| s.backup_set_dir(None)).await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn backup_now(state: Shared<'_>) -> Result<BackupReportDto, AppError> {
+    run(state, AppState::backup_now).await
+}
+
+/// Step one of a restore: asks for a backup or export file (native dialog, from Rust),
+/// validates it and returns a preview with a confirmation token. `null` when the user
+/// cancelled. Nothing is modified.
+#[tauri::command]
+#[specta::specta]
+pub async fn restore_prepare(
+    app: AppHandle,
+    state: Shared<'_>,
+) -> Result<Option<RestorePreviewDto>, AppError> {
+    let chosen = blocking_dialog(&app, |app| {
+        app.dialog()
+            .file()
+            .add_filter("Time Track backup or export", &["gz", "json"])
+            .blocking_pick_file()
+    })
+    .await?;
+    let Some(path) = chosen else {
+        return Ok(None);
+    };
+    run(state, move |s| s.restore_prepare_file(&path).map(Some)).await
+}
+
+/// Step two: with the token from `restore_prepare`, copies the database aside and replaces
+/// every piece of data in one transaction.
+#[tauri::command]
+#[specta::specta]
+pub async fn restore_apply(
+    app: AppHandle,
+    state: Shared<'_>,
+    token: String,
+) -> Result<RestoreResultDto, AppError> {
+    let result = run(state, move |s| s.restore_apply(token)).await?;
+    announce_data_changed(&app);
+    Ok(result)
+}
+
+/// Dry run of "delete data older than N days", for the confirmation text.
+#[tauri::command]
+#[specta::specta]
+pub async fn retention_impact(
+    state: Shared<'_>,
+    days: u32,
+) -> Result<RetentionImpactDto, AppError> {
+    run(state, move |s| s.retention_impact(days)).await
 }
 
 /// Asks the update server for a newer signed release. Returns it (and announces it with

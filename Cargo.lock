@@ -15,6 +15,7 @@ dependencies = [
  "application",
  "crossbeam-channel",
  "domain",
+ "tempfile",
 ]
 
 [[package]]
@@ -118,6 +119,7 @@ version = "0.1.0"
 dependencies = [
  "crossbeam-channel",
  "domain",
+ "flate2",
  "serde",
  "serde_json",
 ]

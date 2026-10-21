@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-restore-apply"
+description = "Enables the restore_apply command without any pre-configured scope."
+commands.allow = ["restore_apply"]
+
+[[permission]]
+identifier = "deny-restore-apply"
+description = "Denies the restore_apply command without any pre-configured scope."
+commands.deny = ["restore_apply"]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-backup-set-enabled"
+description = "Enables the backup_set_enabled command without any pre-configured scope."
+commands.allow = ["backup_set_enabled"]
+
+[[permission]]
+identifier = "deny-backup-set-enabled"
+description = "Denies the backup_set_enabled command without any pre-configured scope."
+commands.deny = ["backup_set_enabled"]

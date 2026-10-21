@@ -5,6 +5,7 @@
 
 pub mod activation;
 pub mod fanout;
+pub mod files;
 pub mod idle;
 pub mod permission;
 pub mod sampler;

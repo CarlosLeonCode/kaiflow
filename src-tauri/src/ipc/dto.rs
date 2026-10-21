@@ -2,8 +2,12 @@
 //! `bindings.ts` is generated from them. Timestamps are UTC milliseconds as `i64`; they stay
 //! far below 2^53, so the bindings export them as TypeScript `number`.
 
-use application::commands::{DeleteOp, RuleInput, RuleSpec, Settings, SettingsPatch, TrayDisplay};
+use application::backup::Kind;
+use application::commands::{
+    DeleteOp, RetentionImpact, RuleInput, RuleSpec, Settings, SettingsPatch, TrayDisplay,
+};
 use application::dashboard::{Dashboard, DashboardActivity, ProductivityTotals, StackedBucket};
+use application::export::{BackupReport, BackupStatus, RestorePreview, RestoreReport};
 use application::ports::{DegradedReason, PrivacyMode, TrackingKind, TrackingStatus};
 use application::presets::{ApplyOutcome, SuggestionView};
 use application::queries::{
@@ -933,6 +937,129 @@ pub struct UpdateInfoDto {
     pub current_version: String,
     pub notes: Option<String>,
     pub date: Option<String>,
+}
+
+/// Daily backup configuration and the outcome of the last run (Settings > Data).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct BackupStatusDto {
+    pub enabled: bool,
+    /// The folder the user picked; `null` while the default folder is used.
+    pub custom_dir: Option<String>,
+    /// The folder backups go to right now.
+    pub dir: String,
+    pub last_backup_at: Option<i64>,
+    /// Message of the last failed run; cleared by the next success.
+    pub last_error: Option<String>,
+    /// Backups currently stored in `dir`.
+    pub stored: u32,
+}
+
+impl From<BackupStatus> for BackupStatusDto {
+    fn from(s: BackupStatus) -> Self {
+        Self {
+            enabled: s.enabled,
+            custom_dir: s.custom_dir,
+            dir: s.dir,
+            last_backup_at: s.last_backup_at.map(|t| t.0),
+            last_error: s.last_error,
+            stored: u32::try_from(s.stored).unwrap_or(u32::MAX),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct BackupReportDto {
+    pub path: String,
+    /// Older backups the retention policy removed.
+    pub removed: u32,
+}
+
+impl From<BackupReport> for BackupReportDto {
+    fn from(r: BackupReport) -> Self {
+        Self {
+            path: r.path.display().to_string(),
+            removed: u32::try_from(r.removed).unwrap_or(u32::MAX),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum DocumentKindDto {
+    Backup,
+    Export,
+}
+
+/// What a backup or export file contains, shown before the user confirms a restore.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct RestorePreviewDto {
+    /// Single-use token `restore_apply` must send back within a minute.
+    pub token: String,
+    pub file_name: String,
+    pub kind: DocumentKindDto,
+    pub app_version: String,
+    pub exported_at: String,
+    pub activities: u32,
+    pub rules: u32,
+    pub segments: u32,
+    pub idle_gaps: u32,
+    /// First start and last end of the tracked time in the file (UTC ms).
+    pub first_at: Option<i64>,
+    pub last_at: Option<i64>,
+}
+
+impl RestorePreviewDto {
+    pub fn new(preview: RestorePreview, file_name: String) -> Self {
+        let n = |v: usize| u32::try_from(v).unwrap_or(u32::MAX);
+        let s = preview.summary;
+        Self {
+            token: preview.token,
+            file_name,
+            kind: match s.kind {
+                Kind::Backup => DocumentKindDto::Backup,
+                Kind::Export => DocumentKindDto::Export,
+            },
+            app_version: s.app_version,
+            exported_at: s.exported_at,
+            activities: n(s.activities),
+            rules: n(s.rules),
+            segments: n(s.segments),
+            idle_gaps: n(s.idle_gaps),
+            first_at: s.first_at,
+            last_at: s.last_at,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct RestoreResultDto {
+    /// Complete copy of the data as it was before the restore.
+    pub safety_copy: String,
+}
+
+impl From<RestoreReport> for RestoreResultDto {
+    fn from(r: RestoreReport) -> Self {
+        Self {
+            safety_copy: r.safety_copy.display().to_string(),
+        }
+    }
+}
+
+/// What a retention purge would delete, so the confirmation can say so first.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct RetentionImpactDto {
+    pub segments: u32,
+    /// Days of an active goal streak the purge would cut; `null` when it cuts none.
+    pub streak_days_cut: Option<u32>,
+}
+
+impl From<RetentionImpact> for RetentionImpactDto {
+    fn from(i: RetentionImpact) -> Self {
+        Self {
+            segments: u32::try_from(i.segments).unwrap_or(u32::MAX),
+            streak_days_cut: i.streak_days_cut,
+        }
+    }
 }
 
 #[cfg(test)]

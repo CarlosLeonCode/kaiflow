@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-backup-reset-dir"
+description = "Enables the backup_reset_dir command without any pre-configured scope."
+commands.allow = ["backup_reset_dir"]
+
+[[permission]]
+identifier = "deny-backup-reset-dir"
+description = "Denies the backup_reset_dir command without any pre-configured scope."
+commands.deny = ["backup_reset_dir"]

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-restore-prepare"
+description = "Enables the restore_prepare command without any pre-configured scope."
+commands.allow = ["restore_prepare"]
+
+[[permission]]
+identifier = "deny-restore-prepare"
+description = "Denies the restore_prepare command without any pre-configured scope."
+commands.deny = ["restore_prepare"]

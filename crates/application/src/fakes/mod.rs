@@ -311,6 +311,14 @@ impl RetentionRepository for FakeStore {
         Ok(before - s.segments.len())
     }
 
+    fn count_older_than(&self, cutoff: UtcMs) -> PortResult<usize> {
+        let s = self.0.lock().unwrap();
+        Ok(s.segments
+            .iter()
+            .filter(|g| g.ended_at.is_some_and(|e| e < cutoff))
+            .count())
+    }
+
     fn purge_older_than(&self, cutoff: UtcMs) -> PortResult<usize> {
         let mut s = self.0.lock().unwrap();
         let before = s.segments.len();
@@ -571,6 +579,10 @@ impl FixedCalendar {
 }
 
 impl Calendar for FixedCalendar {
+    fn local_day(&self, at: UtcMs) -> i64 {
+        (at.0 + self.offset_at(at.0)).div_euclid(86_400_000)
+    }
+
     fn hour_slot(&self, at: UtcMs) -> domain::HourSlot {
         const HOUR: i64 = 3_600_000;
         const DAY: i64 = 24 * HOUR;
@@ -594,5 +606,120 @@ impl Calendar for FixedCalendar {
             hour,
             next_boundary: UtcMs(next),
         }
+    }
+}
+
+/// In-memory file system: a path maps to its bytes. Failures can be armed per call.
+#[derive(Clone, Default)]
+pub struct FakeFiles {
+    files: Arc<Mutex<std::collections::BTreeMap<std::path::PathBuf, Vec<u8>>>>,
+    fail_writes: Arc<Mutex<Option<String>>>,
+}
+
+impl FakeFiles {
+    pub fn put(&self, path: &std::path::Path, bytes: &[u8]) {
+        self.files
+            .lock()
+            .unwrap()
+            .insert(path.to_path_buf(), bytes.to_vec());
+    }
+    pub fn get(&self, path: &std::path::Path) -> Option<Vec<u8>> {
+        self.files.lock().unwrap().get(path).cloned()
+    }
+    pub fn names_in(&self, dir: &std::path::Path) -> Vec<String> {
+        self.list(dir).unwrap()
+    }
+    /// Every write fails with `message` until `heal` is called; stored files stay intact.
+    pub fn fail_writes_with(&self, message: &str) {
+        *self.fail_writes.lock().unwrap() = Some(message.to_owned());
+    }
+    pub fn heal(&self) {
+        *self.fail_writes.lock().unwrap() = None;
+    }
+}
+
+impl FileSink for FakeFiles {
+    fn write_atomic(&self, path: &std::path::Path, bytes: &[u8]) -> PortResult<()> {
+        if let Some(message) = self.fail_writes.lock().unwrap().clone() {
+            return Err(PortError(message));
+        }
+        self.put(path, bytes);
+        Ok(())
+    }
+    fn list(&self, dir: &std::path::Path) -> PortResult<Vec<String>> {
+        Ok(self
+            .files
+            .lock()
+            .unwrap()
+            .keys()
+            .filter(|p| p.parent() == Some(dir))
+            .filter_map(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
+            .collect())
+    }
+    fn delete(&self, path: &std::path::Path) -> PortResult<()> {
+        self.files.lock().unwrap().remove(path);
+        Ok(())
+    }
+    fn read(&self, path: &std::path::Path, max_bytes: u64) -> PortResult<Vec<u8>> {
+        let bytes = self
+            .get(path)
+            .ok_or_else(|| PortError(format!("cannot read {}", path.display())))?;
+        if bytes.len() as u64 > max_bytes {
+            return Err(PortError("file too large".into()));
+        }
+        Ok(bytes)
+    }
+}
+
+#[derive(Default)]
+struct BackupState {
+    data: crate::backup::BackupData,
+    copies: Vec<std::path::PathBuf>,
+    fail_replace: bool,
+}
+
+/// A store holding one [`BackupData`]; `replace_all` and `safety_copy` are recorded.
+#[derive(Clone, Default)]
+pub struct FakeBackupStore(Arc<Mutex<BackupState>>);
+
+impl FakeBackupStore {
+    pub fn with_data(data: crate::backup::BackupData) -> Self {
+        let store = Self::default();
+        store.0.lock().unwrap().data = data;
+        store
+    }
+    pub fn data(&self) -> crate::backup::BackupData {
+        self.0.lock().unwrap().data.clone()
+    }
+    pub fn safety_copies(&self) -> Vec<std::path::PathBuf> {
+        self.0.lock().unwrap().copies.clone()
+    }
+    pub fn fail_replace(&self) {
+        self.0.lock().unwrap().fail_replace = true;
+    }
+}
+
+impl BackupStore for FakeBackupStore {
+    fn snapshot(&self, range: Option<(UtcMs, UtcMs)>) -> PortResult<crate::backup::BackupData> {
+        let mut data = self.0.lock().unwrap().data.clone();
+        if let Some((from, to)) = range {
+            data.segments
+                .retain(|s| s.started_at < to.0 && s.ended_at.is_none_or(|e| e > from.0));
+            data.idle_gaps
+                .retain(|g| g.started_at >= from.0 && g.started_at < to.0);
+        }
+        Ok(data)
+    }
+    fn safety_copy(&self, dest: &std::path::Path) -> PortResult<()> {
+        self.0.lock().unwrap().copies.push(dest.to_path_buf());
+        Ok(())
+    }
+    fn replace_all(&self, data: &crate::backup::BackupData) -> PortResult<()> {
+        let mut state = self.0.lock().unwrap();
+        if state.fail_replace {
+            return Err(PortError("replace failed".into()));
+        }
+        state.data = data.clone();
+        Ok(())
     }
 }

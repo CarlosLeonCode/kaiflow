@@ -8,13 +8,16 @@ use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 use std::thread::JoinHandle;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use adapters_common::files::FsFileSink;
 use adapters_common::idle::IdleThreshold;
 use adapters_sqlite::{
-    DbError, SqliteActivityRepository, SqlitePrivacyRepository, SqliteReportRepository,
-    SqliteRetentionRepository, SqliteSessionRepository, SqliteSettingsRepository,
+    DbError, SqliteActivityRepository, SqliteBackupStore, SqlitePrivacyRepository,
+    SqliteReportRepository, SqliteRetentionRepository, SqliteSessionRepository,
+    SqliteSettingsRepository,
 };
 use application::commands::Commands;
 use application::engine::{Command, Engine, EngineHandle, Ports};
+use application::export::DataService;
 use application::idle_policy::IdlePolicy;
 use application::ports::{
     ActiveWindowProvider, ActivityRepository, Clock, EventSink, Notifier, PermissionProvider,
@@ -32,6 +35,8 @@ use crate::ipc::events::SharedShortcut;
 
 /// Cadence of the engine heartbeat / gap-expiry tick (design section 6).
 const TICK_EVERY: Duration = Duration::from_secs(2);
+/// Default folder for automatic backups, next to the database inside the app data directory.
+const BACKUP_DIR: &str = "backups";
 /// Scheduled retention purge period (design section 7).
 const PURGE_EVERY: Duration = Duration::from_secs(24 * 60 * 60);
 
@@ -123,6 +128,8 @@ pub struct AppState {
     pub commands: Arc<Commands>,
     /// Opt-in activity presets and app suggestions.
     pub presets: PresetService,
+    /// JSON export, daily backup and restore.
+    pub data: DataService,
     /// Read-only listing of activities and rules (writes go through `commands`).
     pub activities: Arc<dyn ActivityRepository>,
     pub permission: Arc<dyn PermissionProvider>,
@@ -165,6 +172,16 @@ pub fn compose(
         adapters_sqlite::open(db_path)?,
     ));
 
+    let data = DataService::new(
+        Arc::new(SqliteBackupStore::new(adapters_sqlite::open(db_path)?)),
+        Arc::new(FsFileSink),
+        settings.clone(),
+        Arc::new(ChronoLocalCalendar),
+        db_path.with_file_name(BACKUP_DIR),
+        db_path.to_path_buf(),
+        env!("CARGO_PKG_VERSION"),
+    );
+
     let reports = Arc::new(reports);
     let queries = Queries::new(reports.clone(), activities.clone());
     let presets = PresetService::new(activities.clone(), reports, settings.clone());
@@ -203,6 +220,7 @@ pub fn compose(
         calendar: ChronoLocalCalendar,
         commands,
         presets,
+        data,
         activities,
         permission: providers.permission,
         shortcut,

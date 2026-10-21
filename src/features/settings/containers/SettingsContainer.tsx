@@ -1,6 +1,7 @@
 import { SectionIntroContainer } from "@/features/shell/containers/SectionIntroContainer";
 import { IpcError, useOpenAccessibilitySettingsMutation, useSettingsQuery, useStatusQuery, useUpdateSettingsMutation, errorMessage } from "@/shared/ipc";
 
+import { DataPanelContainer } from "@/features/data/containers/DataPanelContainer";
 import { UpdatesPanelContainer } from "@/features/updates/containers/UpdateContainers";
 
 import { SettingsView } from "../components/SettingsView";
@@ -39,6 +40,7 @@ export function SettingsContainer() {
       error={otherError ?? loadError}
       onChange={(changes) => update.mutate(changes)}
       onOpenAccessibilitySettings={() => openSettings.mutate()}
+      data={<DataPanelContainer />}
       updates={<UpdatesPanelContainer />}
     />
   );

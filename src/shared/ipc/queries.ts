@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tansta
 import { commands } from "./bindings";
 import type {
   ActivityDto,
+  BackupStatusDto,
   DeleteOpDto,
   IdleResolutionDto,
   ProductivityDto,
@@ -333,8 +334,72 @@ export function useDeleteDataMutation() {
 }
 
 /** Resolves to the saved path, or `null` when the user cancelled the save dialog. */
-export function useExportCsvMutation() {
-  return useMutation({ mutationFn: (range: RangeDto) => unwrap(commands.exportCsv(range)) });
+export function useExportJsonMutation() {
+  return useMutation({ mutationFn: (range: RangeDto) => unwrap(commands.exportJson(range)) });
+}
+
+/** Backup configuration plus the outcome of the last run; refreshed when a backup finishes. */
+export function useBackupStatusQuery() {
+  return useQuery({
+    queryKey: queryKeys.backup,
+    queryFn: () => unwrap(commands.backupStatus()),
+  });
+}
+
+function useBackupStatusMutation<V = void>(run: (value: V) => Promise<BackupStatusDto>) {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: run,
+    onSuccess: (status) => client.setQueryData(queryKeys.backup, status),
+  });
+}
+
+export function useSetBackupEnabledMutation() {
+  return useBackupStatusMutation((enabled: boolean) => unwrap(commands.backupSetEnabled(enabled)));
+}
+
+/** Opens the folder picker; cancelling resolves with the unchanged status. */
+export function useChooseBackupDirMutation() {
+  return useBackupStatusMutation(() => unwrap(commands.backupChooseDir()));
+}
+
+export function useResetBackupDirMutation() {
+  return useBackupStatusMutation(() => unwrap(commands.backupResetDir()));
+}
+
+/** Backs up right now; resolves with the file written. */
+export function useBackupNowMutation() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: () => unwrap(commands.backupNow()),
+    onSettled: () => client.invalidateQueries({ queryKey: queryKeys.backup }),
+  });
+}
+
+/** Opens the file picker and previews the chosen file; resolves to `null` when cancelled. */
+export function useRestorePrepareMutation() {
+  return useMutation({ mutationFn: () => unwrap(commands.restorePrepare()) });
+}
+
+/** Replaces every piece of data with the previewed file, then reloads all views. */
+export function useRestoreApplyMutation() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (token: string) => unwrap(commands.restoreApply(token)),
+    // Everything changed: activities, rules, settings, privacy rules and tracked time.
+    onSuccess: () => client.invalidateQueries(),
+  });
+}
+
+/** What deleting data older than `days` would remove; disabled while `days` is `null`. */
+export function useRetentionImpactQuery(days: number | null) {
+  return useQuery({
+    queryKey: queryKeys.retentionImpact(days),
+    queryFn: () => unwrap(commands.retentionImpact(days ?? 1)),
+    enabled: days !== null,
+    // A dry run must reflect the data right now, never a cached answer.
+    gcTime: 0,
+  });
 }
 
 /** The update announced by the backend, or `null`. Only the `update-available` event and a manual check write it. */

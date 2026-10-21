@@ -98,6 +98,15 @@ pub struct StorageFailed {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type, Event)]
 pub struct UpdateAvailable(pub UpdateInfoDto);
 
+/// A backup run finished. Sent on every success and on the first failure of a streak, so
+/// the UI can show a one-time notice; the details stay in `backup_status`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type, Event)]
+pub struct BackupFinished {
+    pub ok: bool,
+    /// The file written, or the reason it failed.
+    pub message: String,
+}
+
 /// Everything the backend can push, as one value so translation is testable.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AppEvent {

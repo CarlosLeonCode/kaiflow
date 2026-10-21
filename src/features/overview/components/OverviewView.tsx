@@ -94,7 +94,7 @@ export function OverviewView(props: Props) {
         <>
           <Segmented aria-label="Period" value={period} options={PERIODS} onChange={props.onPeriodChange} />
           <Button size="sm" onClick={props.onExport} disabled={props.exporting}>
-            <Download aria-hidden="true" /> Export CSV
+            <Download aria-hidden="true" /> Export JSON
           </Button>
         </>
       }

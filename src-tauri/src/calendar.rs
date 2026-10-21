@@ -16,6 +16,33 @@ impl Calendar for ChronoLocalCalendar {
     fn hour_slot(&self, at: UtcMs) -> HourSlot {
         slot_in(&Local, at)
     }
+
+    fn local_day(&self, at: UtcMs) -> i64 {
+        day_in(&Local, at)
+    }
+}
+
+/// Local calendar day of `at` in `tz`, as days since 1970-01-01.
+fn day_in<Tz: TimeZone>(tz: &Tz, at: UtcMs) -> i64 {
+    tz.timestamp_millis_opt(at.0).single().map_or_else(
+        // Out of chrono's range: UTC keeps callers moving.
+        || at.0.div_euclid(86_400_000),
+        |local| i64::from(local.date_naive().num_days_from_ce()) - DAYS_FROM_CE_TO_EPOCH,
+    )
+}
+
+/// `num_days_from_ce` of 1970-01-01.
+const DAYS_FROM_CE_TO_EPOCH: i64 = 719_163;
+
+/// The machine's current UTC offset as a readable label, e.g. `UTC+02:00`, for exports.
+pub fn timezone_label() -> String {
+    offset_label(Local::now().offset().fix().local_minus_utc())
+}
+
+fn offset_label(offset_secs: i32) -> String {
+    let sign = if offset_secs < 0 { '-' } else { '+' };
+    let minutes = offset_secs.unsigned_abs() / 60;
+    format!("UTC{sign}{:02}:{:02}", minutes / 60, minutes % 60)
 }
 
 /// UTC offset of `tz` at `at_ms`, in milliseconds; `None` outside chrono's range.
@@ -96,6 +123,30 @@ mod tests {
         let slot = slot_in(&tz, UtcMs(3 * 60 * MIN));
         assert_eq!((slot.weekday, slot.hour), (2, 22));
         assert_eq!(slot.next_boundary, UtcMs(4 * 60 * MIN));
+    }
+
+    #[test]
+    fn the_local_day_changes_at_local_midnight() {
+        // UTC-5: local midnight is 05:00 UTC.
+        let tz = FixedOffset::west_opt(5 * 3600).unwrap();
+        let day = 20_000_i64;
+        let utc_midnight = day * 24 * 60 * MIN;
+        assert_eq!(
+            day_in(&tz, UtcMs(utc_midnight + 4 * 60 * MIN + 59 * MIN)),
+            day - 1
+        );
+        assert_eq!(day_in(&tz, UtcMs(utc_midnight + 5 * 60 * MIN)), day);
+        // Epoch day 0 and a pre-epoch instant.
+        assert_eq!(day_in(&FixedOffset::east_opt(0).unwrap(), UtcMs(0)), 0);
+        assert_eq!(day_in(&FixedOffset::east_opt(0).unwrap(), UtcMs(-1)), -1);
+    }
+
+    #[test]
+    fn offsets_are_labelled_for_humans() {
+        assert_eq!(offset_label(0), "UTC+00:00");
+        assert_eq!(offset_label(2 * 3600), "UTC+02:00");
+        assert_eq!(offset_label(-(5 * 3600 + 1800)), "UTC-05:30");
+        assert!(timezone_label().starts_with("UTC"));
     }
 
     #[test]

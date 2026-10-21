@@ -45,7 +45,15 @@
     "allow-delete-range",
     "allow-purge-older-than",
     "allow-delete-all",
-    "allow-export-csv",
+    "allow-export-json",
+    "allow-backup-status",
+    "allow-backup-set-enabled",
+    "allow-backup-choose-dir",
+    "allow-backup-reset-dir",
+    "allow-backup-now",
+    "allow-restore-prepare",
+    "allow-restore-apply",
+    "allow-retention-impact",
     "allow-update-check",
     "allow-update-install"
   ]

@@ -4,6 +4,7 @@
 use application::commands::CommandError;
 use application::effects_executor::ResolveError;
 use application::engine::EngineError;
+use application::export::DataError;
 use application::ports::PortError;
 use application::queries::QueryError;
 use serde::{Deserialize, Serialize};
@@ -53,6 +54,16 @@ impl From<CommandError> for AppError {
             CommandError::NotFound => Self::NotFound,
             CommandError::ConfirmationRequired => Self::ConfirmationRequired,
             CommandError::Storage(e) => e.into(),
+        }
+    }
+}
+
+impl From<DataError> for AppError {
+    fn from(e: DataError) -> Self {
+        match e {
+            DataError::Invalid(message) => Self::Invalid { message },
+            DataError::ConfirmationRequired => Self::ConfirmationRequired,
+            DataError::Storage(e) => e.into(),
         }
     }
 }

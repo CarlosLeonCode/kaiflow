@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 
+import { BackupNoticeContainer } from "@/features/data/containers/BackupNoticeContainer";
 import { ActivitiesContainer } from "@/features/activities/containers/ActivitiesContainer";
 import { OverviewContainer } from "@/features/overview/containers/OverviewContainer";
 import { PrivacyContainer } from "@/features/privacy/containers/PrivacyContainer";
@@ -53,8 +54,11 @@ export function MainApp() {
             : null
         }
       />
-      <main aria-label="Dashboard" className="min-w-0 flex-1 bg-background">
-        <SectionView section={section} onNavigate={select} />
+      <main aria-label="Dashboard" className="flex min-w-0 flex-1 flex-col bg-background">
+        <BackupNoticeContainer />
+        <div className="min-h-0 flex-1">
+          <SectionView section={section} onNavigate={select} />
+        </div>
       </main>
     </div>
   );

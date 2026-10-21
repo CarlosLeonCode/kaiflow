@@ -45,7 +45,7 @@ actualizador).
 ## 3. Red solo del actualizador (R10.1)
 
 Usar un monitor de red por proceso (Little Snitch, LuLu o `nettop -p <pid>`) mientras se usa
-la app unos minutos: abrir popover y ventana principal, cambiar de app, exportar un CSV.
+la app unos minutos: abrir popover y ventana principal, cambiar de app, exportar un JSON.
 
 - [ ] Sin pulsar "Check now" y durante los primeros 30 s no hay ninguna conexion saliente.
 - [ ] La unica conexion saliente es a `github.com` (`releases/latest/download/latest.json` y,

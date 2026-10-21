@@ -1,4 +1,4 @@
-import type { DeleteOpDto, RangeDto } from "@/shared/ipc";
+import type { DeleteOpDto, RangeDto, RetentionImpactDto } from "@/shared/ipc";
 import { addLocalDays } from "@/shared/lib/time";
 
 /** Pure helpers for the destructive operations of the Privacy section. */
@@ -50,8 +50,31 @@ export interface DeleteCopy {
 
 const dayFormat = { year: "numeric", month: "short", day: "numeric" } as const;
 
-/** Confirmation copy for an operation: what goes, what stays, and that it cannot be undone. */
-export function deleteCopy(op: DeleteOpDto, trackingWillRestart = false): DeleteCopy {
+/**
+ * What a purge of old data would touch, in plain words: how much goes and, when it reaches
+ * into an active goal streak, a warning before the user confirms.
+ */
+export function impactParagraphs(impact: RetentionImpactDto | undefined): string[] {
+  if (!impact) return [];
+  const paragraphs = [
+    impact.segments === 0
+      ? "Nothing is older than that right now, so nothing would be deleted."
+      : `This would delete ${impact.segments.toLocaleString()} ${impact.segments === 1 ? "segment" : "segments"}.`,
+  ];
+  if (impact.streak_days_cut !== null) {
+    const days = impact.streak_days_cut;
+    paragraphs.push(
+      `Warning: this reaches into an active goal streak and would cut ${days} ${days === 1 ? "day" : "days"} of it. Streaks are counted from the data that remains, so your streak would become shorter.`,
+    );
+  }
+  return paragraphs;
+}
+
+/**
+ * Confirmation copy for an operation: what goes, what stays, and that it cannot be undone.
+ * `impact` is the dry run of a purge (`older_than_days` only).
+ */
+export function deleteCopy(op: DeleteOpDto, trackingWillRestart = false, impact?: RetentionImpactDto): DeleteCopy {
   const kept = "Activities, rules, privacy rules and settings are kept.";
   switch (op.kind) {
     case "range": {
@@ -72,6 +95,7 @@ export function deleteCopy(op: DeleteOpDto, trackingWillRestart = false): Delete
         title: `Delete everything older than ${op.days} ${op.days === 1 ? "day" : "days"}?`,
         paragraphs: [
           `Anything recorded more than ${op.days} ${op.days === 1 ? "day" : "days"} ago is permanently deleted. Newer data stays.`,
+          ...impactParagraphs(impact),
           `${kept} This cannot be undone.`,
         ],
         confirmLabel: "Delete older data",

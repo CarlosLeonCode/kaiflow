@@ -1,6 +1,7 @@
 //! Pure domain model: no Tauri, no OS, no I/O (R1.7).
 
 pub mod activity;
+pub mod backup_retention;
 pub mod calendar;
 pub mod focus;
 pub mod idle_gap;

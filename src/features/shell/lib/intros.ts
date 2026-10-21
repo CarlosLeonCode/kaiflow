@@ -25,6 +25,6 @@ export const INTROS: Record<SectionId, IntroCopy> = {
   },
   settings: {
     title: "Tune the app",
-    body: "Idle detection, appearance, startup behavior and the global shortcut live here.",
+    body: "Idle detection, appearance, startup behavior and the global shortcut live here, along with your data: a daily backup of your tracked time and a way to restore it from a file.",
   },
 };

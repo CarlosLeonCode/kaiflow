@@ -6,7 +6,7 @@ TimeTrack is a local-first menu bar app that records which apps and windows you 
 
 - Menu bar popover with today's total, the current app and a pause/resume shortcut
 - Today view with a timeline colored by activity, totals by app and by activity
-- Overview by day, week, month and the last 90 days (trend, busiest hours, focus ratio), with CSV export
+- Overview by day, week, month and the last 90 days (trend, busiest hours, focus ratio), with JSON export
 - Activities (projects, clients or tasks) with rules by app or by window-title pattern, each flagged productive, neutral or distracting
 - Idle detection: when you come back, choose to discard the time or assign it
 - Privacy controls: excluded apps, hidden titles, delete by range or everything
@@ -62,7 +62,7 @@ npm run e2e
 | Path | Contents |
 |---|---|
 | `crates/domain` | Pure tracking rules: segments, state machine, idle gaps, activities, privacy |
-| `crates/application` | Ports, tracking engine, queries, commands, CSV export |
+| `crates/application` | Ports, tracking engine, queries, commands, JSON export, backup and restore |
 | `crates/adapters-sqlite` | SQLite schema, migrations and repositories |
 | `crates/adapters-common` | Platform-neutral sampler core, idle edge detection, signal fan-out |
 | `crates/adapters-macos` | NSWorkspace, Accessibility, idle, lock and permission adapters |

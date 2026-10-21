@@ -7,6 +7,7 @@ import { installMockBackend } from "./mockBackend";
  * - `?update=1`: an update is announced at startup (popover banner, Settings panel).
  * - `?update=manual`: an update is only offered when "Check now" is pressed.
  * - `?data=empty`: no tracked time at all (empty states).
+ * - `?backup=failing`: the daily backup cannot write (Settings > Data error state).
  * - `?activities=empty`: only the system activity and no rules (first-run preset choice).
  */
 export function installMockIpc(search: string = window.location.search): void {
@@ -15,6 +16,7 @@ export function installMockIpc(search: string = window.location.search): void {
     permission: params.get("permission") === "denied" ? "denied" : "granted",
     emptyActivities: params.get("activities") === "empty",
     emptyHistory: params.get("data") === "empty",
+    backupFails: params.get("backup") === "failing",
     announceUpdate: params.get("update") === "1",
     update: ["1", "manual"].includes(params.get("update") ?? "")
         ? { version: "0.2.0", current_version: "0.1.0", notes: "Faster history.\nFixes the idle prompt.", date: null }

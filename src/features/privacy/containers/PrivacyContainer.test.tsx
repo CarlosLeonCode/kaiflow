@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import type { PrivacyRulesDto, SettingsDto } from "@/shared/ipc";
+import type { PrivacyRulesDto, RetentionImpactDto, SettingsDto } from "@/shared/ipc";
 import { mockBackend, renderWithProviders, report, settings, status } from "@/test/ipc";
 
 import { PrivacyContainer } from "./PrivacyContainer";
@@ -13,13 +13,20 @@ const SLACK = { app_id: "com.tinyspeck.slackmacgap", app_name: "Slack", total_ms
 type Call = { cmd: string; args: Record<string, unknown> };
 
 /** In-memory backend for the privacy commands, with the real token rule: one token, one operation. */
-function backend(initial: { privacy?: Partial<PrivacyRulesDto>; state?: "running" | "paused" | "stopped" } = {}) {
+function backend(
+  initial: {
+    privacy?: Partial<PrivacyRulesDto>;
+    state?: "running" | "paused" | "stopped";
+    impact?: RetentionImpactDto;
+  } = {},
+) {
   let privacy: PrivacyRulesDto = { store_titles: true, excluded_apps: [], redacted_apps: [], ...initial.privacy };
   let stored: SettingsDto = settings();
   let issued: string | null = null;
   const order: string[] = [];
   const mock = mockBackend({
     privacy_list: () => privacy,
+    retention_impact: () => initial.impact ?? { segments: 3, streak_days_cut: null },
     settings_get: () => stored,
     settings_update: (args) => {
       const patch = args.patch as Record<string, unknown>;
@@ -254,6 +261,31 @@ describe("PrivacyContainer", () => {
         expect(calls.find((c) => c.cmd === "purge_older_than")?.args).toEqual({ days: 45, confirmToken: "token-1" }),
       );
       expect(await screen.findByText("Deleted 3 segments.")).toBeInTheDocument();
+    });
+
+    it("tells how much a purge removes before the user confirms", async () => {
+      const user = userEvent.setup();
+      const { calls } = backend({ impact: { segments: 120, streak_days_cut: null } });
+      renderWithProviders(<PrivacyContainer onOpenSettings={() => {}} />);
+
+      await user.click(await screen.findByRole("button", { name: "Delete older data…" }));
+
+      const dialog = await screen.findByRole("alertdialog");
+      expect(await within(dialog).findByText("This would delete 120 segments.")).toBeInTheDocument();
+      expect(within(dialog).queryByText(/streak/)).not.toBeInTheDocument();
+      expect(calls.find((c) => c.cmd === "retention_impact")?.args).toEqual({ days: 30 });
+    });
+
+    it("warns when the purge would cut into an active streak", async () => {
+      const user = userEvent.setup();
+      backend({ impact: { segments: 40, streak_days_cut: 10 } });
+      renderWithProviders(<PrivacyContainer onOpenSettings={() => {}} />);
+
+      await user.click(await screen.findByRole("button", { name: "Delete older data…" }));
+
+      const dialog = await screen.findByRole("alertdialog");
+      expect(await within(dialog).findByText(/would cut 10 days of it/)).toBeInTheDocument();
+      expect(within(dialog).getByRole("button", { name: "Delete older data" })).toBeEnabled();
     });
 
     it("refuses 0 or empty days", async () => {

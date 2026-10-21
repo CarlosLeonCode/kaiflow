@@ -1,7 +1,9 @@
 //! Ports implemented by adapters (design section 5) and the values that cross them.
 
 use std::fmt;
+use std::path::Path;
 
+use crate::backup::BackupData;
 use crossbeam_channel::Sender;
 use domain::{
     Activity, ActivityId, ActivityRule, AssignedSpan, EndReason, FocusSnapshot, GapId, GapStatus,
@@ -191,6 +193,8 @@ pub trait PrivacyRepository: Send + Sync {
 pub trait RetentionRepository: Send + Sync {
     /// Deletes closed segments that started in `[from, to)`; returns how many.
     fn delete_range(&self, from: UtcMs, to: UtcMs) -> PortResult<usize>;
+    /// How many closed segments `purge_older_than(cutoff)` would delete (a dry run).
+    fn count_older_than(&self, cutoff: UtcMs) -> PortResult<usize>;
     /// Deletes closed segments (and resolved gaps) that ended before `cutoff`.
     fn purge_older_than(&self, cutoff: UtcMs) -> PortResult<usize>;
     /// Deletes every segment and gap, then compacts the store so nothing lingers on disk.
@@ -202,6 +206,36 @@ pub trait RetentionRepository: Send + Sync {
 pub trait Calendar: Send + Sync {
     /// The local weekday and hour `at` falls in, and where the next local hour begins.
     fn hour_slot(&self, at: UtcMs) -> HourSlot;
+    /// The local calendar day `at` falls in, as days since 1970-01-01 (UTC when not overridden).
+    fn local_day(&self, at: UtcMs) -> i64 {
+        at.0.div_euclid(86_400_000)
+    }
+}
+
+/// Reads and writes whole-store snapshots: the source of exports and backups and the target
+/// of a restore.
+pub trait BackupStore: Send + Sync {
+    /// A consistent copy of the data. With a range `[from, to)` only the segments overlapping
+    /// it (and the gaps that started in it) are included. Segments still open are returned
+    /// closed at their heartbeat. Device-bound settings and the backup settings are left out.
+    fn snapshot(&self, range: Option<(UtcMs, UtcMs)>) -> PortResult<BackupData>;
+    /// Writes a complete copy of the database to `dest` (`VACUUM INTO`); fails if it exists.
+    fn safety_copy(&self, dest: &Path) -> PortResult<()>;
+    /// Replaces activities, rules, privacy rules, tracked data and settings in one
+    /// transaction; any failure leaves the stored data untouched. Device-bound settings stay.
+    fn replace_all(&self, data: &BackupData) -> PortResult<()>;
+}
+
+/// File access for exports and backups.
+pub trait FileSink: Send + Sync {
+    /// Writes `bytes` so that `path` either keeps its previous content or holds all of
+    /// `bytes`, never a partial file. The parent folder is created when missing.
+    fn write_atomic(&self, path: &Path, bytes: &[u8]) -> PortResult<()>;
+    /// File names (not paths) directly inside `dir`; a missing folder is an empty list.
+    fn list(&self, dir: &Path) -> PortResult<Vec<String>>;
+    fn delete(&self, path: &Path) -> PortResult<()>;
+    /// Whole file; errors when it is longer than `max_bytes`.
+    fn read(&self, path: &Path, max_bytes: u64) -> PortResult<Vec<u8>>;
 }
 
 pub trait EventSink: Send {

@@ -41,6 +41,8 @@ interface Props {
   error: string | null;
   onChange: (changes: Partial<SettingsPatchDto>) => void;
   onOpenAccessibilitySettings: () => void;
+  /** Slot after Privacy: the Data panel (backup and restore). */
+  data?: ReactNode;
   /** Slot after the settings: the updates panel. */
   updates?: ReactNode;
 }
@@ -55,6 +57,7 @@ export function SettingsView({
   error,
   onChange,
   onOpenAccessibilitySettings,
+  data,
   updates,
 }: Props) {
   return (
@@ -207,6 +210,8 @@ export function SettingsView({
               />
             </Row>
           </Panel>
+
+          {data}
 
           {updates}
         </div>

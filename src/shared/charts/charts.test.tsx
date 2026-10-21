@@ -94,15 +94,36 @@ describe("RatioBar", () => {
     );
     expect(screen.getByTestId("focus-ratio")).toHaveTextContent("75%");
     expect(
-      screen.getByRole("img", { name: "Time by productivity: Productive 3h 00m, Neutral 1h 00m, Distracting 1h 00m" }),
+      screen.getByRole("img", { name: "Productive against distracting time: Productive 3h 00m, Distracting 1h 00m" }),
     ).toBeInTheDocument();
     expect(screen.getByText("Distracting").closest("div")).toHaveTextContent("1h 00m");
+    expect(screen.getByTestId("neutral-time")).toHaveTextContent("Neutral: 1h 00m");
+  });
+
+  it("draws the bar from productive and distracting time only, so the bar matches the headline", () => {
+    const { container, rerender } = render(
+      <RatioBar productiveMs={HOUR} neutralMs={9 * HOUR} distractingMs={0} ratio={{ kind: "ratio", ratio: 1 }} />,
+    );
+    expect(screen.getByTestId("focus-ratio")).toHaveTextContent("100%");
+    let rects = container.querySelectorAll("svg rect");
+    expect(rects).toHaveLength(1);
+    expect(rects[0]).toHaveAttribute("width", "100");
+
+    rerender(
+      <RatioBar productiveMs={3 * HOUR} neutralMs={9 * HOUR} distractingMs={HOUR} ratio={{ kind: "ratio", ratio: 0.75 }} />,
+    );
+    rects = container.querySelectorAll("svg rect");
+    expect(rects).toHaveLength(2);
+    expect(rects[0]).toHaveAttribute("width", "75");
+    expect(rects[1]).toHaveAttribute("x", "75");
+    expect(rects[1]).toHaveAttribute("width", "25");
   });
 
   it("explains the missing signal instead of showing a number", () => {
     render(<RatioBar productiveMs={0} neutralMs={2 * HOUR} distractingMs={0} ratio={{ kind: "no_signal" }} />);
     expect(screen.getByTestId("focus-ratio")).toHaveTextContent("No productive or distracting data");
     expect(screen.getByText(/Mark activities as productive or distracting/)).toBeInTheDocument();
+    expect(screen.getByTestId("neutral-time")).toHaveTextContent("Neutral: 2h 00m");
   });
 
   it("formats the ratio", () => {

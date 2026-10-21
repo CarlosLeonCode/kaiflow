@@ -1,19 +1,23 @@
 //! Use cases behind the IPC commands, expressed on `AppState` and returning DTOs. Keeping
 //! them free of Tauri types makes them testable with a temp database (see tests below).
 
+use std::path::Path;
 use std::sync::PoisonError;
 
 use application::commands::ConfirmToken;
 use application::engine::{Command, Reply};
+use application::export::ScheduledBackup;
 use domain::{Activity, ActivityId, GapId};
 
+use crate::calendar::timezone_label;
 use crate::composition::AppState;
 use crate::error::AppError;
 use crate::ipc::dto::{
-    ActivityDto, ApplyPresetResultDto, DashboardDto, DeleteOpDto, IdleGapDto, IdleResolutionDto,
-    PermissionStateDto, PresetDto, PrivacyModeDto, PrivacyRulesDto, ProductivityDto, RangeDto,
-    ReportDto, RuleDto, RuleInputDto, SettingsDto, SettingsPatchDto, ShortcutStatusDto,
-    SuggestionDto, TimelineItemDto, TrackingStatusDto,
+    ActivityDto, ApplyPresetResultDto, BackupReportDto, BackupStatusDto, DashboardDto, DeleteOpDto,
+    IdleGapDto, IdleResolutionDto, PermissionStateDto, PresetDto, PrivacyModeDto, PrivacyRulesDto,
+    ProductivityDto, RangeDto, ReportDto, RestorePreviewDto, RestoreResultDto, RetentionImpactDto,
+    RuleDto, RuleInputDto, SettingsDto, SettingsPatchDto, ShortcutStatusDto, SuggestionDto,
+    TimelineItemDto, TrackingStateDto, TrackingStatusDto,
 };
 
 impl AppState {
@@ -92,9 +96,84 @@ impl AppState {
         Ok(items.into_iter().map(Into::into).collect())
     }
 
-    /// CSV text of a range; the save dialog lives in the command layer.
-    pub fn csv_for(&self, range: RangeDto) -> Result<String, AppError> {
-        Ok(self.queries.export_csv(range.into(), self.now())?)
+    /// Writes the JSON export of a range to `path` (chosen in a native dialog by the command
+    /// layer). The file appears complete or not at all.
+    pub fn export_json_to(&self, path: &Path, range: RangeDto) -> Result<(), AppError> {
+        Ok(self
+            .data
+            .export_to(path, range.into(), self.now(), &timezone_label())?)
+    }
+
+    pub fn backup_status(&self) -> Result<BackupStatusDto, AppError> {
+        Ok(self.data.backup_status()?.into())
+    }
+
+    pub fn backup_set_enabled(&self, enabled: bool) -> Result<BackupStatusDto, AppError> {
+        self.data.set_backup_enabled(enabled)?;
+        self.backup_status()
+    }
+
+    /// `None` goes back to the default folder.
+    pub fn backup_set_dir(&self, dir: Option<&str>) -> Result<BackupStatusDto, AppError> {
+        self.data.set_backup_dir(dir)?;
+        self.backup_status()
+    }
+
+    pub fn backup_now(&self) -> Result<BackupReportDto, AppError> {
+        Ok(self.data.backup_now(self.now(), &timezone_label())?.into())
+    }
+
+    /// The scheduled check run by the backup worker.
+    pub fn run_scheduled_backup(&self) -> Result<ScheduledBackup, AppError> {
+        Ok(self
+            .data
+            .run_scheduled_backup(self.now(), &timezone_label())?)
+    }
+
+    /// Reads a backup or export file and previews it; nothing is modified.
+    pub fn restore_prepare_file(&self, path: &Path) -> Result<RestorePreviewDto, AppError> {
+        let preview = self.data.restore_prepare_file(path, self.now())?;
+        let name = path
+            .file_name()
+            .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+        Ok(RestorePreviewDto::new(preview, name))
+    }
+
+    /// Replaces all data with the previewed file. Tracking stops first (the open segment
+    /// would otherwise be replaced underneath the engine) and picks up again afterwards if it
+    /// was running; the engine then reloads what it caches and the live settings are re-applied.
+    pub fn restore_apply(&self, token: String) -> Result<RestoreResultDto, AppError> {
+        let was_running = self.get_status()?.state == TrackingStateDto::Running;
+        self.engine.request(Command::Stop)?;
+        let outcome = self.data.restore_apply(&token, self.now());
+        if outcome.is_ok() {
+            self.engine.request(Command::ReloadPrivacy)?;
+            self.reapply_live_settings();
+        }
+        if was_running {
+            self.start()?;
+        }
+        Ok(outcome?.into())
+    }
+
+    /// Pushes the stored settings into the live handles after the database was replaced.
+    fn reapply_live_settings(&self) {
+        let Ok(settings) = self.commands.get_settings() else {
+            return;
+        };
+        self.idle_threshold.set(settings.idle_threshold_secs);
+        self.idle_policy.set(
+            settings.idle_prompt_timeout_secs,
+            settings.idle_auto_discard_below_secs,
+        );
+        if let Some(applier) = self.applier() {
+            applier.refresh_tray_text();
+        }
+    }
+
+    /// What purging data older than `days` days would delete, for the confirmation.
+    pub fn retention_impact(&self, days: u32) -> Result<RetentionImpactDto, AppError> {
+        Ok(self.commands.retention_impact(days, self.now())?.into())
     }
 
     pub fn list_pending_idle_gaps(&self) -> Result<Vec<IdleGapDto>, AppError> {
@@ -873,5 +952,153 @@ mod tests {
             rig.state.get_status().unwrap_err(),
             AppError::Internal { .. }
         ));
+    }
+
+    fn data_dir(rig: &Rig) -> std::path::PathBuf {
+        rig._dir.path().to_path_buf()
+    }
+
+    #[test]
+    fn a_json_export_holds_the_range_and_is_written_atomically() {
+        let rig = rig();
+        rig.window.set(Some(safari()));
+        rig.state.start().unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        let path = data_dir(&rig).join("out/export.json");
+
+        rig.state
+            .export_json_to(&path, around_now(&rig.state))
+            .unwrap();
+
+        let doc = application::backup::Document::parse(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(doc.kind, application::backup::Kind::Export);
+        assert_eq!(doc.data.segments.len(), 1);
+        assert_eq!(doc.data.segments[0].app_name.as_deref(), Some("Safari"));
+        assert!(
+            doc.data.segments[0].ended_at.is_some(),
+            "open segment exported closed"
+        );
+        assert!(doc.timezone.starts_with("UTC"));
+        assert!(
+            rig.state
+                .export_json_to(&path, RangeDto { from: 10, to: 5 })
+                .is_err()
+        );
+        rig.state.shutdown();
+    }
+
+    #[test]
+    fn the_scheduled_backup_runs_once_per_day_and_reports_the_outcome() {
+        let rig = rig();
+        let mut events = Vec::new();
+        let collect = std::cell::RefCell::new(&mut events);
+        crate::backup_worker::cycle(&rig.state, &|e| collect.borrow_mut().push(e));
+        crate::backup_worker::cycle(&rig.state, &|e| collect.borrow_mut().push(e));
+
+        assert_eq!(events.len(), 1, "the second check finds today's backup");
+        assert!(events[0].ok);
+        let status = rig.state.backup_status().unwrap();
+        assert_eq!(status.stored, 1);
+        assert!(status.last_backup_at.is_some());
+        assert!(status.dir.ends_with("backups"));
+        assert!(std::path::Path::new(&events[0].message).exists());
+        rig.state.shutdown();
+    }
+
+    #[test]
+    fn an_unusable_backup_folder_is_announced_once() {
+        let rig = rig();
+        // A file where the folder should be: nothing can be created inside it.
+        let blocker = data_dir(&rig).join("blocker");
+        std::fs::write(&blocker, b"x").unwrap();
+        rig.state
+            .backup_set_dir(Some(&blocker.join("sub").display().to_string()))
+            .unwrap();
+
+        let mut events = Vec::new();
+        let collect = std::cell::RefCell::new(&mut events);
+        for _ in 0..3 {
+            crate::backup_worker::cycle(&rig.state, &|e| collect.borrow_mut().push(e));
+        }
+        assert_eq!(events.len(), 1);
+        assert!(!events[0].ok);
+        let status = rig.state.backup_status().unwrap();
+        assert!(status.last_error.is_some());
+        assert!(status.last_backup_at.is_none());
+        rig.state.shutdown();
+    }
+
+    #[test]
+    fn restore_replaces_the_data_after_a_previewed_confirmation() {
+        let rig = rig();
+        rig.window.set(Some(safari()));
+        rig.state
+            .activities_create("Work", "#111111", ProductivityDto::Productive)
+            .unwrap();
+        let report = rig.state.backup_now().unwrap();
+        let after_backup = rig
+            .state
+            .activities_create("Later", "#222222", ProductivityDto::Neutral)
+            .unwrap();
+        rig.state.start().unwrap();
+
+        let preview = rig
+            .state
+            .restore_prepare_file(std::path::Path::new(&report.path))
+            .unwrap();
+        assert_eq!(preview.kind, crate::ipc::dto::DocumentKindDto::Backup);
+        assert_eq!(preview.activities, 2, "Unassigned and Work");
+        assert_eq!(
+            rig.state.activities_list().unwrap().len(),
+            3,
+            "preview changes nothing"
+        );
+
+        // A wrong token does nothing; the right one restores.
+        assert_eq!(
+            rig.state.restore_apply("nope".into()).unwrap_err(),
+            AppError::ConfirmationRequired
+        );
+        let result = rig.state.restore_apply(preview.token).unwrap();
+
+        let names: Vec<String> = rig
+            .state
+            .activities_list()
+            .unwrap()
+            .into_iter()
+            .map(|a| a.name)
+            .collect();
+        assert_eq!(names, ["Unassigned", "Work"]);
+        assert!(!names.contains(&after_backup.name));
+        assert!(std::path::Path::new(&result.safety_copy).exists());
+        assert_eq!(
+            rig.state.get_status().unwrap().state,
+            TrackingStateDto::Running,
+            "tracking picks up again"
+        );
+        rig.state.shutdown();
+    }
+
+    #[test]
+    fn restoring_a_bad_file_leaves_everything_untouched() {
+        let rig = rig();
+        let bad = data_dir(&rig).join("bad.json.gz");
+        std::fs::write(&bad, b"definitely not a backup").unwrap();
+        assert!(matches!(
+            rig.state.restore_prepare_file(&bad).unwrap_err(),
+            AppError::Invalid { .. }
+        ));
+        assert_eq!(rig.state.activities_list().unwrap().len(), 1);
+        rig.state.shutdown();
+    }
+
+    #[test]
+    fn retention_impact_reports_without_deleting() {
+        let rig = rig();
+        let impact = rig.state.retention_impact(30).unwrap();
+        assert_eq!(impact.segments, 0);
+        assert_eq!(impact.streak_days_cut, None);
+        assert!(rig.state.retention_impact(0).is_err());
+        rig.state.shutdown();
     }
 }

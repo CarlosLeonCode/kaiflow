@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { HOUR } from "@/shared/lib/time";
 
 import { bundleIdProblem, privacyRows } from "./apps";
-import { deleteCopy, deletedMessage, parseDays, rangeFromDays, toDateInput } from "./delete";
+import { deleteCopy, deletedMessage, impactParagraphs, parseDays, rangeFromDays, toDateInput } from "./delete";
 import { retentionOptions, retentionPatch, retentionValue } from "./retention";
 
 const originalTz = process.env.TZ;
@@ -78,6 +78,22 @@ describe("deleteCopy", () => {
     expect(deleteCopy({ kind: "older_than_days", days: 90 }).title).toContain("90 days");
     expect(deleteCopy({ kind: "all" }, true).paragraphs.join(" ")).toContain("Tracking pauses");
     expect(deleteCopy({ kind: "all" }, false).paragraphs.join(" ")).not.toContain("Tracking pauses");
+  });
+
+  it("adds the purge impact and the streak warning to the older-data copy only", () => {
+    const op = { kind: "older_than_days", days: 10 } as const;
+    expect(impactParagraphs(undefined)).toEqual([]);
+    expect(impactParagraphs({ segments: 1, streak_days_cut: null })).toEqual(["This would delete 1 segment."]);
+    expect(impactParagraphs({ segments: 0, streak_days_cut: null })[0]).toContain("nothing would be deleted");
+
+    const plain = deleteCopy(op, false, { segments: 5, streak_days_cut: null }).paragraphs.join(" ");
+    expect(plain).toContain("This would delete 5 segments.");
+    expect(plain).not.toContain("streak");
+
+    const warned = deleteCopy(op, false, { segments: 5, streak_days_cut: 1 }).paragraphs.join(" ");
+    expect(warned).toContain("Warning: this reaches into an active goal streak and would cut 1 day of it.");
+    // Other operations ignore the dry run.
+    expect(deleteCopy({ kind: "all" }, false, { segments: 5, streak_days_cut: 9 }).paragraphs.join(" ")).not.toContain("streak");
   });
 
   it("reports the outcome", () => {

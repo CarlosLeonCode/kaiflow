@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { CircleAlert, X } from "lucide-react";
 
-import type { DeleteOpDto, PrivacyRulesDto } from "@/shared/ipc";
+import type { DeleteOpDto, PrivacyRulesDto, RetentionImpactDto } from "@/shared/ipc";
 import type { AppOption } from "@/shared/lib/apps";
 import { Alert, AlertDescription } from "@/shared/ui/alert";
 import { Button } from "@/shared/ui/button";
@@ -30,6 +30,8 @@ interface Props {
   /** Operation waiting for the user's confirmation (token already issued). */
   pending: DeleteOpDto | null;
   trackingWillRestart: boolean;
+  /** Dry run of the pending purge of older data; `undefined` until it arrives. */
+  impact?: RetentionImpactDto;
   deleting: boolean;
   preparing: boolean;
   deleteError: string | null;
@@ -46,7 +48,7 @@ interface Props {
 /** Privacy section (presentational): what is recorded, what is kept, and how to delete it. */
 export function PrivacyView(props: Props) {
   const { privacy, pending } = props;
-  const copy = pending ? deleteCopy(pending, props.trackingWillRestart && pending.kind === "all") : null;
+  const copy = pending ? deleteCopy(pending, props.trackingWillRestart && pending.kind === "all", props.impact) : null;
   return (
     <Page title="Privacy" subtitle="Everything stays on this Mac. Nothing is sent anywhere." intro={props.intro}>
       {!privacy ? (

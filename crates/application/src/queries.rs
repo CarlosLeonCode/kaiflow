@@ -240,7 +240,7 @@ impl Queries {
         })
     }
 
-    /// Clipped spans in chronological order with the activity resolved (timeline, CSV).
+    /// Clipped spans in chronological order with the activity resolved (timeline).
     pub fn timeline(&self, range: Range, now: UtcMs) -> Result<Vec<TimelineItem>, QueryError> {
         let (resolved, cats) = self.load(range, now)?;
         Ok(resolved
@@ -268,11 +268,6 @@ impl Queries {
                 }
             })
             .collect())
-    }
-
-    /// CSV of the range's timeline (R8.2, R8.4); a range without data gives only the header.
-    pub fn export_csv(&self, range: Range, now: UtcMs) -> Result<String, QueryError> {
-        Ok(crate::csv::render_csv(&self.timeline(range, now)?))
     }
 
     /// Time per window title, optionally for a single app, busiest first (R7.1).
@@ -567,17 +562,5 @@ mod tests {
             .unwrap();
         assert_eq!(only_a.len(), 2);
         assert!(only_a.iter().all(|t| t.app_id.as_deref() == Some("a")));
-    }
-
-    #[test]
-    fn export_csv_neutralizes_titles_and_empty_range_is_header_only() {
-        let (q, store, _) = setup();
-        let empty = q.export_csv(range(0, MIN), UtcMs(0)).unwrap();
-        assert_eq!(empty.lines().count(), 1);
-
-        store.seed_segment(seg(0, Some(MIN), Some("a"), Some("=CMD()"), None));
-        let csv = q.export_csv(range(0, MIN), UtcMs(0)).unwrap();
-        assert_eq!(csv.lines().count(), 2);
-        assert!(csv.contains(",'=CMD(),"));
     }
 }
