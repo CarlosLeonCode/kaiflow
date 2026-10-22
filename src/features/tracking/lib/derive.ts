@@ -1,4 +1,5 @@
-import type { AppTotalDto, DegradedReasonDto, FocusDto, TrackingStateDto } from "@/shared/ipc";
+import type { AppTotalDto, DegradedReasonDto, FocusDto, OsDto, TrackingStateDto } from "@/shared/ipc";
+import { platformWords } from "@/shared/lib/platform";
 
 /** Pure view-model helpers for the popover (no IPC, no clock). */
 
@@ -90,7 +91,7 @@ export function stateLabel(state: TrackingStateDto): string {
 }
 
 /** Short explanation shown when there is no app in the foreground to report. */
-export function emptyActivityText(state: TrackingStateDto): string {
+export function emptyActivityText(state: TrackingStateDto, os: OsDto = "macos"): string {
   switch (state) {
     case "running":
       return "Waiting for the first window.";
@@ -101,6 +102,6 @@ export function emptyActivityText(state: TrackingStateDto): string {
     case "idle":
       return "You seem to be away.";
     case "asleep":
-      return "This Mac is asleep.";
+      return `${platformWords(os).Device} is asleep.`;
   }
 }

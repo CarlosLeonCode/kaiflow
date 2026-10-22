@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { emit } from "@tauri-apps/api/event";
 import { describe, expect, it } from "vitest";
 
-import { mergePatch, mockBackend, renderWithProviders, status } from "@/test/ipc";
+import { mergePatch, mockBackend, platform, renderWithProviders, status } from "@/test/ipc";
 
 import { OnboardingContainer } from "./OnboardingContainer";
 
@@ -164,5 +164,110 @@ describe("OnboardingContainer", () => {
     await user.click(screen.getByRole("button", { name: "Back" }));
 
     expect(await screen.findByRole("heading", { name: "Know where your time goes" })).toBeInTheDocument();
+  });
+
+  describe("per platform", () => {
+    it("macOS: names the Mac, asks for Accessibility and labels the step Permissions", async () => {
+      const user = userEvent.setup();
+      mockBackend({ platform_info: () => platform("macos"), permission_status: () => "denied" });
+      renderWithProviders(<OnboardingContainer />);
+
+      expect(await screen.findByText(/Everything stays on this Mac/)).toBeInTheDocument();
+      expect(screen.getByText(/lives in your menu bar/)).toBeInTheDocument();
+      expect(screen.getByRole("navigation", { name: "Progress" })).toHaveTextContent("Permissions");
+      await toAccessStep(user);
+      expect(screen.getByRole("region", { name: "Accessibility access" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Open System Settings" })).toBeInTheDocument();
+    });
+
+    it("Windows: no permission step, what is read, and everything stays on the computer", async () => {
+      const user = userEvent.setup();
+      mockBackend({
+        platform_info: () => platform("windows"),
+        permission_status: () => "granted",
+        settings_update: (args) => mergePatch(args.patch),
+      });
+      renderWithProviders(<OnboardingContainer />);
+
+      expect(await screen.findByText(/Everything stays on this computer/)).toBeInTheDocument();
+      expect(screen.getByText(/lives in your system tray/)).toBeInTheDocument();
+      expect(screen.getByText(/Your screen, keystrokes and files are never read/)).toBeInTheDocument();
+      expect(screen.queryByText(/this Mac/)).toBeNull();
+      expect(screen.queryByText(/Accessibility/)).toBeNull();
+      expect(screen.getByRole("navigation", { name: "Progress" })).toHaveTextContent("Recording");
+      expect(screen.getByRole("navigation", { name: "Progress" })).not.toHaveTextContent("Permissions");
+
+      await toAccessStep(user);
+      expect(screen.getByRole("switch", { name: "Record window titles" })).toBeInTheDocument();
+      const section = screen.getByRole("region", { name: "No permission needed" });
+      expect(section).toHaveTextContent(/Windows lets Kaiflow read the active app and its window title/);
+      expect(screen.queryByRole("region", { name: "Accessibility access" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Open System Settings" })).toBeNull();
+      expect(screen.queryByText("Restart to apply")).toBeNull();
+
+      await user.click(screen.getByRole("button", { name: "Continue" }));
+      expect(await screen.findByRole("heading", { name: "You're all set" })).toBeInTheDocument();
+      expect(screen.getByText("None needed")).toBeInTheDocument();
+      expect(screen.getByText(/Find Kaiflow in the system tray: click it/)).toBeInTheDocument();
+      expect(screen.getByText(/turn on Open at login in Settings/)).toBeInTheDocument();
+      expect(screen.queryByText(/AppIndicator/)).toBeNull();
+    });
+
+    it("Linux on X11: no permission step and the AppIndicator note", async () => {
+      const user = userEvent.setup();
+      mockBackend({ platform_info: () => platform("linux", "x11"), permission_status: () => "granted" });
+      renderWithProviders(<OnboardingContainer />);
+
+      expect(await screen.findByText(/Everything stays on this computer/)).toBeInTheDocument();
+      await toAccessStep(user);
+      expect(screen.getByRole("region", { name: "No permission needed" })).toHaveTextContent(/X11 session/);
+      expect(screen.queryByRole("region", { name: "Wayland session" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Open System Settings" })).toBeNull();
+
+      await user.click(screen.getByRole("button", { name: "Continue" }));
+      expect(await screen.findByText("App names and window titles")).toBeInTheDocument();
+      expect(screen.getByText(/needs the AppIndicator extension/)).toBeInTheDocument();
+      expect(screen.getByText(/its menu pauses tracking/)).toBeInTheDocument();
+    });
+
+    it("Linux on Wayland: explains honestly that window tracking is unavailable", async () => {
+      const user = userEvent.setup();
+      const { calls } = mockBackend({
+        platform_info: () => platform("linux", "wayland"),
+        permission_status: () => "denied",
+        settings_update: (args) => mergePatch(args.patch),
+        start: () => status({ degraded: true, degraded_reason: "wayland_session" }),
+        close_onboarding: () => null,
+      });
+      renderWithProviders(<OnboardingContainer />);
+
+      expect(await screen.findByText(/Not available in a Wayland session/)).toBeInTheDocument();
+      await toAccessStep(user);
+      const section = screen.getByRole("region", { name: "Wayland session" });
+      expect(within(section).getByRole("heading", { name: "Window tracking is unavailable on Wayland" })).toBeInTheDocument();
+      expect(section).toHaveTextContent(/Idle, lock and sleep detection, focus timers and goals still work/);
+      expect(section).toHaveTextContent(/Ubuntu on Xorg/);
+      expect(screen.queryByRole("button", { name: "Open System Settings" })).toBeNull();
+      expect(screen.queryByText("Restart to apply")).toBeNull();
+
+      await user.click(screen.getByRole("button", { name: "Continue" }));
+      expect(await screen.findByText("Unavailable on Wayland")).toBeInTheDocument();
+      expect(screen.getByText(/needs the AppIndicator extension/)).toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Start tracking" }));
+      await waitFor(() => expect(calls.some((c) => c.cmd === "close_onboarding")).toBe(true));
+    });
+
+    it("never offers a restart where no permission exists", async () => {
+      const user = userEvent.setup();
+      let state: "denied" | "granted" = "denied";
+      mockBackend({ platform_info: () => platform("windows"), permission_status: () => state });
+      renderWithProviders(<OnboardingContainer />);
+      await toAccessStep(user);
+      state = "granted";
+      await act(async () => {
+        await emit("permission-changed", { state: "granted" });
+      });
+      expect(screen.queryByText("Restart to apply")).toBeNull();
+    });
   });
 });

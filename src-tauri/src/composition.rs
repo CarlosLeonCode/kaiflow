@@ -37,7 +37,7 @@ use domain::{PrivacyPolicy, UtcMs};
 
 use crate::calendar::ChronoLocalCalendar;
 use crate::error::AppError;
-use crate::ipc::dto::ShortcutStatusDto;
+use crate::ipc::dto::{DisplaySessionDto, PlatformInfoDto, ShortcutStatusDto};
 use crate::ipc::events::SharedShortcut;
 
 /// Cadence of the engine heartbeat / gap-expiry tick (design section 6).
@@ -77,6 +77,8 @@ pub struct Providers {
     /// The sampler drives focus, idle, permission checks and the heartbeat. `None` keeps a
     /// plain 2 s heartbeat thread (tests and the placeholder fallback).
     pub sampler: Option<SamplerLauncher>,
+    /// Linux display server the adapters observe through (`None` elsewhere).
+    pub display_session: Option<DisplaySessionDto>,
 }
 
 impl Providers {
@@ -90,6 +92,7 @@ impl Providers {
             notifier: Box::new(SilentNotifier),
             idle_threshold: IdleThreshold::default(),
             sampler: None,
+            display_session: None,
         }
     }
 }
@@ -173,6 +176,8 @@ pub struct AppState {
     /// Read-only listing of activities and rules (writes go through `commands`).
     pub activities: Arc<dyn ActivityRepository>,
     pub permission: Arc<dyn PermissionProvider>,
+    /// OS and display session, for platform-specific UI copy (`platform_info`).
+    pub platform: PlatformInfoDto,
     pub shortcut: SharedShortcut,
     pub clock: SystemClock,
     pub idle_threshold: IdleThreshold,
@@ -291,6 +296,10 @@ pub fn compose(
         review,
         activities,
         permission: providers.permission,
+        platform: crate::platform_info::platform_info(
+            crate::platform_info::current_os(),
+            providers.display_session,
+        ),
         shortcut,
         clock: SystemClock,
         idle_threshold: providers.idle_threshold,

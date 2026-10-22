@@ -3,7 +3,18 @@ import userEvent from "@testing-library/user-event";
 import { emit } from "@tauri-apps/api/event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { focus, focusActive, focusSession, goalStatus, idleFocus, mockBackend, renderWithProviders, report, status } from "@/test/ipc";
+import {
+  focus,
+  focusActive,
+  focusSession,
+  goalStatus,
+  idleFocus,
+  mockBackend,
+  platform,
+  renderWithProviders,
+  report,
+  status,
+} from "@/test/ipc";
 
 import { TrackingPopoverContainer } from "./TrackingPopoverContainer";
 
@@ -143,6 +154,34 @@ describe("TrackingPopoverContainer", () => {
     expect(screen.getByText(/already in use/)).toBeInTheDocument();
     // Tracking stays usable: the pause button is still there.
     expect(screen.getByRole("button", { name: "Pause tracking" })).toBeEnabled();
+  });
+
+  it("shows the shortcut with Windows conventions and never offers System Settings there", async () => {
+    mockBackend({
+      platform_info: () => platform("windows"),
+      get_status: () =>
+        status({ degraded: true, degraded_reason: null, shortcut: { kind: "registered", shortcut: "⌃⌥⇧K" } }),
+      get_report: () => report(),
+    });
+    renderWithProviders(<TrackingPopoverContainer />);
+
+    expect(await screen.findByTitle("Global shortcut")).toHaveTextContent("Ctrl+Alt+Shift+K");
+    expect(screen.queryByRole("button", { name: "Open System Settings" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Accessibility/)).not.toBeInTheDocument();
+  });
+
+  it("words the unavailable shortcut and the tray for Linux", async () => {
+    mockBackend({
+      platform_info: () => platform("linux", "x11"),
+      get_status: () =>
+        status({ state: "asleep", current: null, since: null, shortcut: { kind: "unavailable", shortcut: "⌃⌥⇧K", reason: "taken" } }),
+      get_report: () => report(),
+    });
+    renderWithProviders(<TrackingPopoverContainer />);
+
+    expect(await screen.findByText("Shortcut Ctrl+Alt+Shift+K is unavailable")).toBeInTheDocument();
+    expect(screen.getByText(/from the system tray/)).toBeInTheDocument();
+    expect(screen.getByText("This computer is asleep.")).toBeInTheDocument();
   });
 
   it("disables pause while idle or asleep", async () => {

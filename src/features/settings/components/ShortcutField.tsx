@@ -1,14 +1,16 @@
 import { RotateCcw } from "lucide-react";
 import { type KeyboardEvent, useState } from "react";
 
+import type { OsDto } from "@/shared/ipc";
+import { defaultShortcut, formatShortcut, shortcutFromKeyEvent, shortcutKeys } from "@/shared/lib/shortcut";
 import { Button } from "@/shared/ui/button";
 import { Kbd } from "@/shared/ui/kbd";
-
-import { DEFAULT_SHORTCUT, shortcutFromKeyEvent, shortcutKeys } from "../lib/shortcut";
 
 interface Props {
   id: string;
   value: string;
+  /** Keycap labels and the reset default follow the platform. */
+  os?: OsDto;
   invalid: boolean;
   describedBy?: string;
   disabled?: boolean;
@@ -19,8 +21,9 @@ interface Props {
  * Click, then press the new combination. Escape cancels. The button is the only tab stop,
  * so the field stays keyboard operable (Enter/Space starts recording like a click).
  */
-export function ShortcutField({ id, value, invalid, describedBy, disabled, onChange }: Props) {
+export function ShortcutField({ id, value, os = "macos", invalid, describedBy, disabled, onChange }: Props) {
   const [recording, setRecording] = useState(false);
+  const fallback = defaultShortcut(os);
 
   const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
     if (!recording) return;
@@ -44,7 +47,7 @@ export function ShortcutField({ id, value, invalid, describedBy, disabled, onCha
         disabled={disabled}
         aria-invalid={invalid || undefined}
         aria-describedby={describedBy}
-        aria-label={recording ? "Press the new shortcut" : `Global shortcut ${value}, change`}
+        aria-label={recording ? "Press the new shortcut" : `Global shortcut ${formatShortcut(value, os)}, change`}
         onClick={() => setRecording((r) => !r)}
         onBlur={() => setRecording(false)}
         onKeyDown={onKeyDown}
@@ -55,16 +58,16 @@ export function ShortcutField({ id, value, invalid, describedBy, disabled, onCha
         {recording ? (
           <span>Press shortcut…</span>
         ) : (
-          shortcutKeys(value).map((key, index) => <Kbd key={`${key}-${index}`}>{key}</Kbd>)
+          shortcutKeys(value, os).map((key, index) => <Kbd key={`${key}-${index}`}>{key}</Kbd>)
         )}
       </button>
-      {value !== DEFAULT_SHORTCUT && (
+      {value !== fallback && (
         <Button
           size="icon"
           variant="ghost"
           aria-label="Reset shortcut to default"
           disabled={disabled}
-          onClick={() => onChange(DEFAULT_SHORTCUT)}
+          onClick={() => onChange(fallback)}
         >
           <RotateCcw aria-hidden="true" />
         </Button>

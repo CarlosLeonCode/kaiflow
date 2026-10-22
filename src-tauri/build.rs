@@ -32,6 +32,7 @@ const COMMANDS: &[&str] = &[
     "privacy_set",
     "settings_get",
     "settings_update",
+    "platform_info",
     "permission_status",
     "permission_request",
     "permission_open_settings",

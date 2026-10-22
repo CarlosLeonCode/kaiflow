@@ -1,12 +1,13 @@
 import { CircleHelp } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import { useDismissedIntros } from "@/shared/ipc";
+import { useDismissedIntros, usePlatformQuery } from "@/shared/ipc";
+import { osOf } from "@/shared/lib/platform";
 import { Button } from "@/shared/ui/button";
 import type { IntroSlot } from "@/shared/ui/page";
 import { SectionIntro } from "@/shared/ui/SectionIntro";
 
-import { INTROS } from "../lib/intros";
+import { introFor } from "../lib/intros";
 import { SECTIONS, type SectionId } from "../lib/sections";
 
 function HelpButton({
@@ -50,6 +51,7 @@ function HelpButton({
  */
 export function useSectionIntro(section: SectionId): IntroSlot {
   const { ready, isDismissed, dismiss, restore } = useDismissedIntros();
+  const os = osOf(usePlatformQuery().data);
   const [focusIntro, setFocusIntro] = useState(0);
   const [focusHelp, setFocusHelp] = useState(0);
   const visible = ready && !isDismissed(section);
@@ -60,7 +62,7 @@ export function useSectionIntro(section: SectionId): IntroSlot {
     body: visible ? (
       <SectionIntro
         id={id}
-        content={INTROS[section]}
+        content={introFor(section, os)}
         focusRequest={focusIntro}
         onDismiss={() => {
           dismiss(section);

@@ -35,6 +35,22 @@ equipos reales. Las listas de prueba manual estan en `docs/checklists/beta-windo
 | Suspension y reanudacion | Si | Si | Si (logind) | Si (logind) |
 | Apagado o cierre de sesion | Si | Si | Si (logind) | Si (logind) |
 | Texto junto al icono de la bandeja | Titulo del item de la barra de menus | No: solo tooltip | Etiqueta de AppIndicator | Etiqueta de AppIndicator |
+| Atajo por defecto (pausar y reanudar) | `⌃⌥⌘T` | `Ctrl+Alt+Shift+K` | `Ctrl+Alt+Shift+K` | `Ctrl+Alt+Shift+K` (puede no funcionar) |
+| Paso de permisos en la bienvenida | Accesibilidad | No hay | No hay | Explicacion de Wayland |
+
+### Atajo por defecto
+
+El atajo de macOS usaria la tecla Windows/Super en los otros sistemas, que sus escritorios
+reservan. `Ctrl+Alt+T` abre la terminal en Ubuntu y `Ctrl+Alt+Shift+T` es "Refactor This" en
+los IDE de JetBrains, asi que Windows y Linux usan `Ctrl+Alt+Shift+K` ("K" de Kaiflow; no es una
+letra AltGr en los teclados europeos habituales). Solo cambia el valor por defecto: quien ya
+guardo un atajo lo conserva. La interfaz lo muestra con la convencion de cada sistema (simbolos
+en macOS, `Ctrl+Alt+Shift+K` en el resto) y el menu de la bandeja lo indica junto a
+Pausar/Reanudar mientras esta registrado.
+
+La interfaz conoce el sistema con el comando `platform_info` (`os`, `session` en Linux y
+`needs_accessibility_permission`), que usa para adaptar textos, la bienvenida y los atajos de
+las secciones (`⌘1`..`⌘8` en macOS, `Ctrl+1`..`Ctrl+8` en el resto).
 
 ## macOS
 

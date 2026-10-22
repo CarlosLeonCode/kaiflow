@@ -2,7 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
-import { mergePatch, mockBackend, renderWithProviders, settings, status } from "@/test/ipc";
+import { mergePatch, mockBackend, platform, renderWithProviders, settings, status } from "@/test/ipc";
 
 import { SettingsContainer } from "./SettingsContainer";
 
@@ -24,6 +24,41 @@ describe("SettingsContainer", () => {
     expect(screen.getByRole("switch", { name: "Record window titles" })).not.toBeChecked();
     expect(screen.getByRole("button", { name: "Global shortcut ⌃⌥⌘T, change" })).toBeInTheDocument();
     expect(screen.getByRole("combobox", { name: "Show next to the icon" })).toHaveValue("today_total");
+  });
+
+  it("uses Windows conventions: key names, the PC default and no Mac wording", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockBackend({
+      platform_info: () => platform("windows"),
+      get_status: () => status({ shortcut: { kind: "registered", shortcut: "⌃⌥⌘T" } }),
+      settings_get: () => settings({ shortcut: "⌃⌥⌘T" }),
+      settings_update: (args) => mergePatch(args.patch),
+    });
+    renderWithProviders(<SettingsContainer />);
+
+    const field = await screen.findByRole("button", { name: "Global shortcut Ctrl+Alt+Win+T, change" });
+    expect(within(field).getByText("Win")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "System tray" })).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Show in the icon tooltip" })).toBeInTheDocument();
+    expect(screen.getByText("Start tracking when you log in to this computer.")).toBeInTheDocument();
+    expect(screen.queryByText(/this Mac|Accessibility/)).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Reset shortcut to default" }));
+    await waitFor(() => expect(lastUpdate(calls)).toMatchObject({ shortcut: "⌃⌥⇧K" }));
+  });
+
+  it("explains on Wayland that titles cannot be read", async () => {
+    mockBackend({
+      platform_info: () => platform("linux", "wayland"),
+      get_status: () => status({ degraded: true, degraded_reason: "wayland_session" }),
+      settings_get: () => settings({ shortcut: "⌃⌥⇧K" }),
+    });
+    renderWithProviders(<SettingsContainer />);
+
+    expect(await screen.findByText(/Titles cannot be read in a Wayland session/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Global shortcut Ctrl+Alt+Shift+K, change" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reset shortcut to default" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Open System Settings" })).toBeNull();
   });
 
   it("shows the version, the MIT license and the repository in About", async () => {

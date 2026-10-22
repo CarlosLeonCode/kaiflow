@@ -5,11 +5,13 @@ import {
   useGoalsStatusQuery,
   useOpenAccessibilitySettingsMutation,
   useOpenMainWindowMutation,
+  usePlatformQuery,
   useReportQuery,
   useStatusQuery,
   useTrackingCommandMutation,
 } from "@/shared/ipc";
 import { FocusSessionContainer } from "@/features/focus/containers/FocusSessionContainer";
+import { osOf } from "@/shared/lib/platform";
 import { localDayRange } from "@/shared/lib/time";
 import { withLiveTime } from "@/features/goals/lib/goals";
 import { Alert, AlertDescription } from "@/shared/ui/alert";
@@ -31,6 +33,7 @@ export function TrackingPopoverContainer({ notice }: { notice?: ReactNode }) {
   const toggle = useTrackingCommandMutation();
   const openMain = useOpenMainWindowMutation();
   const openSettings = useOpenAccessibilitySettingsMutation();
+  const platform = usePlatformQuery();
 
   if (status.isError) {
     return (
@@ -49,6 +52,7 @@ export function TrackingPopoverContainer({ notice }: { notice?: ReactNode }) {
   return (
     <TrackingPopover
       state={data?.state ?? "stopped"}
+      os={osOf(platform.data)}
       degraded={data?.degraded ?? false}
       degradedReason={data?.degraded_reason ?? null}
       shortcut={data?.shortcut ?? { kind: "disabled" }}

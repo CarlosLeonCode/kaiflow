@@ -1,7 +1,8 @@
 import { CircleAlert, X } from "lucide-react";
 
-import type { DeleteOpDto, PrivacyRulesDto, RetentionImpactDto } from "@/shared/ipc";
+import type { DeleteOpDto, OsDto, PrivacyRulesDto, RetentionImpactDto } from "@/shared/ipc";
 import type { AppOption } from "@/shared/lib/apps";
+import { platformWords } from "@/shared/lib/platform";
 import { Alert, AlertDescription } from "@/shared/ui/alert";
 import { Button } from "@/shared/ui/button";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
@@ -21,6 +22,8 @@ interface Props {
   intro?: IntroSlot;
   /** `undefined` while loading. */
   privacy: PrivacyRulesDto | undefined;
+  /** Names the device in the copy (macOS when omitted). */
+  os?: OsDto;
   retentionDays: number | null;
   apps: readonly AppOption[];
   today: number;
@@ -49,7 +52,11 @@ export function PrivacyView(props: Props) {
   const { privacy, pending } = props;
   const copy = pending ? deleteCopy(pending, props.trackingWillRestart && pending.kind === "all", props.impact) : null;
   return (
-    <Page title="Privacy" subtitle="Everything stays on this Mac. Nothing is sent anywhere." intro={props.intro}>
+    <Page
+      title="Privacy"
+      subtitle={`Everything stays on ${platformWords(props.os ?? "macos").device}. Nothing is sent anywhere.`}
+      intro={props.intro}
+    >
       {!privacy ? (
         <div className="max-w-2xl space-y-3" aria-label="Loading privacy">
           <Skeleton className="h-20" />

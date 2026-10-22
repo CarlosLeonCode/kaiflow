@@ -1,9 +1,10 @@
 import { CalendarDays, ChartNoAxesColumn, NotebookPen, Settings, ShieldCheck, Tags, Target, Timer, type LucideIcon } from "lucide-react";
 
+import type { OsDto } from "@/shared/ipc";
 import { cn } from "@/shared/lib/utils";
 import { Kbd } from "@/shared/ui/kbd";
 
-import { SECTIONS, type SectionId } from "../lib/sections";
+import { SECTIONS, sectionAriaShortcut, sectionShortcutLabel, type SectionId } from "../lib/sections";
 
 const ICONS: Record<SectionId, LucideIcon> = {
   today: CalendarDays,
@@ -21,13 +22,15 @@ interface Props {
   onSelect: (section: SectionId) => void;
   /** Short status line pinned to the bottom (for example "Tracking"). */
   status: { label: string; running: boolean; degraded: boolean } | null;
+  /** Shortcut conventions (⌘ on macOS, Ctrl elsewhere). */
+  os?: OsDto;
 }
 
 /**
  * Left navigation. The top strip is the draggable title area: the traffic lights float over
  * it (overlay title bar), so it is 44 px tall and carries no controls.
  */
-export function Sidebar({ active, onSelect, status }: Props) {
+export function Sidebar({ active, onSelect, status, os = "macos" }: Props) {
   return (
     <aside className="flex h-full w-52 shrink-0 flex-col border-r border-border bg-surface">
       <div data-tauri-drag-region className="h-11 shrink-0" />
@@ -40,7 +43,7 @@ export function Sidebar({ active, onSelect, status }: Props) {
               key={section.id}
               type="button"
               aria-current={current ? "page" : undefined}
-              aria-keyshortcuts={`Meta+${section.digit}`}
+              aria-keyshortcuts={sectionAriaShortcut(section.digit, os)}
               onClick={() => onSelect(section.id)}
               // No color transition: the highlight must switch in the same frame as the
               // section. An animated background is sampled from the animation timeline, which
@@ -56,7 +59,7 @@ export function Sidebar({ active, onSelect, status }: Props) {
               <Icon className="size-4 shrink-0" aria-hidden="true" />
               <span className="flex-1">{section.label}</span>
               <Kbd aria-hidden="true" className="border-transparent bg-transparent">
-                ⌘{section.digit}
+                {sectionShortcutLabel(section.digit, os)}
               </Kbd>
             </button>
           );

@@ -81,6 +81,20 @@ pub fn set_tracking_state(app: &AppHandle<Wry>, kind: TrackingKind) {
     });
 }
 
+/// Shows the registered global shortcut next to Pause/Resume, or removes it. Each OS draws
+/// the accelerator its own way (`⌃⌥⌘T` on macOS, `Ctrl+Alt+Shift+K` on Windows); Linux
+/// AppIndicator menus ignore it. Non-blocking, like `set_tracking_state`.
+pub fn set_shortcut_hint(app: &AppHandle<Wry>, accelerator: Option<String>) {
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        if let Some(controls) = handle.try_state::<TrayControls>()
+            && let Err(error) = controls.toggle.set_accelerator(accelerator.as_deref())
+        {
+            eprintln!("could not show the shortcut in the tray menu: {error}");
+        }
+    });
+}
+
 /// The ensō mark as a template image (black on transparent, 36 px = 18 pt @2x): macOS tints
 /// it for light and dark menu bars. Built from `assets/brand/kaiflow-mark-mono.svg`.
 #[cfg(target_os = "macos")]

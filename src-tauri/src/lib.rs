@@ -18,6 +18,7 @@ pub mod macos_notifications;
 pub mod notifications;
 pub mod placeholders;
 pub mod platform;
+pub mod platform_info;
 pub mod review_api;
 pub mod review_worker;
 pub mod settings_applier;

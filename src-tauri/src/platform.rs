@@ -101,6 +101,7 @@ mod mac {
             notifier,
             idle_threshold: threshold,
             sampler: Some(Box::new(move |engine, stop| sampler.spawn(engine, stop))),
+            display_session: None,
         })
     }
 }
@@ -134,6 +135,7 @@ mod win {
             notifier,
             idle_threshold: threshold,
             sampler: Some(Box::new(move |engine, stop| sampler.spawn(engine, stop))),
+            display_session: None,
         }
     }
 }
@@ -145,13 +147,22 @@ mod linux {
     use adapters_common::idle::IdleThreshold;
     use adapters_common::sampler::{Sampler, SamplerWindow, SharedFrontmost};
     use adapters_linux::LinuxPlatform;
+    use adapters_linux::session::DisplayMode;
     use application::ports::Notifier;
 
     use crate::composition::{Providers, SystemClock};
+    use crate::ipc::dto::DisplaySessionDto;
     use crate::notifications::WithoutRevocationNotice;
 
     pub fn providers(notifier: Box<dyn Notifier>) -> Providers {
         let platform = LinuxPlatform::start();
+        // The effective mode, not just the environment: Wayland with a usable X11 view of
+        // the active window tracks like X11, so the UI must not call it unavailable.
+        let display_session = match platform.mode {
+            DisplayMode::X11 => Some(DisplaySessionDto::X11),
+            DisplayMode::Wayland => Some(DisplaySessionDto::Wayland),
+            DisplayMode::NoDisplay => None,
+        };
         // A degraded Linux session is never a revoked permission (the banner explains it).
         let notifier = Box::new(WithoutRevocationNotice(notifier));
         let frontmost = SharedFrontmost::new(platform.frontmost());
@@ -170,6 +181,7 @@ mod linux {
             notifier,
             idle_threshold: threshold,
             sampler: Some(Box::new(move |engine, stop| sampler.spawn(engine, stop))),
+            display_session,
         }
     }
 }

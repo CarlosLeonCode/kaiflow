@@ -7,6 +7,7 @@
     "core:event:default",
     "allow-get-status",
     "allow-start",
+    "allow-platform-info",
     "allow-permission-status",
     "allow-permission-request",
     "allow-permission-open-settings",

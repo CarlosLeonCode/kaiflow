@@ -1,3 +1,5 @@
+import type { OsDto } from "@/shared/ipc";
+import { platformWords } from "@/shared/lib/platform";
 import type { IntroContent } from "@/shared/ui/SectionIntro";
 
 import type { SectionId } from "./sections";
@@ -60,3 +62,13 @@ export const INTROS: Record<SectionId, IntroContent> = {
     example: "Count 10 minutes away from the keyboard as a break instead of 5.",
   },
 };
+
+/** The intro for `section` worded for the OS (the app icon lives in the system tray off macOS). */
+export function introFor(section: SectionId, os: OsDto): IntroContent {
+  const intro = INTROS[section];
+  if (section !== "today" || os === "macos") return intro;
+  return {
+    ...intro,
+    can: `Check today's total, see time per activity and per app, and pause tracking from the ${platformWords(os).tray}.`,
+  };
+}

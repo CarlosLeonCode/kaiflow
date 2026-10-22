@@ -1,8 +1,9 @@
 import { Monitor, Moon, Sun } from "lucide-react";
 import type { ReactNode } from "react";
 
-import type { DegradedReasonDto, SettingsDto, SettingsPatchDto } from "@/shared/ipc";
+import type { DegradedReasonDto, PlatformInfoDto, SettingsDto, SettingsPatchDto } from "@/shared/ipc";
 import { APP_INFO } from "@/shared/lib/appInfo";
+import { DEFAULT_PLATFORM, isWayland, platformWords } from "@/shared/lib/platform";
 import { parseTheme, type ThemeSetting } from "@/shared/lib/theme";
 import { Alert, AlertDescription } from "@/shared/ui/alert";
 import { Panel, Row } from "@/shared/ui/field";
@@ -41,6 +42,8 @@ interface Props {
   intro?: IntroSlot;
   /** `undefined` while loading. */
   settings: SettingsDto | undefined;
+  /** Words the copy for the OS (macOS when omitted). */
+  platform?: PlatformInfoDto;
   degraded: boolean;
   /** Why tracking is degraded; `null` falls back to the Accessibility explanation. */
   degradedReason?: DegradedReasonDto | null;
@@ -61,6 +64,7 @@ interface Props {
 export function SettingsView({
   intro,
   settings,
+  platform = DEFAULT_PLATFORM,
   degraded,
   degradedReason,
   shortcutError,
@@ -71,6 +75,8 @@ export function SettingsView({
   ai,
   updates,
 }: Props) {
+  const { os } = platform;
+  const words = platformWords(os);
   return (
     <Page title="Settings" subtitle="Changes apply immediately." intro={intro}>
       {!settings ? (
@@ -80,7 +86,9 @@ export function SettingsView({
         </div>
       ) : (
         <div className="max-w-xl space-y-6">
-          {degraded && <DegradedBanner reason={degradedReason} onOpenSettings={onOpenAccessibilitySettings} />}
+          {degraded && (
+            <DegradedBanner reason={degradedReason} os={os} onOpenSettings={onOpenAccessibilitySettings} />
+          )}
           {error && (
             <Alert variant="warning" role="alert">
               <AlertDescription>{error}</AlertDescription>
@@ -119,10 +127,14 @@ export function SettingsView({
             </Row>
           </Panel>
 
-          <Panel title="Menu bar">
+          <Panel title={words.Tray}>
             <Row
-              label="Show next to the icon"
-              description="Updates once a minute while tracking. Paused time shows ⏸. The top goal is the first one still in progress today."
+              label={os === "windows" ? "Show in the icon tooltip" : "Show next to the icon"}
+              description={
+                os === "windows"
+                  ? "Windows shows no text next to tray icons, so it appears when you point at the icon. Updates once a minute while tracking. Paused time shows ⏸. The top goal is the first one still in progress today."
+                  : "Updates once a minute while tracking. Paused time shows ⏸. The top goal is the first one still in progress today."
+              }
               controlId="setting-tray-display"
             >
               <Select
@@ -320,7 +332,7 @@ export function SettingsView({
           <Panel title="Tracking">
             <Row
               label="Open at login"
-              description="Start tracking when you log in to this Mac."
+              description={`Start tracking when you log in to ${words.device}.`}
               controlId="setting-autostart"
             >
               <Switch
@@ -339,6 +351,7 @@ export function SettingsView({
               <ShortcutField
                 id="setting-shortcut"
                 value={settings.shortcut}
+                os={os}
                 invalid={shortcutError !== null}
                 describedBy={
                   shortcutError ? "setting-shortcut-error setting-shortcut-hint" : "setting-shortcut-hint"
@@ -351,7 +364,7 @@ export function SettingsView({
           <Panel title="Privacy">
             <Row
               label="Record window titles"
-              description="Needs Accessibility access. Off means only app names are stored. Everything stays on this Mac."
+              description={titlesDescription(platform)}
               controlId="setting-titles"
             >
               <Switch
@@ -378,4 +391,16 @@ export function SettingsView({
       )}
     </Page>
   );
+}
+
+/** Only macOS gates titles behind a permission; Wayland cannot read them at all. */
+function titlesDescription(platform: PlatformInfoDto): string {
+  if (platform.needs_accessibility_permission) {
+    return "Needs Accessibility access. Off means only app names are stored. Everything stays on this Mac.";
+  }
+  const device = platformWords(platform.os).device;
+  if (isWayland(platform)) {
+    return `Titles cannot be read in a Wayland session; they are recorded once you use an X11 session. Off means only app names are stored. Everything stays on ${device}.`;
+  }
+  return `Off means only app names are stored. Everything stays on ${device}.`;
 }

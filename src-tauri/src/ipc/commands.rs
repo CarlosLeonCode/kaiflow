@@ -16,10 +16,10 @@ use super::ai_dto::{
 use super::dto::{
     ActivityDto, ApplyPresetResultDto, BackupReportDto, BackupStatusDto, DashboardDto, DeleteOpDto,
     FocusCardActionDto, FocusSessionDto, FocusStartDto, FocusStatusDto, GoalDto, GoalStatusDto,
-    IdleGapDto, IdleResolutionDto, PermissionStateDto, PresetDto, PrivacyModeDto, PrivacyRulesDto,
-    ProductivityDto, RangeDto, ReportDto, RestorePreviewDto, RestoreResultDto, RetentionImpactDto,
-    RuleDto, RuleInputDto, RulePreviewDto, RuleSpecDto, SettingsDto, SettingsPatchDto,
-    SuggestionDto, TimelineItemDto, TrackingStatusDto, UpdateInfoDto,
+    IdleGapDto, IdleResolutionDto, PermissionStateDto, PlatformInfoDto, PresetDto, PrivacyModeDto,
+    PrivacyRulesDto, ProductivityDto, RangeDto, ReportDto, RestorePreviewDto, RestoreResultDto,
+    RetentionImpactDto, RuleDto, RuleInputDto, RulePreviewDto, RuleSpecDto, SettingsDto,
+    SettingsPatchDto, SuggestionDto, TimelineItemDto, TrackingStatusDto, UpdateInfoDto,
 };
 use super::events::{DataChanged, DataKindDto, FocusChanged};
 use crate::composition::AppState;
@@ -270,6 +270,13 @@ pub async fn settings_update(
     patch: SettingsPatchDto,
 ) -> Result<SettingsDto, AppError> {
     run(state, move |s| s.settings_update(patch)).await
+}
+
+/// OS and display session, so the UI words permissions and shortcuts for this platform.
+#[tauri::command]
+#[specta::specta]
+pub async fn platform_info(state: Shared<'_>) -> Result<PlatformInfoDto, AppError> {
+    run(state, |s| Ok(s.platform_info())).await
 }
 
 #[tauri::command]

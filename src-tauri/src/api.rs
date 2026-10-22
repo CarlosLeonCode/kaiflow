@@ -17,10 +17,11 @@ use crate::error::AppError;
 use crate::ipc::dto::{
     ActivityDto, ApplyPresetResultDto, BackupReportDto, BackupStatusDto, DashboardDto, DeleteOpDto,
     FocusCardActionDto, FocusSessionDto, FocusStartDto, FocusStatusDto, GoalDto, GoalStatusDto,
-    IdleGapDto, IdleResolutionDto, PermissionStateDto, PresetDto, PrivacyModeDto, PrivacyRulesDto,
-    ProductivityDto, RangeDto, ReportDto, RestorePreviewDto, RestoreResultDto, RetentionImpactDto,
-    RuleDto, RuleInputDto, RulePreviewDto, RuleSpecDto, SettingsDto, SettingsPatchDto,
-    ShortcutStatusDto, SuggestionDto, TimelineItemDto, TrackingStateDto, TrackingStatusDto,
+    IdleGapDto, IdleResolutionDto, PermissionStateDto, PlatformInfoDto, PresetDto, PrivacyModeDto,
+    PrivacyRulesDto, ProductivityDto, RangeDto, ReportDto, RestorePreviewDto, RestoreResultDto,
+    RetentionImpactDto, RuleDto, RuleInputDto, RulePreviewDto, RuleSpecDto, SettingsDto,
+    SettingsPatchDto, ShortcutStatusDto, SuggestionDto, TimelineItemDto, TrackingStateDto,
+    TrackingStatusDto,
 };
 
 impl AppState {
@@ -520,6 +521,10 @@ impl AppState {
         }
     }
 
+    pub fn platform_info(&self) -> PlatformInfoDto {
+        self.platform
+    }
+
     pub fn permission_status(&self) -> PermissionStateDto {
         self.permission.accessibility().into()
     }
@@ -616,6 +621,7 @@ mod tests {
                 notifier: Box::new(RecordingNotifier::default()),
                 idle_threshold: adapters_common::idle::IdleThreshold::default(),
                 sampler: None,
+                display_session: None,
             },
             no_ai(),
         )
@@ -1176,6 +1182,31 @@ mod tests {
             status.degraded_reason,
             Some(DegradedReasonDto::WaylandSession)
         );
+        state.shutdown();
+    }
+
+    #[test]
+    fn platform_info_reports_the_build_os_and_the_detected_session() {
+        use crate::ipc::dto::{DisplaySessionDto, OsDto};
+        use crate::platform_info::current_os;
+
+        let dir = tempfile::tempdir().unwrap();
+        let state = compose(
+            &dir.path().join("kaiflow.db"),
+            Box::new(RecordingSink::default()),
+            AppState::default_shortcut(),
+            Providers {
+                display_session: Some(DisplaySessionDto::Wayland),
+                ..Providers::placeholders()
+            },
+            no_ai(),
+        )
+        .unwrap();
+        let info = state.platform_info();
+        assert_eq!(info.os, current_os());
+        assert_eq!(info.needs_accessibility_permission, info.os == OsDto::Macos);
+        let expected_session = (info.os == OsDto::Linux).then_some(DisplaySessionDto::Wayland);
+        assert_eq!(info.session, expected_session);
         state.shutdown();
     }
 

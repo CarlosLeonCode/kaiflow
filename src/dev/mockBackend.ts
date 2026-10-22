@@ -22,6 +22,7 @@ import type {
   GoalDto,
   IdleResolutionDto,
   PermissionStateDto,
+  PlatformInfoDto,
   ProductivityDto,
   RangeDto,
   ReportDto,
@@ -37,6 +38,8 @@ import type {
   TrackingStatusDto,
   UpdateInfoDto,
 } from "@/shared/ipc";
+import { DEFAULT_PLATFORM, isWayland } from "@/shared/lib/platform";
+import { defaultShortcut } from "@/shared/lib/shortcut";
 
 import { buildDashboard } from "./mockDashboard";
 import {
@@ -75,6 +78,11 @@ export type DemoFocus = "running" | "drift" | "break" | "paused" | "ended";
 export interface MockOptions {
   /** Start with Accessibility revoked (onboarding and the degraded banner). */
   permission?: PermissionStateDto;
+  /**
+   * The OS and Linux session `platform_info` reports (macOS by default). Linux on Wayland
+   * runs degraded like the real adapter: no window tracking, idle only.
+   */
+  platform?: PlatformInfoDto;
   /** The update the server offers. */
   update?: UpdateInfoDto | null;
   /** Announce it at startup (like the daily background check) instead of only on a manual check. */
@@ -149,7 +157,16 @@ export function installMockBackend(options: MockOptions = {}): void {
     data.autoDiscarded = [];
   }
   const dismissedSuggestions = new Set<string>();
-  let permission: PermissionStateDto = options.permission ?? "granted";
+  const platform = options.platform ?? DEFAULT_PLATFORM;
+  const wayland = isWayland(platform);
+  // Only macOS has a permission to revoke; Wayland reports it missing like the Linux adapter.
+  let permission: PermissionStateDto = wayland
+    ? "denied"
+    : platform.needs_accessibility_permission
+      ? (options.permission ?? "granted")
+      : "granted";
+  const degradedReason = () =>
+    wayland ? ("wayland_session" as const) : permission === "denied" ? ("accessibility_denied" as const) : null;
   let tracking: TrackingStateDto = "running";
   let settings: SettingsDto = {
     store_titles: true,
@@ -159,7 +176,7 @@ export function installMockBackend(options: MockOptions = {}): void {
     retention_days: null,
     theme: "system",
     autostart: false,
-    shortcut: "⌃⌥⌘T",
+    shortcut: defaultShortcut(platform.os),
     onboarding_completed: true,
     tray_display: "today_total",
     week_start: 0,
@@ -248,12 +265,12 @@ export function installMockBackend(options: MockOptions = {}): void {
     return {
       state: tracking,
       current:
-        tracking === "running" && current
+        tracking === "running" && current && !wayland
           ? { app_id: current.app_id ?? "", app_name: current.app_name ?? "", window_title: current.window_title }
           : null,
-      since: tracking === "running" && current ? current.started_at : null,
-      degraded: permission === "denied",
-      degraded_reason: permission === "denied" ? "accessibility_denied" : null,
+      since: tracking === "running" && current && !wayland ? current.started_at : null,
+      degraded: degradedReason() !== null,
+      degraded_reason: degradedReason(),
       shortcut: { kind: "registered", shortcut: settings.shortcut },
     };
   };
@@ -358,7 +375,7 @@ export function installMockBackend(options: MockOptions = {}): void {
           }
         : null,
       cycle: { enabled: settings.focus_timer.cycle_enabled, round: Math.min(cycle.round, every), every },
-      unavailable: permission === "denied" ? "accessibility_denied" : null,
+      unavailable: degradedReason(),
     };
   };
   const runningSession = (): MockSession => session ?? fail({ kind: "invalid", message: "no focus session is running" });
@@ -789,11 +806,12 @@ export function installMockBackend(options: MockOptions = {}): void {
       if (retention) settings.retention_days = retention.kind === "forever" ? null : retention.days;
       return settings;
     },
+    platform_info: () => platform,
     permission_status: () => permission,
     permission_request: () => null,
     permission_open_settings: () => {
-      // The grant happens in System Settings: simulate it shortly after.
-      setTimeout(() => (permission = "granted"), 1500);
+      // The grant happens in System Settings: simulate it shortly after (macOS only).
+      if (platform.needs_accessibility_permission) setTimeout(() => (permission = "granted"), 1500);
       return null;
     },
     app_restart: () => null,
@@ -909,7 +927,8 @@ export function installMockBackend(options: MockOptions = {}): void {
     focus_status: () => focusStatus(),
     focus_start: (args) => {
       const start = args.start as FocusStartDto;
-      if (permission === "denied" && start.kind === "focus") fail({ kind: "focus_unavailable", reason: "accessibility_denied" });
+      const unavailable = degradedReason();
+      if (unavailable && start.kind === "focus") fail({ kind: "focus_unavailable", reason: unavailable });
       if (session) fail({ kind: "invalid", message: "a focus session is already running" });
       const problem = startProblem(start);
       if (problem) fail({ kind: "invalid", message: problem });

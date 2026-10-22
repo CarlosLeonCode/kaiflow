@@ -40,10 +40,14 @@ sin marcar, anota lo que viste y abre un issue (ver el final).
 ## 2. Primera apertura y bienvenida
 
 - [ ] Abrir Kaiflow. **Esperado:** aparece la ventana de bienvenida (pasos "Welcome",
-      "Permissions", "Ready") y el icono en la bandeja.
+      "Recording", "Ready") y el icono en la bandeja. La bienvenida dice "lives in your system
+      tray" y "Everything stays on this computer".
 - [ ] Recorrer los pasos con **Continue** y terminar con **Start tracking**. **Esperado:** en
-      X11 el estado aparece como concedido ("Granted"); en Wayland no. Anotar si algún texto
-      habla de "this Mac" o de Ajustes del Sistema (texto de macOS que conviene corregir).
+      X11 el segundo paso muestra "No permission needed"; en Wayland muestra "Window tracking is
+      unavailable on Wayland", explica que la inactividad, el bloqueo, la suspensión y los
+      temporizadores siguen funcionando y sugiere una sesión "Ubuntu on Xorg". En ningún caso
+      aparece "Open System Settings" ni la oferta de reinicio. El último paso recuerda que GNOME
+      necesita la extensión AppIndicator para el icono.
 - [ ] **Esperado:** se crea `~/.local/share/com.carlosleon.kaiflow/kaiflow.db`.
 
 ## 3. App y título de la ventana activa
@@ -119,8 +123,10 @@ Sesión **Wayland**:
 
 ## 10. Atajo global
 
-- [ ] Probar el atajo de pausar y reanudar (por defecto `Ctrl+Alt+Super+T`). **Esperado:** en X11
-      pausa y reanuda el registro. En Wayland los atajos globales pueden no funcionar; anotarlo.
+- [ ] Probar el atajo de pausar y reanudar (por defecto `Ctrl+Alt+Shift+K` en una instalación
+      nueva; `Ctrl+Alt+T` no se usa porque abre la terminal en Ubuntu). **Esperado:** en X11
+      pausa y reanuda el registro; el popover y Settings lo muestran como `Ctrl+Alt+Shift+K`.
+      En Wayland los atajos globales pueden no funcionar; anotarlo.
 
 ## 11. Copias de seguridad y exportación
 

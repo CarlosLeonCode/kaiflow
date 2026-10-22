@@ -1,5 +1,15 @@
 import { useSectionIntro } from "@/features/shell/hooks/useSectionIntro";
-import { IpcError, useOpenAccessibilitySettingsMutation, useSettingsQuery, useStatusQuery, useUpdateSettingsMutation, errorMessage } from "@/shared/ipc";
+import {
+  IpcError,
+  useOpenAccessibilitySettingsMutation,
+  usePlatformQuery,
+  useSettingsQuery,
+  useStatusQuery,
+  useUpdateSettingsMutation,
+  errorMessage,
+} from "@/shared/ipc";
+import { DEFAULT_PLATFORM } from "@/shared/lib/platform";
+import { formatShortcut } from "@/shared/lib/shortcut";
 
 import { DataPanelContainer } from "@/features/data/containers/DataPanelContainer";
 import { AiSettingsPanelContainer } from "@/features/review/containers/AiSettingsPanelContainer";
@@ -18,15 +28,18 @@ export function SettingsContainer() {
   const status = useStatusQuery();
   const update = useUpdateSettingsMutation();
   const openSettings = useOpenAccessibilitySettingsMutation();
+  const platform = usePlatformQuery().data ?? DEFAULT_PLATFORM;
+  const describe = (shortcut: string, reason: string) =>
+    shortcutMessage(formatShortcut(shortcut, platform.os), reason);
 
   const failure = update.error;
   const shortcutFailure =
     failure instanceof IpcError && failure.error.kind === "shortcut_unavailable" ? failure.error : null;
   const unavailable = status.data?.shortcut.kind === "unavailable" ? status.data.shortcut : null;
   const shortcutError = shortcutFailure
-    ? shortcutMessage(shortcutFailure.shortcut, shortcutFailure.reason)
+    ? describe(shortcutFailure.shortcut, shortcutFailure.reason)
     : unavailable
-      ? shortcutMessage(unavailable.shortcut, unavailable.reason)
+      ? describe(unavailable.shortcut, unavailable.reason)
       : null;
 
   const otherError = failure && !shortcutFailure ? errorMessage(failure) : null;
@@ -36,6 +49,7 @@ export function SettingsContainer() {
     <SettingsView
       intro={intro}
       settings={settings.data}
+      platform={platform}
       degraded={status.data?.degraded ?? false}
       degradedReason={status.data?.degraded_reason ?? null}
       shortcutError={shortcutError}

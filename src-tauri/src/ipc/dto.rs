@@ -151,6 +151,32 @@ impl From<DegradedReason> for DegradedReasonDto {
     }
 }
 
+/// Desktop OS the app was built for; the UI words its permission and privacy copy by it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum OsDto {
+    Macos,
+    Windows,
+    Linux,
+}
+
+/// Linux display server the tracker observes through; `None` elsewhere and without a display.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum DisplaySessionDto {
+    X11,
+    Wayland,
+}
+
+/// What the UI needs to know about the platform (`platform_info`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct PlatformInfoDto {
+    pub os: OsDto,
+    pub session: Option<DisplaySessionDto>,
+    /// Window titles need an OS permission (Accessibility on macOS).
+    pub needs_accessibility_permission: bool,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum PermissionStateDto {

@@ -31,12 +31,14 @@ sin marcar, anota lo que viste y abre un issue (ver el final).
 ## 2. Primera apertura y bienvenida
 
 - [ ] Abrir Kaiflow desde el menú Inicio. **Esperado:** aparece la ventana de bienvenida
-      (pasos "Welcome", "Permissions", "Ready") y el icono de Kaiflow en la bandeja del sistema
-      (puede quedar oculto bajo la flecha **^**).
+      (pasos "Welcome", "Recording", "Ready") y el icono de Kaiflow en la bandeja del sistema
+      (puede quedar oculto bajo la flecha **^**). La bienvenida dice "lives in your system tray"
+      y "Everything stays on this computer".
 - [ ] Recorrer los pasos con **Continue** y terminar con **Start tracking**. **Esperado:** el
-      estado del permiso aparece como concedido ("Granted"); no se pide ningún permiso de
-      Windows. Anotar si algún texto habla de "this Mac" o de Ajustes del Sistema (texto de
-      macOS que conviene corregir).
+      segundo paso muestra el interruptor "Record window titles" y el bloque "No permission
+      needed"; no hay paso de Accesibilidad, ni botón "Open System Settings", ni oferta de
+      reinicio. El último paso indica "Permission: None needed" y recuerda que **Open at login**
+      se activa en Settings.
 - [ ] **Esperado:** se crea `%APPDATA%\com.carlosleon.kaiflow\kaiflow.db`.
 
 ## 3. App y título de la ventana activa
@@ -108,8 +110,12 @@ sin marcar, anota lo que viste y abre un issue (ver el final).
 
 ## 10. Atajo global
 
-- [ ] Probar el atajo de pausar y reanudar (por defecto `Ctrl+Alt+Win+T`). **Esperado:** pausa y
-      reanuda el registro. Anotar si choca con algún atajo de Windows.
+- [ ] Probar el atajo de pausar y reanudar (por defecto `Ctrl+Alt+Shift+K` en una instalación
+      nueva). **Esperado:** pausa y reanuda el registro; el popover, Settings y el menú de la
+      bandeja lo muestran como `Ctrl+Alt+Shift+K`. Anotar si choca con algún atajo de Windows o
+      de una app instalada.
+- [ ] Settings > Tracking: grabar otro atajo y pulsar **Reset shortcut to default**.
+      **Esperado:** vuelve a `Ctrl+Alt+Shift+K`.
 
 ## 11. Copias de seguridad y exportación
 

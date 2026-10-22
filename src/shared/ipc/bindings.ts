@@ -41,6 +41,8 @@ export const commands = {
 	privacySet: (appId: string, mode: "exclude" | "redact_title" | null) => typedError<null, AppError>(__TAURI_INVOKE("privacy_set", { appId, mode })),
 	settingsGet: () => typedError<SettingsDto, AppError>(__TAURI_INVOKE("settings_get")),
 	settingsUpdate: (patch: SettingsPatchDto) => typedError<SettingsDto, AppError>(__TAURI_INVOKE("settings_update", { patch })),
+	/**  OS and display session, so the UI words permissions and shortcuts for this platform. */
+	platformInfo: () => typedError<PlatformInfoDto, AppError>(__TAURI_INVOKE("platform_info")),
 	permissionStatus: () => typedError<PermissionStateDto, AppError>(__TAURI_INVOKE("permission_status")),
 	permissionRequest: () => typedError<null, AppError>(__TAURI_INVOKE("permission_request")),
 	permissionOpenSettings: () => typedError<null, AppError>(__TAURI_INVOKE("permission_open_settings")),
@@ -427,6 +429,9 @@ export type DegradedReasonDto =
 /**  Destructive operation to confirm with `prepare_delete`. */
 export type DeleteOpDto = { kind: "range"; range: RangeDto } | { kind: "older_than_days"; days: number } | { kind: "all" };
 
+/**  Linux display server the tracker observes through; `None` elsewhere and without a display. */
+export type DisplaySessionDto = "x11" | "wayland";
+
 export type DocumentKindDto = "backup" | "export";
 
 export type EndReasonDto = "focus_change" | "idle" | "sleep" | "lock" | "pause" | "stop" | "shutdown" | "recovered";
@@ -695,6 +700,9 @@ export type IdleGapResolved = {
 /**  Same enum as the domain and the database (design section 3). */
 export type IdleResolutionDto = { kind: "discard" } | { kind: "assign_previous" } | { kind: "assign_activity"; activity_id: number };
 
+/**  Desktop OS the app was built for; the UI words its permission and privacy copy by it. */
+export type OsDto = "macos" | "windows" | "linux";
+
 export type PatternDto = {
 	observation: string,
 	evidence: string,
@@ -707,6 +715,14 @@ export type PermissionChanged = {
 };
 
 export type PermissionStateDto = "granted" | "denied";
+
+/**  What the UI needs to know about the platform (`platform_info`). */
+export type PlatformInfoDto = {
+	os: OsDto,
+	session: DisplaySessionDto | null,
+	/**  Window titles need an OS permission (Accessibility on macOS). */
+	needs_accessibility_permission: boolean,
+};
 
 /**  One activity a preset pack would create. */
 export type PresetActivityDto = {

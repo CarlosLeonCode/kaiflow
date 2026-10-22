@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import { buildSummary, nextStep, previousStep, shouldOfferRestart } from "./steps";
+import { platform } from "@/test/ipc";
+
+import { buildSummary, nextStep, previousStep, shouldOfferRestart, stepLabels } from "./steps";
 
 describe("steps", () => {
   it("moves within bounds", () => {
@@ -30,5 +32,34 @@ describe("buildSummary", () => {
     const summary = buildSummary(false, "denied");
     expect(summary.titles).toBe("App names only");
     expect(summary.access).toBe("Accessibility is not needed");
+  });
+});
+
+describe("per platform", () => {
+  it("only macOS has a Permissions step", () => {
+    expect(stepLabels(platform("macos")).access).toBe("Permissions");
+    expect(stepLabels(platform("windows")).access).toBe("Recording");
+    expect(stepLabels(platform("linux", "wayland")).access).toBe("Recording");
+  });
+
+  it("never offers a restart outside macOS", () => {
+    expect(shouldOfferRestart(true, "granted", platform("windows"))).toBe(false);
+    expect(shouldOfferRestart(true, "granted", platform("linux", "x11"))).toBe(false);
+    expect(shouldOfferRestart(true, "granted", platform("macos"))).toBe(true);
+  });
+
+  it("summarizes without Accessibility on Windows and Linux X11", () => {
+    expect(buildSummary(true, "denied", platform("windows"))).toEqual({
+      titles: "App names and window titles",
+      accessLabel: "Permission",
+      access: "None needed",
+    });
+    expect(buildSummary(false, undefined, platform("linux", "x11")).titles).toBe("App names only");
+  });
+
+  it("is honest about Wayland", () => {
+    const summary = buildSummary(true, "denied", platform("linux", "wayland"));
+    expect(summary.accessLabel).toBe("Window tracking");
+    expect(summary.access).toBe("Unavailable on Wayland");
   });
 });

@@ -137,9 +137,19 @@ impl ShortcutRegistrar for TauriRegistrar {
     }
 }
 
-/// Frontend notification for a status change (best effort).
+/// Accelerator to show next to Pause/Resume in the tray menu: only a shortcut that is
+/// actually registered, so the menu never advertises a combination that does nothing.
+pub fn menu_accelerator(status: &ShortcutStatusDto) -> Option<String> {
+    match status {
+        ShortcutStatusDto::Registered { shortcut } => Some(to_accelerator(shortcut)),
+        _ => None,
+    }
+}
+
+/// Frontend notification and tray menu hint for a status change (best effort).
 pub fn announce_to_frontend(app: AppHandle<Wry>) -> Box<dyn Fn(ShortcutStatusDto) + Send + Sync> {
     Box::new(move |status| {
+        crate::tray::set_shortcut_hint(&app, menu_accelerator(&status));
         let _ = ShortcutStatusChanged(status).emit(&app);
     })
 }
@@ -211,6 +221,31 @@ mod tests {
         assert_eq!(to_accelerator("⇧⌘P"), "Shift+Cmd+P");
         assert_eq!(to_accelerator("Ctrl+Alt+T"), "Ctrl+Alt+T");
         assert_eq!(to_accelerator(" ⌘K "), "Cmd+K");
+    }
+
+    #[test]
+    fn the_default_shortcuts_become_valid_accelerators() {
+        use application::commands::default_shortcut;
+        assert_eq!(to_accelerator(default_shortcut(true)), "Ctrl+Alt+Cmd+T");
+        assert_eq!(to_accelerator(default_shortcut(false)), "Ctrl+Alt+Shift+K");
+    }
+
+    #[test]
+    fn the_tray_menu_only_shows_a_registered_shortcut() {
+        assert_eq!(
+            menu_accelerator(&ShortcutStatusDto::Registered {
+                shortcut: "⌃⌥⇧K".into()
+            }),
+            Some("Ctrl+Alt+Shift+K".into())
+        );
+        assert_eq!(
+            menu_accelerator(&ShortcutStatusDto::Unavailable {
+                shortcut: "⌃⌥⇧K".into(),
+                reason: "taken".into()
+            }),
+            None
+        );
+        assert_eq!(menu_accelerator(&ShortcutStatusDto::Disabled), None);
     }
 
     #[test]

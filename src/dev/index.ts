@@ -1,3 +1,5 @@
+import type { OsDto, PlatformInfoDto } from "@/shared/ipc";
+
 import { installMockBackend, type DemoFocus } from "./mockBackend";
 
 const DEMO_FOCUS: readonly DemoFocus[] = ["running", "drift", "break", "paused", "ended"];
@@ -6,10 +8,24 @@ function demoFocus(value: string | null): DemoFocus | undefined {
   return DEMO_FOCUS.find((demo) => demo === value);
 }
 
+const OSES: readonly OsDto[] = ["macos", "windows", "linux"];
+
+/** `?os=windows|linux|macos`, plus `&session=wayland|x11` on Linux (X11 when omitted). */
+function mockPlatform(params: URLSearchParams): PlatformInfoDto {
+  const os = OSES.find((candidate) => candidate === params.get("os")) ?? "macos";
+  return {
+    os,
+    session: os === "linux" ? (params.get("session") === "wayland" ? "wayland" : "x11") : null,
+    needs_accessibility_permission: os === "macos",
+  };
+}
+
 /**
  * Installs the mocked backend. Query flags tweak the scenario so one dev server covers the
  * states that are hard to reach otherwise:
- * - `?permission=denied`: Accessibility revoked (onboarding, degraded banner).
+ * - `?permission=denied`: Accessibility revoked (onboarding, degraded banner; macOS only).
+ * - `?os=windows` / `?os=linux` (`&session=wayland` for a Wayland session): platform copy,
+ *   onboarding without the Accessibility step and the Ctrl+Alt+Shift+K default shortcut.
  * - `?update=1`: an update is announced at startup (popover banner, Settings panel).
  * - `?update=manual`: an update is only offered when "Check now" is pressed.
  * - `?data=empty`: no tracked time at all (empty states).
@@ -27,6 +43,7 @@ function demoFocus(value: string | null): DemoFocus | undefined {
 export function installMockIpc(search: string = window.location.search): void {
   const params = new URLSearchParams(search);
   installMockBackend({
+    platform: mockPlatform(params),
     permission: params.get("permission") === "denied" ? "denied" : "granted",
     emptyActivities: params.get("activities") === "empty",
     emptyHistory: params.get("data") === "empty",

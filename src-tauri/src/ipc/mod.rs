@@ -49,6 +49,7 @@ pub fn builder() -> Builder<Wry> {
             commands::privacy_set,
             commands::settings_get,
             commands::settings_update,
+            commands::platform_info,
             commands::permission_status,
             commands::permission_request,
             commands::permission_open_settings,

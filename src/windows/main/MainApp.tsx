@@ -13,7 +13,8 @@ import { DEFAULT_SECTION, type SectionId } from "@/features/shell/lib/sections";
 import { SettingsContainer } from "@/features/settings/containers/SettingsContainer";
 import { TodayContainer } from "@/features/today/containers/TodayContainer";
 import { degradedLabel, stateLabel } from "@/features/tracking/lib/derive";
-import { useStatusQuery } from "@/shared/ipc";
+import { usePlatformQuery, useStatusQuery } from "@/shared/ipc";
+import { osOf } from "@/shared/lib/platform";
 
 function SectionView({ section, onNavigate }: { section: SectionId; onNavigate: (next: SectionId) => void }) {
   switch (section) {
@@ -51,7 +52,8 @@ function SectionView({ section, onNavigate }: { section: SectionId; onNavigate: 
 export function MainApp() {
   const [section, setSection] = useState<SectionId>(DEFAULT_SECTION);
   const select = useCallback((next: SectionId) => setSection(next), []);
-  useSectionShortcuts(select);
+  const os = osOf(usePlatformQuery().data);
+  useSectionShortcuts(select, os);
   const status = useStatusQuery();
 
   return (
@@ -59,6 +61,7 @@ export function MainApp() {
       <Sidebar
         active={section}
         onSelect={select}
+        os={os}
         status={
           status.data
             ? {

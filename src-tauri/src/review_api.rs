@@ -140,6 +140,7 @@ mod tests {
                 notifier: Box::new(RecordingNotifier::default()),
                 idle_threshold: adapters_common::idle::IdleThreshold::default(),
                 sampler: None,
+                display_session: None,
             },
             AiPorts {
                 provider: Arc::new(ai.clone()),

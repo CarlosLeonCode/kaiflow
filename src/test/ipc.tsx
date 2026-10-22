@@ -14,6 +14,8 @@ import type {
   FocusStatusDto,
   GoalDto,
   GoalStatusDto,
+  OsDto,
+  PlatformInfoDto,
   ReportDto,
   WeeklyReviewDto,
   SettingsDto,
@@ -36,6 +38,15 @@ export function status(overrides: Partial<TrackingStatusDto> = {}): TrackingStat
     degraded_reason: null,
     shortcut: { kind: "registered", shortcut: "⌃⌥⌘T" },
     ...overrides,
+  };
+}
+
+/** `platform_info` for an OS (and Linux session); macOS is what every test gets by default. */
+export function platform(os: OsDto = "macos", session: PlatformInfoDto["session"] = null): PlatformInfoDto {
+  return {
+    os,
+    session: os === "linux" ? session : null,
+    needs_accessibility_permission: os === "macos",
   };
 }
 
@@ -175,6 +186,8 @@ export function mockBackend(handlers: Handlers): { calls: Call[] } {
         handlers[cmd] ??
         (cmd === "settings_get"
           ? () => settings()
+          : cmd === "platform_info"
+            ? () => platform()
           : cmd === "backup_status"
             ? () => backupStatus()
             : cmd === "goals_status" || cmd === "goals_list" || cmd === "focus_history"

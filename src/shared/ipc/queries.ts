@@ -58,6 +58,16 @@ export function useTimelineQuery(range: RangeDto) {
   });
 }
 
+/** OS and Linux display session. Never changes while the app runs, so it is fetched once. */
+export function usePlatformQuery() {
+  return useQuery({
+    queryKey: queryKeys.platform,
+    queryFn: () => unwrap(commands.platformInfo()),
+    staleTime: Number.POSITIVE_INFINITY,
+    gcTime: Number.POSITIVE_INFINITY,
+  });
+}
+
 /** Live Accessibility state; refreshed by `permission-changed` and when the window regains focus. */
 export function usePermissionQuery() {
   return useQuery({

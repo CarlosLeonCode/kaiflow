@@ -178,6 +178,27 @@ impl TrayDisplay {
     }
 }
 
+/// Default pause/resume shortcut on macOS: Control-Option-Command-T. Stored as the symbols
+/// the shell converts to an accelerator (`shortcuts::to_accelerator`).
+pub const MACOS_DEFAULT_SHORTCUT: &str = "⌃⌥⌘T";
+
+/// Default pause/resume shortcut on Windows and Linux: Ctrl+Alt+Shift+K ("K" for Kaiflow).
+/// The macOS combination would need the Windows/Super key, which those shells reserve for
+/// themselves. Ctrl+Alt+T opens the terminal on Ubuntu, and Ctrl+Alt+Shift+T is "Refactor
+/// This" in JetBrains IDEs; no common desktop or app binds Ctrl+Alt+Shift+K globally, and K
+/// is not an AltGr letter on the usual European layouts.
+pub const PC_DEFAULT_SHORTCUT: &str = "⌃⌥⇧K";
+
+/// The shortcut a fresh install uses. Users who saved their own keep it: the default only
+/// fills in a missing setting.
+pub fn default_shortcut(macos: bool) -> &'static str {
+    if macos {
+        MACOS_DEFAULT_SHORTCUT
+    } else {
+        PC_DEFAULT_SHORTCUT
+    }
+}
+
 /// All user settings with their defaults (design section 7).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Settings {
@@ -214,7 +235,8 @@ impl Default for Settings {
             retention_days: None,
             theme: "system".into(),
             autostart: false,
-            shortcut: "⌃⌥⌘T".into(),
+            // The build target, not a runtime OS call: each binary ships for one OS.
+            shortcut: default_shortcut(cfg!(target_os = "macos")).into(),
             onboarding_completed: false,
             tray_display: TrayDisplay::default(),
             week_start: 0,
@@ -1055,6 +1077,18 @@ mod tests {
             f.cmd.get_settings(),
             Err(CommandError::Storage(_))
         ));
+    }
+
+    #[test]
+    fn the_default_shortcut_follows_the_platform() {
+        assert_eq!(default_shortcut(true), "⌃⌥⌘T");
+        assert_eq!(default_shortcut(false), "⌃⌥⇧K");
+        // No Command/Super key outside macOS: the Windows and Linux shells reserve it.
+        assert!(!default_shortcut(false).contains('⌘'));
+        assert_eq!(
+            Settings::default().shortcut,
+            default_shortcut(cfg!(target_os = "macos"))
+        );
     }
 
     #[test]

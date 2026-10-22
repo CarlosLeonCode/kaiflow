@@ -7,6 +7,7 @@ import {
   IpcError,
   useDeleteDataMutation,
   usePrepareDeleteMutation,
+  usePlatformQuery,
   usePrivacyQuery,
   useRetentionImpactQuery,
   useReportQuery,
@@ -18,6 +19,7 @@ import {
   type DeleteOpDto,
 } from "@/shared/ipc";
 import { appOptions, RECENT_APP_DAYS } from "@/shared/lib/apps";
+import { osOf } from "@/shared/lib/platform";
 import { addLocalDays } from "@/shared/lib/time";
 
 import { PrivacyView } from "../components/PrivacyView";
@@ -54,6 +56,7 @@ export function PrivacyContainer({ onOpenSettings }: Props) {
   const privacy = usePrivacyQuery();
   const settings = useSettingsQuery();
   const status = useStatusQuery();
+  const platform = usePlatformQuery();
   const recent = useReportQuery(range);
   const apps = useMemo(
     () =>
@@ -117,6 +120,7 @@ export function PrivacyContainer({ onOpenSettings }: Props) {
     <PrivacyView
       intro={intro}
       privacy={privacy.data}
+      os={osOf(platform.data)}
       retentionDays={settings.data?.retention_days ?? null}
       apps={apps}
       today={today}
