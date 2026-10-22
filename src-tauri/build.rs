@@ -92,9 +92,29 @@ const COMMANDS: &[&str] = &[
 fn main() {
     ensure_placeholder_frontend();
     let attributes = tauri_build::Attributes::new()
-        .app_manifest(tauri_build::AppManifest::new().commands(COMMANDS));
+        .app_manifest(tauri_build::AppManifest::new().commands(COMMANDS))
+        .windows_attributes(tauri_build::WindowsAttributes::new_without_app_manifest());
+    embed_common_controls_manifest();
     tauri_build::try_build(attributes).expect("failed to run tauri-build");
 }
+
+/// Tauri needs Common Controls v6 on Windows; without a manifest asking for it Windows loads
+/// v5 and the process dies at startup with STATUS_ENTRYPOINT_NOT_FOUND (0xc0000139).
+/// tauri-build only embeds that manifest into the app binary, not into the library's test
+/// executable, so we turn its manifest off and have the MSVC linker embed the same
+/// dependency into every executable it links, tests included.
+fn embed_common_controls_manifest() {
+    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    let target_env = std::env::var("CARGO_CFG_TARGET_ENV").unwrap_or_default();
+    if target_os != "windows" || target_env != "msvc" {
+        return;
+    }
+    println!("cargo:rustc-link-arg=/MANIFEST:EMBED");
+    println!("cargo:rustc-link-arg=/MANIFESTDEPENDENCY:{COMMON_CONTROLS_V6}");
+}
+
+/// The dependency tauri-build's default Windows app manifest declares.
+const COMMON_CONTROLS_V6: &str = "type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'";
 
 /// Fallback for a clean checkout where `npm run build` has not produced `dist/` yet:
 /// `tauri::generate_context!` needs `frontendDist` to exist, so seed it with the (unbuilt)
