@@ -16,6 +16,14 @@ Kaiflow lives in your menu bar and records which app and window you use, so you 
 see where your day actually goes. No timers, no account, no cloud: your data stays on your
 computer.
 
+<p align="center">
+  <a href="website/public/video/kaiflow-explainer.mp4">
+    <img alt="Kaiflow in 30 seconds: your day disappears between apps; Kaiflow shows where it goes, records the app in front of you privately, lets you set a goal and focus, and helps you improve a little every day." src="docs/media/kaiflow-explainer.gif" width="100%">
+  </a>
+  <br>
+  <sub><a href="website/public/video/kaiflow-explainer.mp4">Watch the full-quality video</a></sub>
+</p>
+
 ## Why Kaiflow?
 
 **Kai** comes from *kaizen* (改善, "change for the better"), the Japanese idea of continuous
