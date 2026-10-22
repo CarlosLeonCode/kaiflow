@@ -283,25 +283,46 @@ jobs:
 
       - run: npm ci
 
+      # Tauri checks whether these variables EXIST, not whether they are empty: an empty
+      # APPLE_CERTIFICATE makes it try to import an empty .p12 and fail, and an empty APPLE_ID
+      # makes it try to notarize. So they are exported only when the mode really uses them.
+      - name: Export signing credentials for this mode
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          export_var() {
+            local delimiter="EOF_$(openssl rand -hex 8)"
+            { echo "$1<<${delimiter}"; printf '%s\n' "$2"; echo "${delimiter}"; } >> "$GITHUB_ENV"
+          }
+          if [ "${SIGNING_MODE}" = "notarized" ]; then
+            export_var APPLE_CERTIFICATE "${APPLE_CERTIFICATE}"
+            export_var APPLE_CERTIFICATE_PASSWORD "${APPLE_CERTIFICATE_PASSWORD}"
+            export_var APPLE_ID "${APPLE_ID}"
+            export_var APPLE_PASSWORD "${APPLE_PASSWORD}"
+            export_var APPLE_TEAM_ID "${APPLE_TEAM_ID}"
+          fi
+          if [ "${UPDATER}" = "true" ]; then
+            export_var TAURI_SIGNING_PRIVATE_KEY "${TAURI_SIGNING_PRIVATE_KEY}"
+            export_var TAURI_SIGNING_PRIVATE_KEY_PASSWORD "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD}"
+          fi
+
       - name: Build, sign and upload to the draft release
         id: tauri
         # v0.6.2, pinned by commit.
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Updater signature. Ignored when the overrides turn updater artifacts off.
-          TAURI_SIGNING_PRIVATE_KEY: ${{ env.UPDATER == 'true' && secrets.TAURI_SIGNING_PRIVATE_KEY || '' }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ env.UPDATER == 'true' && secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '' }}
-          # Notarized mode: Tauri imports the Developer ID .p12, signs with the hardened runtime
-          # (tauri.conf.json) and notarizes. Empty values make Tauri skip import and
-          # notarization; then it signs with APPLE_SIGNING_IDENTITY only: the self-signed
-          # identity hash, or "-" (ad-hoc).
-          APPLE_CERTIFICATE: ${{ env.SIGNING_MODE == 'notarized' && secrets.APPLE_CERTIFICATE || '' }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ env.SIGNING_MODE == 'notarized' && secrets.APPLE_CERTIFICATE_PASSWORD || '' }}
+          # Always set: the Developer ID identity, the self-signed identity hash, or "-"
+          # (ad-hoc). Certificate import and notarization credentials come from the step above,
+          # only in notarized mode.
           APPLE_SIGNING_IDENTITY: ${{ env.SIGNING_MODE == 'notarized' && secrets.APPLE_SIGNING_IDENTITY || (env.SIGNING_MODE == 'self-signed' && env.SELF_SIGNED_HASH || '-') }}
-          APPLE_ID: ${{ env.SIGNING_MODE == 'notarized' && secrets.APPLE_ID || '' }}
-          APPLE_PASSWORD: ${{ env.SIGNING_MODE == 'notarized' && secrets.APPLE_PASSWORD || '' }}
-          APPLE_TEAM_ID: ${{ env.SIGNING_MODE == 'notarized' && secrets.APPLE_TEAM_ID || '' }}
         with:
           releaseId: ${{ needs.prepare.outputs.release_id }}
           # latest.json is written once, for every platform, by the publish job.
@@ -399,13 +420,26 @@ jobs:
 
       # Unsigned: no code-signing secrets on Windows or Linux. Only the updater key is used,
       # and only when the updater is on.
+      # Same rule as on macOS: export the updater key only when the updater is on, because an
+      # empty-but-defined variable is treated as "set".
+      - name: Export the updater key when enabled
+        if: env.UPDATER == 'true'
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD; do
+            delimiter="EOF_$(openssl rand -hex 8)"
+            { echo "${name}<<${delimiter}"; printf '%s\n' "${!name}"; echo "${delimiter}"; } >> "$GITHUB_ENV"
+          done
+
       - name: Build and upload to the draft release
         # v0.6.2, pinned by commit.
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ env.UPDATER == 'true' && secrets.TAURI_SIGNING_PRIVATE_KEY || '' }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ env.UPDATER == 'true' && secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '' }}
         with:
           releaseId: ${{ needs.prepare.outputs.release_id }}
           includeUpdaterJson: false
