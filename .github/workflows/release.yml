@@ -553,8 +553,24 @@ jobs:
           print(json.dumps(manifest["platforms"], indent=2))
           PY
 
-          gh release upload "${GITHUB_REF_NAME}" "${work}/latest.json" --clobber --repo "${GITHUB_REPOSITORY}"
+          # Draft releases cannot be found by tag, so address the release by id: replace any
+          # previous latest.json (re-runs), then upload through the uploads endpoint.
+          old_asset="$(gh api "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}/assets?per_page=100" --paginate \
+            --jq '.[] | select(.name == "latest.json") | .id')"
+          if [ -n "${old_asset}" ]; then
+            gh api -X DELETE "repos/${GITHUB_REPOSITORY}/releases/assets/${old_asset}" --silent
+          fi
+          curl --fail-with-body --silent --show-error -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/json" \
+            --data-binary @"${work}/latest.json" \
+            "https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}/assets?name=latest.json" > /dev/null
           echo "- Updater manifest: \`latest.json\` with $(python3 -c "import json,sys; print(len(json.load(open(sys.argv[1]))['platforms']))" "${work}/latest.json") platform entries" >> "$GITHUB_STEP_SUMMARY"
 
+      # By id, not by tag: GitHub does not resolve draft releases from their tag name.
       - name: Publish the release
-        run: gh release edit "${GITHUB_REF_NAME}" --draft=false --repo "${GITHUB_REPOSITORY}"
+        run: |
+          gh api -X PATCH "repos/${GITHUB_REPOSITORY}/releases/${RELEASE_ID}" \
+            -F draft=false -f tag_name="${GITHUB_REF_NAME}" -f make_latest=true --silent
+          echo "Published: https://github.com/${GITHUB_REPOSITORY}/releases/tag/${GITHUB_REF_NAME}" >> "$GITHUB_STEP_SUMMARY"
