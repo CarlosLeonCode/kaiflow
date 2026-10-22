@@ -47,8 +47,10 @@ export interface Content {
     /** "Free. Not notarized by Apple..." line, followed by a link to the Install section. */
     notice: string;
     noticeLink: string;
-    shotAlt: string;
-    popoverAlt: string;
+    /** Accessible description of the hero explainer video. */
+    videoLabel: string;
+    pauseVideo: string;
+    playVideo: string;
   };
   how: { title: string; lead: string; steps: Item[] };
   features: { title: string; lead: string; items: Item[] };

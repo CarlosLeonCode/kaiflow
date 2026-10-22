@@ -2,7 +2,6 @@
 import type { Content } from "../../i18n";
 import { LINKS } from "../../lib/links";
 import Icon from "../Icon.astro";
-import Screenshot from "../Screenshot.astro";
 
 interface Props {
   t: Content;
@@ -55,24 +54,63 @@ const { t } = Astro.props;
     </div>
 
     <div class="relative mx-auto mt-14 max-w-5xl sm:mt-16">
-      <div class="window">
-        <div class="flex h-8 items-center gap-1.5 border-b border-line bg-bg-subtle px-3" aria-hidden="true">
-          <span class="size-2.5 rounded-full bg-[#ff5f57]"></span>
-          <span class="size-2.5 rounded-full bg-[#febc2e]"></span>
-          <span class="size-2.5 rounded-full bg-[#28c840]"></span>
-        </div>
-        <Screenshot
-          name="today"
-          alt={t.hero.shotAlt}
-          widths={[640, 1040]}
-          sizes="(min-width: 1040px) 1040px, calc(100vw - 32px)"
-          priority
-        />
-      </div>
-
-      <div class="window absolute -right-2 -bottom-10 hidden w-[30%] max-w-[300px] lg:-right-10 lg:block">
-        <Screenshot name="popover" alt={t.hero.popoverAlt} widths={[300]} sizes="300px" />
+      <div class="window relative">
+        <video
+          id="hero-video"
+          class="block aspect-video w-full bg-[#f4efe6]"
+          muted
+          loop
+          playsinline
+          preload="metadata"
+          poster="/video/kaiflow-explainer.jpg"
+          aria-label={t.hero.videoLabel}
+          data-autoplay
+        >
+          <source src="/video/kaiflow-explainer.mp4" type="video/mp4" />
+          <source src="/video/kaiflow-explainer.webm" type="video/webm" />
+        </video>
+        <button
+          id="hero-video-toggle"
+          type="button"
+          class="absolute right-3 bottom-3 inline-flex size-9 items-center justify-center rounded-full border border-line bg-bg/85 text-fg backdrop-blur-sm transition-opacity hover:bg-bg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          data-pause-label={t.hero.pauseVideo}
+          data-play-label={t.hero.playVideo}
+          aria-label={t.hero.playVideo}
+        >
+          <svg data-icon="play" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="currentColor">
+            <path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z"></path>
+          </svg>
+          <svg data-icon="pause" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="currentColor" style="display: none">
+            <rect x="6.5" y="5" width="4" height="14" rx="1"></rect>
+            <rect x="13.5" y="5" width="4" height="14" rx="1"></rect>
+          </svg>
+        </button>
       </div>
     </div>
   </div>
 </section>
+
+<script>
+  // Autoplay muted unless the visitor prefers reduced motion; the button pauses and resumes.
+  const video = document.querySelector<HTMLVideoElement>("#hero-video");
+  const toggle = document.querySelector<HTMLButtonElement>("#hero-video-toggle");
+  if (video && toggle) {
+    const playIcon = toggle.querySelector<SVGElement>('[data-icon="play"]');
+    const pauseIcon = toggle.querySelector<SVGElement>('[data-icon="pause"]');
+    const sync = () => {
+      const playing = !video.paused;
+      toggle.setAttribute("aria-label", playing ? toggle.dataset.pauseLabel ?? "" : toggle.dataset.playLabel ?? "");
+      if (playIcon) playIcon.style.display = playing ? "none" : "";
+      if (pauseIcon) pauseIcon.style.display = playing ? "" : "none";
+    };
+    video.addEventListener("play", sync);
+    video.addEventListener("pause", sync);
+    toggle.addEventListener("click", () => {
+      if (video.paused) void video.play().catch(sync);
+      else video.pause();
+    });
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!reduceMotion) void video.play().catch(sync);
+    sync();
+  }
+</script>

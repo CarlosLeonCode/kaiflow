@@ -35,10 +35,10 @@ export const en: Content = {
     note: "Requires macOS 13 or later. Universal build for Apple silicon and Intel.",
     notice: "Free. Not notarized by Apple — the first time, open it from System Settings → Privacy & Security.",
     noticeLink: "See the install steps",
-    shotAlt:
-      "The Kaiflow Today view: 4 hours 25 minutes of focused time, a colored timeline from 9 AM to 2 PM, and totals by app and by activity.",
-    popoverAlt:
-      "The Kaiflow menu bar popover showing today's total, the app in use right now and the top apps of the day.",
+    videoLabel:
+      "A short animated film: your day disappears between apps; Kaiflow shows where it goes, records the app in front of you privately, lets you set a goal and focus, and helps you improve a little every day.",
+    pauseVideo: "Pause video",
+    playVideo: "Play video",
   },
   how: {
     title: "Set it up once. Then forget about it.",

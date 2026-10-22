@@ -35,10 +35,10 @@ export const es: Content = {
     note: "Requiere macOS 13 o posterior. Compilación universal para Apple silicon e Intel.",
     notice: "Gratis. Sin notarización de Apple: la primera vez, ábrela desde Ajustes del Sistema → Privacidad y seguridad.",
     noticeLink: "Ver los pasos de instalación",
-    shotAlt:
-      "La vista Hoy de Kaiflow: 4 horas y 25 minutos de tiempo enfocado, una línea de tiempo de colores de 9:00 a 14:00 y totales por app y por actividad.",
-    popoverAlt:
-      "El panel de la barra de menús de Kaiflow con el total de hoy, la app en uso y las apps más usadas del día.",
+    videoLabel:
+      "Un breve video animado: tu día se pierde entre apps; Kaiflow te muestra a dónde se va, registra en privado la app que usas, te permite fijar una meta y enfocarte, y te ayuda a mejorar un poco cada día.",
+    pauseVideo: "Pausar video",
+    playVideo: "Reproducir video",
   },
   how: {
     title: "Configúralo una vez. Después, olvídate.",
