@@ -8,15 +8,15 @@ interface Props {
 const { t } = Astro.props;
 ---
 
-<section id="faq" aria-labelledby="faq-title" class="py-20 sm:py-28">
+<section id="faq" aria-labelledby="faq-title" class="py-16 sm:py-20">
   <div class="container-page grid gap-10 lg:grid-cols-12">
     <h2 id="faq-title" class="section-title lg:col-span-4">{t.faq.title}</h2>
 
     <!-- Native disclosure widgets: keyboard and screen reader support with no JavaScript. -->
     <div class="divide-y divide-line border-y border-line lg:col-span-8">
       {
-        t.faq.items.map((item, index) => (
-          <details class="group" open={index === 0}>
+        t.faq.items.map((item) => (
+          <details class="group">
             <summary class="flex cursor-pointer list-none items-center justify-between gap-4 py-5 font-medium [&::-webkit-details-marker]:hidden">
               <span>{item.q}</span>
               <span

@@ -1,6 +1,7 @@
 ---
 import type { Content } from "../../i18n";
 import Icon, { type IconName } from "../Icon.astro";
+import Screenshot from "../Screenshot.astro";
 
 interface Props {
   t: Content;
@@ -9,24 +10,40 @@ interface Props {
 const { t } = Astro.props;
 
 /** Icons follow the order of `features.items` in the locale files. */
-const ICONS: IconName[] = ["clock", "tag", "chart", "target", "timer", "review", "moon", "archive"];
+const ICONS: IconName[] = ["clock", "target", "timer", "review"];
 ---
 
-<section id="features" aria-labelledby="features-title" class="py-20 sm:py-28">
+<section id="features" aria-labelledby="features-title" class="border-y border-line bg-bg-subtle py-16 sm:py-20">
   <div class="container-page">
     <h2 id="features-title" class="section-title">{t.features.title}</h2>
-    <p class="section-lead">{t.features.lead}</p>
 
-    <ul class="mt-12 grid gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
+    <ul class="mt-8 grid gap-x-8 gap-y-6 sm:grid-cols-2 lg:grid-cols-4">
       {
         t.features.items.map((item, index) => (
-          <li class="bg-surface p-6">
-            <Icon name={ICONS[index] ?? "clock"} size={22} class="text-accent" />
-            <h3 class="mt-4 font-semibold tracking-tight">{item.title}</h3>
-            <p class="mt-2 text-[15px] leading-relaxed text-fg-muted">{item.body}</p>
+          <li>
+            <h3 class="flex items-center gap-2 font-semibold tracking-tight">
+              <Icon name={ICONS[index] ?? "clock"} size={20} class="shrink-0 text-accent" />
+              {item.title}
+            </h3>
+            <p class="mt-1.5 text-[15px] leading-relaxed text-fg-muted">{item.body}</p>
           </li>
         ))
       }
     </ul>
+
+    <div class="mt-10 grid gap-6 md:grid-cols-2">
+      {
+        t.features.shots.map((shot) => (
+          <div class="window">
+            <Screenshot
+              name={shot.key}
+              alt={shot.alt}
+              widths={[540]}
+              sizes="(min-width: 1152px) 540px, (min-width: 768px) 46vw, calc(100vw - 32px)"
+            />
+          </div>
+        ))
+      }
+    </div>
   </div>
 </section>

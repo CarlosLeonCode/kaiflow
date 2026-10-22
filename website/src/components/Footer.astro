@@ -1,6 +1,7 @@
 ---
 import { getContent, type Locale } from "../i18n";
-import { LINKS } from "../lib/links";
+import { LINKS, SHOW_SPONSOR } from "../lib/links";
+import Icon from "./Icon.astro";
 import Logo from "./Logo.astro";
 
 interface Props {
@@ -18,22 +19,38 @@ const links = [
 ---
 
 <footer class="border-t border-line">
-  <div class="container-page flex flex-col gap-6 py-10 text-sm text-fg-muted sm:flex-row sm:items-center sm:justify-between">
+  <div class="container-page flex flex-col gap-6 py-10 text-sm text-fg-muted md:flex-row md:items-start md:justify-between">
     <div>
       <p class="text-fg"><Logo size={24} wordmark class="text-[15px]" /></p>
       <p class="mt-1">{t.footer.tagline}</p>
       <p class="mt-1 max-w-md text-xs">{t.footer.nameNote}</p>
     </div>
-    <ul class="flex flex-wrap gap-x-5 gap-y-2">
-      {
-        links.map((link) => (
-          <li>
-            <a href={link.href} class="inline-block py-1 underline-offset-4 hover:text-fg hover:underline">
-              {link.label}
+    <div class="flex flex-col gap-4 md:items-end">
+      <p class="flex flex-wrap gap-3">
+        <a href={LINKS.repo} class="btn btn-secondary min-h-10 px-3.5 py-2 text-sm">
+          <Icon name="star" size={16} />
+          {t.footer.star}
+        </a>
+        {
+          SHOW_SPONSOR && (
+            <a href={LINKS.sponsor} class="btn btn-secondary min-h-10 px-3.5 py-2 text-sm">
+              <Icon name="heart" size={16} class="text-negative" />
+              {t.footer.sponsor}
             </a>
-          </li>
-        ))
-      }
-    </ul>
+          )
+        }
+      </p>
+      <ul class="flex flex-wrap gap-x-5 gap-y-2">
+        {
+          links.map((link) => (
+            <li>
+              <a href={link.href} class="inline-block py-1 underline-offset-4 hover:text-fg hover:underline">
+                {link.label}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
   </div>
 </footer>

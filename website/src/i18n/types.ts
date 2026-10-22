@@ -6,18 +6,7 @@ export interface Item {
   body: string;
 }
 
-export interface Persona {
-  role: string;
-  summary: string;
-  examples: string[];
-}
-
-export type Support = "yes" | "partial" | "no";
-
-export interface PlatformRow {
-  label: string;
-  cells: [Support, string][];
-}
+export type PlatformStatus = "available" | "beta";
 
 export interface Content {
   meta: { title: string; description: string; ogAlt: string };
@@ -26,16 +15,14 @@ export interface Content {
     primaryNav: string;
     languageNav: string;
     home: string;
-    opensNewTab: string;
-    yes: string;
-    partial: string;
-    no: string;
   };
-  nav: { features: string; privacy: string; platforms: string; install: string; faq: string; download: string };
-  language: { label: string; en: string; es: string };
+  /** Header links: `features` → #features, `privacy` → #privacy, `install` → #download, `faq` → #faq. */
+  nav: { features: string; privacy: string; install: string; faq: string; download: string };
+  language: { en: string; es: string };
   hero: {
     eyebrow: string;
     title: string;
+    /** One sentence. */
     lead: string;
     primary: string;
     /** Text before the Windows and Linux beta links, e.g. "Also for". */
@@ -44,7 +31,7 @@ export interface Content {
     /** Small badge after the Windows and Linux links. */
     betaBadge: string;
     note: string;
-    /** "Free. Not notarized by Apple..." line, followed by a link to the Install section. */
+    /** "Free. Not notarized by Apple..." line, followed by a link to the first-open steps. */
     notice: string;
     noticeLink: string;
     /** Accessible description of the hero explainer video. */
@@ -52,91 +39,40 @@ export interface Content {
     pauseVideo: string;
     playVideo: string;
   };
-  how: { title: string; lead: string; steps: Item[] };
-  features: { title: string; lead: string; items: Item[] };
-  showcase: {
+  /** "What you get": four items, in the order of the icons in Features.astro. */
+  features: {
     title: string;
-    lead: string;
-    shots: { key: "overview" | "goals" | "focus"; title: string; body: string; alt: string }[];
+    items: Item[];
+    shots: { key: "overview" | "focus"; alt: string }[];
   };
-  personas: { title: string; lead: string; items: Persona[] };
   privacy: {
     title: string;
-    lead: string;
-    readTitle: string;
-    read: string[];
-    neverTitle: string;
-    never: string[];
-    storageTitle: string;
-    storage: string[];
-  };
-  ai: {
-    eyebrow: string;
-    title: string;
-    lead: string;
-    points: Item[];
-    providersTitle: string;
-    providers: string[];
-  };
-  platforms: {
-    title: string;
-    lead: string;
-    feature: string;
-    columns: string[];
-    rows: PlatformRow[];
-    note: string;
-    sourceLink: string;
-  };
-  install: {
-    title: string;
-    lead: string;
-    steps: { title: string; body: string }[];
-    firstOpenTitle: string;
-    firstOpenLead: string;
-    variants: { title: string; steps: string[] }[];
-    advancedTitle: string;
-    advancedBody: string;
-    permissionTitle: string;
-    permissionBody: string;
-    beta: {
-      title: string;
-      lead: string;
-      badge: string;
-      windowsTitle: string;
-      windowsSteps: string[];
-      linuxTitle: string;
-      linuxLead: string;
-      appImageLabel: string;
-      debLabel: string;
-      linuxNote: string;
-      report: string;
-      download: string;
-    };
-  };
-  availability: {
-    title: string;
-    available: string;
-    beta: string;
-    soon: string;
-    items: { name: string; status: "available" | "beta" | "soon"; detail: string }[];
-    watch: string;
-    vote: string;
-  };
-  fork: {
-    eyebrow: string;
-    title: string;
-    lead: string;
-    points: Item[];
-    agentsTitle: string;
-    agents: string[];
-    promptTitle: string;
-    prompt: string;
-    agentsLink: string;
-    forkingLink: string;
+    /** Three items, in the order of the icons in Privacy.astro. */
+    items: Item[];
+    /** One line about forking with AI agents, followed by a link to AGENTS.md. */
+    fork: string;
     forkLink: string;
   };
-  support: { title: string; lead: string; star: string; sponsor: string };
+  download: {
+    title: string;
+    lead: string;
+    available: string;
+    beta: string;
+    platforms: { name: string; status: PlatformStatus; detail: string; cta: string }[];
+    firstOpen: {
+      title: string;
+      items: { title: string; steps: string[]; code?: string }[];
+    };
+  };
   faq: { title: string; items: { q: string; a: string }[] };
-  cta: { title: string; lead: string; primary: string; secondary: string };
-  footer: { tagline: string; nameNote: string; license: string; source: string; releases: string; issues: string };
+  footer: {
+    tagline: string;
+    nameNote: string;
+    license: string;
+    source: string;
+    releases: string;
+    issues: string;
+    star: string;
+    sponsor: string;
+  };
 }
