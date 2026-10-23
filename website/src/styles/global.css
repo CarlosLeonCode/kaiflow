@@ -67,7 +67,14 @@
   html {
     -webkit-text-size-adjust: 100%;
     scroll-behavior: smooth;
-    scroll-padding-top: 5rem;
+    /* The sticky header is two rows on small screens (logo, then nav) and one row from md. */
+    scroll-padding-top: 7rem;
+  }
+
+  @media (min-width: 768px) {
+    html {
+      scroll-padding-top: 5rem;
+    }
   }
 
   body {

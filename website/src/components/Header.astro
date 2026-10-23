@@ -20,17 +20,18 @@ const navItems = [
 ---
 
 <header class="sticky top-0 z-40 border-b border-line/70 bg-bg/80 backdrop-blur-xl backdrop-saturate-150">
-  <div class="container-page flex h-16 items-center gap-3">
-    <a href={home} class="flex shrink-0 items-center" aria-label={t.a11y.home}>
+  <!-- Mobile first: the nav wraps to its own full-width row under the logo, and joins it from md. -->
+  <div class="container-page flex flex-wrap items-center gap-x-3 md:h-16 md:flex-nowrap">
+    <a href={home} class="flex h-14 shrink-0 items-center md:h-auto" aria-label={t.a11y.home}>
       <Logo size={28} wordmark class="text-[16px]" />
     </a>
 
-    <nav aria-label={t.a11y.primaryNav} class="ml-6 hidden md:block">
-      <ul class="flex items-center gap-1 text-sm text-fg-muted">
+    <nav aria-label={t.a11y.primaryNav} class="order-last -mx-2 w-[calc(100%+1rem)] md:order-none md:mx-0 md:ml-6 md:w-auto">
+      <ul class="flex items-center justify-between pb-1.5 text-sm text-fg-muted md:justify-start md:gap-1 md:pb-0">
         {
           navItems.map((item) => (
             <li>
-              <a href={item.href} class="rounded-md px-3 py-2 transition-colors hover:text-fg">
+              <a href={item.href} class="inline-flex min-h-10 items-center rounded-md px-2 transition-colors hover:text-fg sm:px-3">
                 {item.label}
               </a>
             </li>
