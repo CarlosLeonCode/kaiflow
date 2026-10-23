@@ -1,6 +1,6 @@
 {
   "name": "kaiflow",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "description": "Local-first time tracker you can fork and customize, by hand or with AI coding agents.",
