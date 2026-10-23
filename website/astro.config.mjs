@@ -4,11 +4,10 @@ import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "astro/config";
 
 /**
- * PLACEHOLDER: change `SITE` to the real production URL before deploying.
- * It drives canonical links, hreflang alternates, Open Graph URLs and the sitemap.
- * Keep `public/robots.txt` in sync with it.
+ * Production URL. It drives canonical links, hreflang alternates, Open Graph URLs and the
+ * sitemap. Keep `public/robots.txt` in sync with it.
  */
-const SITE = "https://kaiflow.example.com";
+const SITE = "https://clc-kaiflow.netlify.app";
 
 export default defineConfig({
   site: SITE,

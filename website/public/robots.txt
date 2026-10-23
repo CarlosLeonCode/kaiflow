@@ -1,5 +1,5 @@
 User-agent: *
 Allow: /
 
-# PLACEHOLDER domain: keep in sync with `SITE` in astro.config.mjs.
-Sitemap: https://kaiflow.example.com/sitemap-index.xml
+# Keep in sync with `SITE` in astro.config.mjs.
+Sitemap: https://clc-kaiflow.netlify.app/sitemap-index.xml

@@ -61,9 +61,9 @@ To reuse a server you already started, set `BASE_URL=http://localhost:1430`.
 
 ## Deploy
 
-The build output is plain static files in `website/dist/`. Before the first deploy, replace the
-placeholder domain `https://kaiflow.example.com` in `astro.config.mjs` (`SITE`) and in
-`public/robots.txt`.
+The build output is plain static files in `website/dist/`. The production domain is set in
+`astro.config.mjs` (`SITE`) and `public/robots.txt`; change both if you deploy elsewhere.
+Netlify reads its settings from `netlify.toml`.
 
 | Host | Settings |
 |---|---|
