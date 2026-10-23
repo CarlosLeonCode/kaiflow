@@ -178,6 +178,13 @@ equivalent; rely on the `windows-latest` CI job.
   goes to your terminal, and ad-hoc signed builds lose it on every rebuild. Test permissions
   with `scripts/dev-sign.sh` and a stable self-signed identity
   (`scripts/create-dev-identity.md`). Releases use the same idea (docs/release.md).
+- **A linker-signed bundle never gets Accessibility.** Without a signing identity Tauri leaves
+  the `.app` signed only by the linker (`codesign -dv` shows `linker-signed`, an identifier like
+  `kaiflow-<hash>` and `Info.plist=not bound`). TCC cannot match that to any grant, so titles
+  stay empty even when System Settings shows Kaiflow enabled. `tauri.conf.json` sets
+  `signingIdentity: "-"` so every bundle is a proper ad-hoc signature; CI overrides it with
+  `APPLE_SIGNING_IDENTITY`. Check with `codesign --verify --deep --strict` and the
+  `accessibility trusted=` line in `diagnostics.log`.
 - **`tauri build` may rewrite `src-tauri/Cargo.toml`** (the `tauri-build` features). Revert
   that hunk before committing.
 - **Tauri plugins stay on the 2.x line.** Do not upgrade any `tauri-plugin-*` to 3.x alphas;
