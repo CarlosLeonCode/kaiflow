@@ -39,10 +39,23 @@ test.describe("Settings", () => {
     await expect(about.getByText("https://github.com/CarlosLeonCode/kaiflow", { exact: true })).toBeVisible();
   });
 
+  test("shows privacy-safe diagnostics and copies them", async ({ page, context }) => {
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    await openSection(page, "Settings");
+    const panel = page.getByRole("region", { name: "Diagnostics" });
+    await panel.scrollIntoViewIfNeeded();
+    await expect(panel.getByText("Accessibility trusted")).toBeVisible();
+    await expect(panel.getByRole("list", { name: "Last title read per app" })).toContainText("ok via AXFocusedWindow");
+
+    await panel.getByRole("button", { name: "Copy diagnostics" }).click();
+    await expect(panel.getByText("Copied to the clipboard.")).toBeVisible();
+  });
+
   test("has no accessibility violations", async ({ page }) => {
     await openSection(page, "Settings");
     await expect(page.getByRole("radio", { name: "Dark" })).toBeVisible();
     await page.getByRole("region", { name: "About" }).scrollIntoViewIfNeeded();
+    await expect(page.getByRole("region", { name: "Diagnostics" })).toBeVisible();
     await expectNoA11yViolations(page);
   });
 });

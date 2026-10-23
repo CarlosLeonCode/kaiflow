@@ -21,6 +21,7 @@ use crossbeam_channel::{Receiver, select};
 use domain::{FocusSnapshot, PermissionState};
 
 use crate::activation::Activation;
+use crate::diagnostics::Diagnostics;
 use crate::idle::{IdleThreshold, IdleTracker};
 use crate::permission::state_from_trusted;
 
@@ -40,6 +41,12 @@ pub trait SamplerEnv: Send {
     /// states while switching are ignored). macOS relies on its notifications alone.
     fn poll_frontmost(&self) -> Option<Activation> {
         None
+    }
+    /// Whether this frontmost application means the user is away (macOS `loginwindow` on
+    /// the lock screen, the screen saver). Such an application never gets a tracked segment:
+    /// the sampler reports it as a screen lock instead of a focus change.
+    fn is_away(&self, _activation: &Activation) -> bool {
+        false
     }
 }
 
@@ -101,6 +108,9 @@ pub struct SamplerCore {
     /// Starts `true`: the engine assumes granted, so only a denial needs reporting at startup.
     trusted: bool,
     idle: IdleTracker,
+    /// The frontmost application is an "away" one (lock screen, screen saver).
+    away: bool,
+    diagnostics: Option<Diagnostics>,
 }
 
 impl SamplerCore {
@@ -110,11 +120,35 @@ impl SamplerCore {
             last_focus: None,
             trusted: true,
             idle: IdleTracker::new(threshold),
+            away: false,
+            diagnostics: None,
         }
+    }
+
+    /// Logs the lock/idle/permission signals this core emits (never focus snapshots).
+    #[must_use]
+    pub fn with_diagnostics(mut self, diagnostics: Diagnostics) -> Self {
+        self.diagnostics = Some(diagnostics);
+        self
     }
 
     /// Signals for one cycle: permission change, idle edge, then focus change.
     pub fn step(
+        &mut self,
+        env: &dyn SamplerEnv,
+        activations: impl IntoIterator<Item = Activation>,
+        now: domain::UtcMs,
+    ) -> Vec<SystemSignal> {
+        let out = self.decide(env, activations, now);
+        if let Some(diagnostics) = &self.diagnostics {
+            for signal in &out {
+                diagnostics.record_signal("sampler", signal, now);
+            }
+        }
+        out
+    }
+
+    fn decide(
         &mut self,
         env: &dyn SamplerEnv,
         activations: impl IntoIterator<Item = Activation>,
@@ -135,11 +169,29 @@ impl SamplerCore {
             out.push(SystemSignal::PermissionChanged(state_from_trusted(trusted)));
         }
 
-        if let Some(signal) = self.idle.observe(env.seconds_since_input(), now) {
+        let frontmost = self.frontmost.get();
+        let away = frontmost.as_ref().is_some_and(|a| env.is_away(a));
+
+        // The idle counter keeps running behind the lock screen, but its edges mean nothing
+        // there: typing the password must not count as "activity resumed" (the engine would
+        // treat it as an unlock and start tracking the lock screen).
+        let idle = self.idle.observe(env.seconds_since_input(), now);
+        if let Some(signal) = idle.filter(|_| !away) {
             out.push(signal);
         }
 
-        if let Some(activation) = self.frontmost.get() {
+        if away {
+            if !self.away {
+                self.away = true;
+                // Re-announce the next real focus even if it is the app from before the lock.
+                self.last_focus = None;
+                out.push(SystemSignal::ScreenLocked);
+            }
+            return out;
+        }
+        let leaving_away = std::mem::take(&mut self.away);
+
+        if let Some(activation) = frontmost {
             let title = if trusted {
                 env.window_title(&activation)
             } else {
@@ -154,6 +206,12 @@ impl SamplerCore {
                 self.last_focus = Some(focus.clone());
                 out.push(SystemSignal::Focus(Some(focus)));
             }
+        }
+        // After the focus, so the engine resumes with the app now in front (a focus while
+        // asleep-but-not-sleeping already counts as an unlock); harmless when the OS unlock
+        // notification arrived first.
+        if leaving_away {
+            out.push(SystemSignal::ScreenUnlocked);
         }
         out
     }
@@ -183,6 +241,13 @@ impl<E: SamplerEnv + 'static> Sampler<E> {
             clock,
             period: TICK,
         }
+    }
+
+    /// Logs the signals the sampler emits to `diagnostics`.
+    #[must_use]
+    pub fn with_diagnostics(mut self, diagnostics: Diagnostics) -> Self {
+        self.core = self.core.with_diagnostics(diagnostics);
+        self
     }
 
     /// Overrides the tick period (tests only need a short one).
@@ -250,6 +315,9 @@ impl<E: SamplerEnv> SamplerWindow<E> {
 impl<E: SamplerEnv> ActiveWindowProvider for SamplerWindow<E> {
     fn current(&self) -> Option<FocusSnapshot> {
         let activation = self.env.poll_frontmost().or_else(|| self.frontmost.get())?;
+        if self.env.is_away(&activation) {
+            return None;
+        }
         let title = if self.env.trusted() {
             self.env.window_title(&activation)
         } else {
@@ -293,6 +361,7 @@ mod tests {
         titles: Mutex<HashMap<i32, String>>,
         idle_ms: Arc<AtomicU64>,
         polled: Mutex<Option<Activation>>,
+        away: Mutex<Vec<String>>,
     }
 
     impl FakeEnv {
@@ -302,6 +371,7 @@ mod tests {
                 titles: Mutex::new(HashMap::new()),
                 idle_ms: Arc::new(AtomicU64::new(0)),
                 polled: Mutex::new(None),
+                away: Mutex::new(vec!["loginwindow".into()]),
             }
         }
         fn poll(&self, activation: Option<Activation>) {
@@ -324,6 +394,12 @@ mod tests {
         }
         fn poll_frontmost(&self) -> Option<Activation> {
             self.polled.lock().unwrap().clone()
+        }
+        fn is_away(&self, activation: &Activation) -> bool {
+            self.away
+                .lock()
+                .unwrap()
+                .contains(&activation.identity.bundle_id)
         }
     }
 
@@ -486,6 +562,69 @@ mod tests {
         env.poll(Some(act(9, "code")));
         let window = SamplerWindow::new(SharedFrontmost::new(Some(act(7, "mail"))), env);
         assert_eq!(window.current().unwrap().app_id, "code");
+    }
+
+    #[test]
+    fn an_away_app_is_reported_as_a_lock_once_and_never_as_focus() {
+        let env = FakeEnv::new();
+        env.title(7, "Inbox");
+        let mut core = core();
+        core.step(&env, [act(7, "mail")], UtcMs(0));
+        let out = core.step(&env, [act(1, "loginwindow")], UtcMs(2_000));
+        assert_eq!(out, vec![SystemSignal::ScreenLocked]);
+        assert!(core.step(&env, [], UtcMs(4_000)).is_empty());
+        assert!(
+            core.step(&env, [act(1, "loginwindow")], UtcMs(6_000))
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn idle_edges_are_dropped_while_away() {
+        let env = FakeEnv::new();
+        let mut core = core();
+        core.step(&env, [act(1, "loginwindow")], UtcMs(0));
+        env.idle_ms.store(301_000, Ordering::SeqCst);
+        assert!(core.step(&env, [], UtcMs(400_000)).is_empty());
+        // Typing the password on the lock screen is not "activity resumed".
+        env.idle_ms.store(0, Ordering::SeqCst);
+        assert!(core.step(&env, [], UtcMs(402_000)).is_empty());
+    }
+
+    #[test]
+    fn leaving_the_lock_screen_reports_the_app_then_the_unlock() {
+        let env = FakeEnv::new();
+        env.title(7, "Inbox");
+        let mut core = core();
+        core.step(&env, [act(7, "mail")], UtcMs(0));
+        core.step(&env, [act(1, "loginwindow")], UtcMs(2_000));
+        // Same app as before the lock: still announced, so the engine resumes with it.
+        let out = core.step(&env, [act(7, "mail")], UtcMs(4_000));
+        assert_eq!(out.len(), 2, "{out:?}");
+        assert_eq!(focus_of(&out[0]).app_id, "mail");
+        assert_eq!(out[1], SystemSignal::ScreenUnlocked);
+        assert!(core.step(&env, [], UtcMs(6_000)).is_empty());
+    }
+
+    #[test]
+    fn the_window_provider_never_reports_an_away_app() {
+        let env = FakeEnv::new();
+        let window = SamplerWindow::new(SharedFrontmost::new(Some(act(1, "loginwindow"))), env);
+        assert_eq!(window.current(), None);
+    }
+
+    #[test]
+    fn emitted_signals_are_logged_without_focus() {
+        let dir = tempfile::tempdir().unwrap();
+        let diagnostics = Diagnostics::in_dir(dir.path());
+        let env = FakeEnv::new();
+        let mut core = core().with_diagnostics(diagnostics);
+        core.step(&env, [act(7, "mail")], UtcMs(0));
+        core.step(&env, [act(1, "loginwindow")], UtcMs(2_000));
+        let log =
+            std::fs::read_to_string(dir.path().join(crate::diagnostics::DIAGNOSTICS_FILE)).unwrap();
+        assert_eq!(log.lines().count(), 1, "{log}");
+        assert!(log.contains("signal source=sampler screen_locked"));
     }
 
     #[derive(Default, Clone)]

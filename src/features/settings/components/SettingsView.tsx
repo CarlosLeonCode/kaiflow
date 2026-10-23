@@ -58,6 +58,8 @@ interface Props {
   ai?: ReactNode;
   /** Slot after the settings: the updates panel. */
   updates?: ReactNode;
+  /** Slot after About: privacy-safe tracking diagnostics. */
+  diagnostics?: ReactNode;
 }
 
 /** Settings section (presentational): every control saves as soon as it changes. */
@@ -74,6 +76,7 @@ export function SettingsView({
   data,
   ai,
   updates,
+  diagnostics,
 }: Props) {
   const { os } = platform;
   const words = platformWords(os);
@@ -387,6 +390,8 @@ export function SettingsView({
             license={APP_INFO.license}
             repositoryUrl={APP_INFO.repositoryUrl}
           />
+
+          {diagnostics}
         </div>
       )}
     </Page>

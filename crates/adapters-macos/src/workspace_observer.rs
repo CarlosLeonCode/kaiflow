@@ -82,9 +82,6 @@ pub fn identity_from_parts(bundle_id: Option<String>, name: Option<String>) -> O
 
 #[cfg(target_os = "macos")]
 pub use mac::WorkspaceObserver;
-/// Shared with `lock.rs`: registers a block observer on a notification center.
-#[cfg(target_os = "macos")]
-pub(crate) use mac::{Token, observe};
 
 #[cfg(target_os = "macos")]
 mod mac {
@@ -110,7 +107,7 @@ mod mac {
         identity_from_parts, power_signal,
     };
 
-    pub(crate) type Token = Retained<ProtocolObject<dyn NSObjectProtocol>>;
+    type Token = Retained<ProtocolObject<dyn NSObjectProtocol>>;
 
     /// Reads `(pid, identity)` from a `NSRunningApplication`; `None` if it is not trackable.
     fn read_app(app: &NSRunningApplication) -> Option<(i32, AppIdentity)> {
@@ -239,7 +236,7 @@ mod mac {
         }
     }
 
-    pub(crate) fn observe(
+    fn observe(
         center: &NSNotificationCenter,
         name: &objc2_foundation::NSNotificationName,
         handler: impl Fn(&NSNotification) + 'static,

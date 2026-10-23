@@ -36,6 +36,7 @@
     "allow-settings-get",
     "allow-settings-update",
     "allow-platform-info",
+    "allow-diagnostics-get",
     "allow-permission-status",
     "allow-permission-request",
     "allow-permission-open-settings",

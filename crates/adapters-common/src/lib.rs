@@ -4,6 +4,7 @@
 //! touches an OS API, so all of it is unit tested on every platform.
 
 pub mod activation;
+pub mod diagnostics;
 pub mod fanout;
 pub mod files;
 pub mod idle;

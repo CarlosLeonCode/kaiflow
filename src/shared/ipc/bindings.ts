@@ -43,6 +43,8 @@ export const commands = {
 	settingsUpdate: (patch: SettingsPatchDto) => typedError<SettingsDto, AppError>(__TAURI_INVOKE("settings_update", { patch })),
 	/**  OS and display session, so the UI words permissions and shortcuts for this platform. */
 	platformInfo: () => typedError<PlatformInfoDto, AppError>(__TAURI_INVOKE("platform_info")),
+	/**  Privacy-safe diagnostics (AX trust, title read status per app, lock/sleep log). */
+	diagnosticsGet: () => typedError<DiagnosticsDto, AppError>(__TAURI_INVOKE("diagnostics_get")),
 	permissionStatus: () => typedError<PermissionStateDto, AppError>(__TAURI_INVOKE("permission_status")),
 	permissionRequest: () => typedError<null, AppError>(__TAURI_INVOKE("permission_request")),
 	permissionOpenSettings: () => typedError<null, AppError>(__TAURI_INVOKE("permission_open_settings")),
@@ -428,6 +430,19 @@ export type DegradedReasonDto =
 
 /**  Destructive operation to confirm with `prepare_delete`. */
 export type DeleteOpDto = { kind: "range"; range: RangeDto } | { kind: "older_than_days"; days: number } | { kind: "all" };
+
+/**  Privacy-safe tracking diagnostics for Settings > About (`diagnostics_get`). */
+export type DiagnosticsDto = {
+	/**
+	 *  Accessibility trust as the sampler last saw it; `None` before the first check or on
+	 *  platforms without one.
+	 */
+	accessibility_trusted: boolean | null,
+	/**  Most recent first. */
+	title_reads: TitleReadDto[],
+	/**  Full text for "Copy diagnostics": status plus the rolling `diagnostics.log`. */
+	report: string,
+};
 
 /**  Linux display server the tracker observes through; `None` elsewhere and without a display. */
 export type DisplaySessionDto = "x11" | "wayland";
@@ -961,6 +976,21 @@ export type TimelineItemDto = {
 	source: SegmentSourceDto,
 	end_reason: EndReasonDto | null,
 	open: boolean,
+};
+
+/**  Last window-title read of one application (`diagnostics_get`). Never contains a title. */
+export type TitleReadDto = {
+	/**  Bundle id (macOS) or application id. */
+	app_id: string,
+	/**  The title was read. */
+	ok: boolean,
+	/**
+	 *  How it went, e.g. `ok via AXFocusedWindow` or `error -25211 (kAXErrorAPIDisabled) at
+	 *  AXFocusedWindow`.
+	 */
+	status: string,
+	/**  UTC milliseconds. */
+	at: number,
 };
 
 export type TitleTotalDto = {

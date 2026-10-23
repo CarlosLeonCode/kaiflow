@@ -807,6 +807,19 @@ export function installMockBackend(options: MockOptions = {}): void {
       return settings;
     },
     platform_info: () => platform,
+    diagnostics_get: () => ({
+      accessibility_trusted: platform.needs_accessibility_permission ? permission === "granted" : null,
+      title_reads: [
+        { app_id: "com.apple.Safari", ok: true, status: "ok via AXFocusedWindow", at: Date.now() - 60_000 },
+        {
+          app_id: "com.tinyspeck.slackmacgap",
+          ok: false,
+          status: "error -25212 (kAXErrorNoValue) at AXWindows",
+          at: Date.now() - 120_000,
+        },
+      ],
+      report: "Kaiflow diagnostics\nversion: mock\naccessibility trusted: yes\n",
+    }),
     permission_status: () => permission,
     permission_request: () => null,
     permission_open_settings: () => {

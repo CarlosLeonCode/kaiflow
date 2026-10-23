@@ -621,6 +621,23 @@ mod tests {
         assert!(m.on(Event::ActivityResumed, t(12)).is_empty());
     }
 
+    /// The macOS sampler reports the lock screen (`loginwindow` in front) as `ScreenLocked`
+    /// and, on leaving it, the next app's focus followed by `ScreenUnlocked`; together with
+    /// the OS notifications (duplicates included) no segment is opened while locked.
+    #[test]
+    fn lock_screen_sequence_from_the_sampler_tracks_nothing_while_locked() {
+        let mut m = running();
+        let fx = without_status(m.on(Event::ScreenLocked, t(10)));
+        assert_eq!(fx, vec![close_fx(10, EndReason::Lock)]);
+        // The OS notification arrives as well: still locked, nothing opens.
+        assert!(without_status(m.on(Event::ScreenLocked, t(11))).is_empty());
+        assert!(without_status(m.on(Event::Heartbeat, t(600))).is_empty());
+        let fx = without_status(m.on(Event::Focus(Some(f("b"))), t(8_000)));
+        assert_eq!(fx, vec![open("b", 8_000)]);
+        assert!(without_status(m.on(Event::ScreenUnlocked, t(8_000))).is_empty());
+        assert!(without_status(m.on(Event::ScreenUnlocked, t(8_001))).is_empty());
+    }
+
     #[test]
     fn heartbeat_jump_closes_at_last_tick_and_reopens() {
         let mut m = running();

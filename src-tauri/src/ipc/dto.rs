@@ -168,6 +168,32 @@ pub enum DisplaySessionDto {
     Wayland,
 }
 
+/// Last window-title read of one application (`diagnostics_get`). Never contains a title.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct TitleReadDto {
+    /// Bundle id (macOS) or application id.
+    pub app_id: String,
+    /// The title was read.
+    pub ok: bool,
+    /// How it went, e.g. `ok via AXFocusedWindow` or `error -25211 (kAXErrorAPIDisabled) at
+    /// AXFocusedWindow`.
+    pub status: String,
+    /// UTC milliseconds.
+    pub at: i64,
+}
+
+/// Privacy-safe tracking diagnostics for Settings > About (`diagnostics_get`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct DiagnosticsDto {
+    /// Accessibility trust as the sampler last saw it; `None` before the first check or on
+    /// platforms without one.
+    pub accessibility_trusted: Option<bool>,
+    /// Most recent first.
+    pub title_reads: Vec<TitleReadDto>,
+    /// Full text for "Copy diagnostics": status plus the rolling `diagnostics.log`.
+    pub report: String,
+}
+
 /// What the UI needs to know about the platform (`platform_info`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct PlatformInfoDto {

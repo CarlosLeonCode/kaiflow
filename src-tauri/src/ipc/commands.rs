@@ -15,11 +15,12 @@ use super::ai_dto::{
 };
 use super::dto::{
     ActivityDto, ApplyPresetResultDto, BackupReportDto, BackupStatusDto, DashboardDto, DeleteOpDto,
-    FocusCardActionDto, FocusSessionDto, FocusStartDto, FocusStatusDto, GoalDto, GoalStatusDto,
-    IdleGapDto, IdleResolutionDto, PermissionStateDto, PlatformInfoDto, PresetDto, PrivacyModeDto,
-    PrivacyRulesDto, ProductivityDto, RangeDto, ReportDto, RestorePreviewDto, RestoreResultDto,
-    RetentionImpactDto, RuleDto, RuleInputDto, RulePreviewDto, RuleSpecDto, SettingsDto,
-    SettingsPatchDto, SuggestionDto, TimelineItemDto, TrackingStatusDto, UpdateInfoDto,
+    DiagnosticsDto, FocusCardActionDto, FocusSessionDto, FocusStartDto, FocusStatusDto, GoalDto,
+    GoalStatusDto, IdleGapDto, IdleResolutionDto, PermissionStateDto, PlatformInfoDto, PresetDto,
+    PrivacyModeDto, PrivacyRulesDto, ProductivityDto, RangeDto, ReportDto, RestorePreviewDto,
+    RestoreResultDto, RetentionImpactDto, RuleDto, RuleInputDto, RulePreviewDto, RuleSpecDto,
+    SettingsDto, SettingsPatchDto, SuggestionDto, TimelineItemDto, TrackingStatusDto,
+    UpdateInfoDto,
 };
 use super::events::{DataChanged, DataKindDto, FocusChanged};
 use crate::composition::AppState;
@@ -277,6 +278,13 @@ pub async fn settings_update(
 #[specta::specta]
 pub async fn platform_info(state: Shared<'_>) -> Result<PlatformInfoDto, AppError> {
     run(state, |s| Ok(s.platform_info())).await
+}
+
+/// Privacy-safe diagnostics (AX trust, title read status per app, lock/sleep log).
+#[tauri::command]
+#[specta::specta]
+pub async fn diagnostics_get(state: Shared<'_>) -> Result<DiagnosticsDto, AppError> {
+    run(state, |s| Ok(s.diagnostics_get())).await
 }
 
 #[tauri::command]

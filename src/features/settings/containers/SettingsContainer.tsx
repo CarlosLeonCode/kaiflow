@@ -16,6 +16,7 @@ import { AiSettingsPanelContainer } from "@/features/review/containers/AiSetting
 import { UpdatesPanelContainer } from "@/features/updates/containers/UpdateContainers";
 
 import { SettingsView } from "../components/SettingsView";
+import { DiagnosticsPanelContainer } from "./DiagnosticsPanelContainer";
 
 function shortcutMessage(shortcut: string, reason: string): string {
   return `${shortcut} is unavailable: ${reason}. Choose another combination.`;
@@ -59,6 +60,7 @@ export function SettingsContainer() {
       data={<DataPanelContainer />}
       ai={<AiSettingsPanelContainer />}
       updates={<UpdatesPanelContainer />}
+      diagnostics={<DiagnosticsPanelContainer />}
     />
   );
 }

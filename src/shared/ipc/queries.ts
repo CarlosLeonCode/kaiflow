@@ -68,6 +68,17 @@ export function usePlatformQuery() {
   });
 }
 
+/**
+ * Privacy-safe tracking diagnostics: Accessibility trust, last window-title read status per
+ * app (bundle ids only, never titles) and the rolling log. Refetched on demand.
+ */
+export function useDiagnosticsQuery() {
+  return useQuery({
+    queryKey: queryKeys.diagnostics,
+    queryFn: () => unwrap(commands.diagnosticsGet()),
+  });
+}
+
 /** Live Accessibility state; refreshed by `permission-changed` and when the window regains focus. */
 export function usePermissionQuery() {
   return useQuery({

@@ -16,12 +16,12 @@ use crate::composition::AppState;
 use crate::error::AppError;
 use crate::ipc::dto::{
     ActivityDto, ApplyPresetResultDto, BackupReportDto, BackupStatusDto, DashboardDto, DeleteOpDto,
-    FocusCardActionDto, FocusSessionDto, FocusStartDto, FocusStatusDto, GoalDto, GoalStatusDto,
-    IdleGapDto, IdleResolutionDto, PermissionStateDto, PlatformInfoDto, PresetDto, PrivacyModeDto,
-    PrivacyRulesDto, ProductivityDto, RangeDto, ReportDto, RestorePreviewDto, RestoreResultDto,
-    RetentionImpactDto, RuleDto, RuleInputDto, RulePreviewDto, RuleSpecDto, SettingsDto,
-    SettingsPatchDto, ShortcutStatusDto, SuggestionDto, TimelineItemDto, TrackingStateDto,
-    TrackingStatusDto,
+    DiagnosticsDto, FocusCardActionDto, FocusSessionDto, FocusStartDto, FocusStatusDto, GoalDto,
+    GoalStatusDto, IdleGapDto, IdleResolutionDto, PermissionStateDto, PlatformInfoDto, PresetDto,
+    PrivacyModeDto, PrivacyRulesDto, ProductivityDto, RangeDto, ReportDto, RestorePreviewDto,
+    RestoreResultDto, RetentionImpactDto, RuleDto, RuleInputDto, RulePreviewDto, RuleSpecDto,
+    SettingsDto, SettingsPatchDto, ShortcutStatusDto, SuggestionDto, TimelineItemDto, TitleReadDto,
+    TrackingStateDto, TrackingStatusDto,
 };
 
 impl AppState {
@@ -525,6 +525,33 @@ impl AppState {
         self.platform
     }
 
+    pub fn diagnostics_get(&self) -> DiagnosticsDto {
+        let diagnostics = self.diagnostics();
+        let snapshot = diagnostics.snapshot();
+        let header = [
+            format!("version: {}", env!("CARGO_PKG_VERSION")),
+            format!("os: {} {}", std::env::consts::OS, std::env::consts::ARCH),
+            format!(
+                "permission (provider): {:?}",
+                self.permission.accessibility()
+            ),
+        ];
+        DiagnosticsDto {
+            accessibility_trusted: snapshot.trusted,
+            title_reads: snapshot
+                .title_reads
+                .iter()
+                .map(|read| TitleReadDto {
+                    app_id: read.app_id.clone(),
+                    ok: read.probe.is_ok(),
+                    status: read.probe.describe(),
+                    at: read.at.0,
+                })
+                .collect(),
+            report: diagnostics.report(&header),
+        }
+    }
+
     pub fn permission_status(&self) -> PermissionStateDto {
         self.permission.accessibility().into()
     }
@@ -650,6 +677,40 @@ mod tests {
             from: now - 3_600_000,
             to: now + 3_600_000,
         }
+    }
+
+    #[test]
+    fn diagnostics_report_trust_title_status_and_the_log_without_titles() {
+        use adapters_common::diagnostics::{Diagnostics, TitleProbe};
+        use application::ports::SystemSignal;
+        use domain::UtcMs;
+        let rig = rig();
+        // Before the shell installs a log, an in-memory one answers.
+        assert_eq!(rig.state.diagnostics_get().accessibility_trusted, None);
+
+        let log_dir = tempfile::tempdir().unwrap();
+        let diagnostics = Diagnostics::in_dir(log_dir.path());
+        rig.state.set_diagnostics(diagnostics.clone());
+        diagnostics.record_trust(true, UtcMs(0));
+        diagnostics.record_title(
+            "com.apple.Safari",
+            TitleProbe::Read {
+                via: "AXFocusedWindow",
+            },
+            UtcMs(1_000),
+        );
+        diagnostics.record_signal("os", &SystemSignal::ScreenLocked, UtcMs(2_000));
+        diagnostics.record_signal("os", &SystemSignal::Focus(Some(safari())), UtcMs(3_000));
+
+        let dto = rig.state.diagnostics_get();
+        assert_eq!(dto.accessibility_trusted, Some(true));
+        assert_eq!(dto.title_reads.len(), 1);
+        assert!(dto.title_reads[0].ok);
+        assert_eq!(dto.title_reads[0].status, "ok via AXFocusedWindow");
+        assert!(dto.report.contains("accessibility trusted: yes"));
+        assert!(dto.report.contains("signal source=os screen_locked"));
+        assert!(!dto.report.contains("Docs"), "a window title leaked");
+        rig.state.shutdown();
     }
 
     #[test]

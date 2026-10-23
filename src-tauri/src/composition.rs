@@ -9,6 +9,7 @@ use std::thread::JoinHandle;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use adapters_ai::HttpAiProvider;
+use adapters_common::diagnostics::Diagnostics;
 use adapters_common::files::FsFileSink;
 use adapters_common::idle::IdleThreshold;
 use adapters_common::secrets::KeyringSecretStore;
@@ -185,6 +186,8 @@ pub struct AppState {
     pub idle_policy: IdlePolicy,
     /// Installed by the shell after composition (it needs the `AppHandle`).
     applier: OnceLock<Arc<dyn SettingsApplier>>,
+    /// Privacy-safe adapter log; installed by the shell (in memory until then).
+    diagnostics: OnceLock<Diagnostics>,
     background: Mutex<Option<Background>>,
     sampler: Mutex<Option<SamplerLauncher>>,
 }
@@ -305,6 +308,7 @@ pub fn compose(
         idle_threshold: providers.idle_threshold,
         idle_policy,
         applier: OnceLock::new(),
+        diagnostics: OnceLock::new(),
         background: Mutex::new(None),
         sampler: Mutex::new(providers.sampler),
     };
@@ -336,6 +340,17 @@ impl AppState {
 
     pub fn applier(&self) -> Option<&Arc<dyn SettingsApplier>> {
         self.applier.get()
+    }
+
+    /// The diagnostics log can be installed once; a second call is ignored.
+    pub fn set_diagnostics(&self, diagnostics: Diagnostics) {
+        let _ = self.diagnostics.set(diagnostics);
+    }
+
+    /// The installed log, or an empty in-memory one before the shell installs it (never
+    /// initialized here, so a later `set_diagnostics` still takes effect).
+    pub fn diagnostics(&self) -> Diagnostics {
+        self.diagnostics.get().cloned().unwrap_or_default()
     }
 
     pub fn default_shortcut() -> SharedShortcut {

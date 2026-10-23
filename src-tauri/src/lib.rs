@@ -86,8 +86,10 @@ pub fn run() {
             let data_dir = app.path().app_data_dir()?;
             carry_over_legacy_data(&data_dir);
             let shortcut = AppState::default_shortcut();
+            // Privacy-safe adapter log (never window titles): `diagnostics.log` next to the DB.
+            let diagnostics = adapters_common::diagnostics::Diagnostics::in_dir(&data_dir);
             // `setup` runs on the main thread, where the AppKit observers must be created.
-            let providers = platform::providers(&handle);
+            let providers = platform::providers(&handle, &diagnostics);
             let degraded_reason = providers.permission.degraded_reason().into();
             let state = Arc::new(compose(
                 &data_dir.join(DB_FILE),
@@ -100,6 +102,7 @@ pub fn run() {
                 providers,
                 AiPorts::native(),
             )?);
+            state.set_diagnostics(diagnostics);
             let settings = state.commands.get_settings()?;
             app.manage(state.clone());
             app.manage(updater::UpdaterState::default());

@@ -7,6 +7,8 @@ export const queryKeys = {
   permission: ["permission"] as const,
   /** OS and display session; fixed for the life of the process. */
   platform: ["platform"] as const,
+  /** Privacy-safe tracking diagnostics (Settings > About). */
+  diagnostics: ["diagnostics"] as const,
   activities: ["activities"] as const,
   rules: ["rules"] as const,
   presets: ["presets"] as const,

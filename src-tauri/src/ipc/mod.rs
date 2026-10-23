@@ -50,6 +50,7 @@ pub fn builder() -> Builder<Wry> {
             commands::settings_get,
             commands::settings_update,
             commands::platform_info,
+            commands::diagnostics_get,
             commands::permission_status,
             commands::permission_request,
             commands::permission_open_settings,

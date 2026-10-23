@@ -4,6 +4,7 @@
 //! from `adapters-common`. The no-op placeholders remain only as a last resort (unsupported
 //! OS, or macOS when not called on the main thread).
 
+use adapters_common::diagnostics::Diagnostics;
 use application::ports::Notifier;
 use tauri::{AppHandle, Wry};
 
@@ -12,9 +13,11 @@ use crate::notifications::{SystemNotifier, TauriToaster};
 
 /// Providers for the running platform. Must be called on the main thread: the AppKit
 /// observers are created and kept alive here (the other platforms start their own threads).
-pub fn providers(app: &AppHandle<Wry>) -> Providers {
+/// `diagnostics` receives the privacy-safe adapter log (macOS: AX trust, title read status,
+/// lock/sleep events).
+pub fn providers(app: &AppHandle<Wry>, diagnostics: &Diagnostics) -> Providers {
     let notifier: Box<dyn Notifier> = Box::new(SystemNotifier::new(TauriToaster::new(app.clone())));
-    native(notifier).unwrap_or_else(|| {
+    native(notifier, diagnostics).unwrap_or_else(|| {
         eprintln!(
             "no native adapters (unsupported OS or not on the main thread): tracking is idle"
         );
@@ -27,22 +30,22 @@ pub fn providers(app: &AppHandle<Wry>) -> Providers {
 
 /// `None` when not on the main thread (observers cannot be installed from elsewhere).
 #[cfg(target_os = "macos")]
-fn native(notifier: Box<dyn Notifier>) -> Option<Providers> {
-    mac::providers(notifier)
+fn native(notifier: Box<dyn Notifier>, diagnostics: &Diagnostics) -> Option<Providers> {
+    mac::providers(notifier, diagnostics)
 }
 
 #[cfg(windows)]
-fn native(notifier: Box<dyn Notifier>) -> Option<Providers> {
+fn native(notifier: Box<dyn Notifier>, _diagnostics: &Diagnostics) -> Option<Providers> {
     Some(win::providers(notifier))
 }
 
 #[cfg(target_os = "linux")]
-fn native(notifier: Box<dyn Notifier>) -> Option<Providers> {
+fn native(notifier: Box<dyn Notifier>, _diagnostics: &Diagnostics) -> Option<Providers> {
     Some(linux::providers(notifier))
 }
 
 #[cfg(not(any(target_os = "macos", windows, target_os = "linux")))]
-fn native(_notifier: Box<dyn Notifier>) -> Option<Providers> {
+fn native(_notifier: Box<dyn Notifier>, _diagnostics: &Diagnostics) -> Option<Providers> {
     None
 }
 
@@ -50,12 +53,13 @@ fn native(_notifier: Box<dyn Notifier>) -> Option<Providers> {
 mod mac {
     use std::sync::Arc;
 
+    use adapters_common::diagnostics::Diagnostics;
     use adapters_macos::idle::IdleThreshold;
     use adapters_macos::lock::LockObserver;
     use adapters_macos::permission::MacPermissionProvider;
     use adapters_macos::sampler::{MacEnv, Sampler, SamplerWindow, SharedFrontmost};
     use adapters_macos::workspace_observer::WorkspaceObserver;
-    use application::ports::{Notifier, PowerEventsProvider, SystemSignal};
+    use application::ports::{Clock, Notifier, PowerEventsProvider, SystemSignal};
     use crossbeam_channel::Sender;
     use objc2::MainThreadMarker;
 
@@ -65,17 +69,20 @@ mod mac {
     struct MacPower {
         workspace: &'static WorkspaceObserver,
         lock: &'static LockObserver,
+        diagnostics: Diagnostics,
     }
 
     impl PowerEventsProvider for MacPower {
         fn subscribe(&self, tx: Sender<SystemSignal>) {
+            // Logged on a helper thread, so the main-thread observers never do file I/O.
+            let tx = self.diagnostics.forwarding("os", tx, || SystemClock.now());
             self.workspace.subscribe(tx.clone());
             self.lock.subscribe(tx);
         }
     }
 
     /// `None` when not on the main thread (observers cannot be installed from elsewhere).
-    pub fn providers(notifier: Box<dyn Notifier>) -> Option<Providers> {
+    pub fn providers(notifier: Box<dyn Notifier>, diagnostics: &Diagnostics) -> Option<Providers> {
         let mtm = MainThreadMarker::new()?;
 
         // The observers must outlive `setup`: dropping them removes the notification
@@ -86,17 +93,23 @@ mod mac {
 
         let frontmost = SharedFrontmost::new(workspace.frontmost(mtm));
         let threshold = IdleThreshold::default();
+        let env = MacEnv::new(diagnostics.clone());
         let sampler = Sampler::new(
-            MacEnv,
+            env.clone(),
             frontmost.clone(),
             threshold.clone(),
             workspace.activations(),
             Box::new(SystemClock),
-        );
+        )
+        .with_diagnostics(diagnostics.clone());
 
         Some(Providers {
-            window: Box::new(SamplerWindow::new(frontmost, MacEnv)),
-            power: Box::new(MacPower { workspace, lock }),
+            window: Box::new(SamplerWindow::new(frontmost, env)),
+            power: Box::new(MacPower {
+                workspace,
+                lock,
+                diagnostics: diagnostics.clone(),
+            }),
             permission: Arc::new(MacPermissionProvider::new()),
             notifier,
             idle_threshold: threshold,
