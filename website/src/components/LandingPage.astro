@@ -3,6 +3,7 @@ import { getContent, type Locale } from "../i18n";
 import Base from "../layouts/Base.astro";
 import Footer from "./Footer.astro";
 import Header from "./Header.astro";
+import SeasonalAmbience from "./SeasonalAmbience.astro";
 import Download from "./sections/Download.astro";
 import Faq from "./sections/Faq.astro";
 import Features from "./sections/Features.astro";
@@ -27,4 +28,5 @@ const t = getContent(locale);
     <Faq t={t} />
   </main>
   <Footer locale={locale} />
+  <SeasonalAmbience />
 </Base>

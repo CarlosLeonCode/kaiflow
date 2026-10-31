@@ -1,0 +1,38 @@
+---
+/*
+ * Seasonal background ambience (Halloween, Christmas, Valentine's). Client only: nothing is
+ * rendered on the server, and outside a season, or with reduced motion, no canvas is created.
+ * Preview with `?season=halloween|christmas|valentine`, or turn it off with `?season=none`.
+ */
+---
+
+<script>
+  import { currentSeason } from "../lib/season";
+
+  // The renderer is a separate chunk, so off-season visitors never download it.
+  const season = currentSeason(location.search);
+  if (season) {
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let unmount: (() => void) | null = null;
+    let mounting = false;
+    const sync = async () => {
+      if (reduceMotion.matches) {
+        unmount?.();
+        unmount = null;
+        return;
+      }
+      if (unmount || mounting) return;
+      mounting = true;
+      const { mountAmbience } = await import("../lib/ambience");
+      mounting = false;
+      if (!reduceMotion.matches && !unmount) unmount = mountAmbience(season);
+    };
+    // Start after load so the ambience never competes with the page and the hero video.
+    const begin = () => {
+      void sync();
+      reduceMotion.addEventListener("change", () => void sync());
+    };
+    if (document.readyState === "complete") begin();
+    else window.addEventListener("load", begin, { once: true });
+  }
+</script>

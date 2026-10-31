@@ -3,6 +3,7 @@ import { getContent, type Locale } from "../i18n";
 import { LINKS } from "../lib/links";
 import LanguageSwitcher from "./LanguageSwitcher.astro";
 import Logo from "./Logo.astro";
+import SeasonalBadge from "./SeasonalBadge.astro";
 
 interface Props {
   locale: Locale;
@@ -25,6 +26,7 @@ const navItems = [
     <a href={home} class="flex h-14 shrink-0 items-center md:h-auto" aria-label={t.a11y.home}>
       <Logo size={28} wordmark class="text-[16px]" />
     </a>
+    <SeasonalBadge />
 
     <nav aria-label={t.a11y.primaryNav} class="order-last -mx-2 w-[calc(100%+1rem)] md:order-none md:mx-0 md:ml-6 md:w-auto">
       <ul class="flex items-center justify-between pb-1.5 text-sm text-fg-muted md:justify-start md:gap-1 md:pb-0">

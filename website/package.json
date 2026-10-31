@@ -13,6 +13,7 @@
     "build": "astro build",
     "preview": "astro preview",
     "check": "astro check",
+    "test:season": "node --test scripts/season.test.mjs",
     "screenshots": "node scripts/screenshots.mjs",
     "og": "node scripts/og-image.mjs"
   },

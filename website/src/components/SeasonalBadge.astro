@@ -1,0 +1,147 @@
+---
+/*
+ * A small seasonal illustration next to the logo in the header (a pumpkin with ghosts, a tree,
+ * hearts). Decorative only. The season is resolved on the client, like the background ambience,
+ * so each one lives in an inert <template> until it is cloned in. Motion is gentle and turns off
+ * with reduced motion; the illustration itself stays.
+ */
+const GHOST = "M0 11V4.5a4.5 4.5 0 0 1 9 0V11l-1.5-1.4L6 11l-1.5-1.4L3 11l-1.5-1.4Z";
+const HEART =
+  "M12 21s-7.5-4.6-9.6-9.2C.9 8.4 2.9 4.5 6.6 4.5c2.2 0 3.7 1.2 5.4 3.2 1.7-2 3.2-3.2 5.4-3.2 3.7 0 5.7 3.9 4.2 7.3C19.5 16.4 12 21 12 21Z";
+---
+
+<span data-season-badge class="season-badge hidden shrink-0 items-center" aria-hidden="true"></span>
+
+<template data-season-template="halloween">
+  <svg viewBox="0 0 48 32" xmlns="http://www.w3.org/2000/svg" focusable="false">
+    <g class="float">
+      <g transform="translate(3 5)">
+        <path d={GHOST} fill="#fff" stroke="currentColor" stroke-opacity="0.35" stroke-width="0.8" />
+        <circle cx="3.1" cy="4.6" r="0.8" fill="#1d1d1f" />
+        <circle cx="5.9" cy="4.6" r="0.8" fill="#1d1d1f" />
+      </g>
+    </g>
+    <g class="float float-late">
+      <g transform="translate(37 2) scale(0.85)">
+        <path d={GHOST} fill="#fff" stroke="currentColor" stroke-opacity="0.35" stroke-width="0.9" />
+        <circle cx="3.1" cy="4.6" r="0.8" fill="#1d1d1f" />
+        <circle cx="5.9" cy="4.6" r="0.8" fill="#1d1d1f" />
+      </g>
+    </g>
+    <path d="M23.2 14.5c0-2.2.6-3.8 2.1-4.9l1.2 1c-1 .9-1.5 2.1-1.5 3.9Z" fill="#4f7a2a" />
+    <ellipse cx="19.5" cy="22" rx="6.5" ry="8.2" fill="#e2691a" />
+    <ellipse cx="28.5" cy="22" rx="6.5" ry="8.2" fill="#e2691a" />
+    <ellipse cx="24" cy="22" rx="5.2" ry="8.6" fill="#f2862c" />
+    <path d="M19.6 18.6l2 3.1h-4Zm8.8 0l2 3.1h-4Z" fill="#3b1f0b" />
+    <path d="M18.8 24.2c3.2 3.2 7.2 3.2 10.4 0-3.2 1.5-7.2 1.5-10.4 0Z" fill="#3b1f0b" />
+  </svg>
+</template>
+
+<template data-season-template="christmas">
+  <svg viewBox="0 0 48 32" xmlns="http://www.w3.org/2000/svg" focusable="false">
+    <circle class="drift" cx="9" cy="9" r="1.3" fill="#a9bfd4" />
+    <circle class="drift drift-late" cx="40" cy="13" r="1.1" fill="#a9bfd4" />
+    <circle class="drift" cx="12" cy="23" r="0.9" fill="#a9bfd4" />
+    <circle class="drift drift-late" cx="38" cy="25" r="1.3" fill="#a9bfd4" />
+    <path d="M24 5.5l6.5 8.5h-2.8l4.8 6.8h-3.3l4.3 6.2H14.5l4.3-6.2h-3.3l4.8-6.8h-2.8Z" fill="#2f7d4f" />
+    <rect x="22.5" y="27" width="3" height="3.5" rx="0.5" fill="#7a4a26" />
+    <circle cx="21.6" cy="16.5" r="1.2" fill="#e0452b" />
+    <circle cx="26.8" cy="20.8" r="1.2" fill="#f2b632" />
+    <circle cx="21" cy="24.5" r="1.2" fill="#f2b632" />
+    <circle cx="27.6" cy="25.4" r="1.1" fill="#e0452b" />
+    <path
+      class="twinkle"
+      d="M24 .8l1.1 2.3 2.5.3-1.9 1.7.5 2.5L24 6.4l-2.2 1.2.5-2.5-1.9-1.7 2.5-.3Z"
+      fill="#f2b632"
+    />
+  </svg>
+</template>
+
+<template data-season-template="valentine">
+  <svg viewBox="0 0 48 32" xmlns="http://www.w3.org/2000/svg" focusable="false">
+    <g class="float">
+      <path d={HEART} transform="translate(4 13) scale(0.42)" fill="#f27a9b" />
+    </g>
+    <g class="float float-late">
+      <path d={HEART} transform="translate(34 1) scale(0.5)" fill="#f27a9b" />
+    </g>
+    <g class="beat">
+      <path d={HEART} transform="translate(12 5.5) scale(1)" fill="#e0452b" />
+    </g>
+  </svg>
+</template>
+
+<script>
+  import { currentSeason } from "../lib/season";
+
+  const season = currentSeason(location.search);
+  const slot = document.querySelector<HTMLElement>("[data-season-badge]");
+  const template = season && document.querySelector<HTMLTemplateElement>(`[data-season-template="${season}"]`);
+  if (slot && template) {
+    slot.append(template.content.cloneNode(true));
+    slot.classList.replace("hidden", "inline-flex");
+  }
+</script>
+
+<style>
+  .season-badge :global(svg) {
+    width: 48px;
+    height: 32px;
+    overflow: visible;
+    color: var(--fg);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .season-badge :global(.float),
+    .season-badge :global(.drift),
+    .season-badge :global(.twinkle),
+    .season-badge :global(.beat) {
+      transform-box: fill-box;
+      transform-origin: center;
+    }
+    .season-badge :global(.float) {
+      animation: badge-float 3.2s ease-in-out infinite;
+    }
+    .season-badge :global(.drift) {
+      animation: badge-drift 4s ease-in-out infinite;
+    }
+    .season-badge :global(.float-late),
+    .season-badge :global(.drift-late) {
+      animation-delay: -1.6s;
+    }
+    .season-badge :global(.twinkle) {
+      animation: badge-twinkle 2.4s ease-in-out infinite;
+    }
+    .season-badge :global(.beat) {
+      animation: badge-beat 1.8s ease-in-out infinite;
+    }
+  }
+
+  @keyframes badge-float {
+    50% {
+      transform: translateY(-2.5px);
+    }
+  }
+  @keyframes badge-drift {
+    50% {
+      transform: translate(1px, 2.5px);
+      opacity: 0.6;
+    }
+  }
+  @keyframes badge-twinkle {
+    50% {
+      transform: scale(1.25) rotate(18deg);
+      opacity: 0.75;
+    }
+  }
+  @keyframes badge-beat {
+    15%,
+    45% {
+      transform: scale(1.1);
+    }
+    30%,
+    60% {
+      transform: scale(1);
+    }
+  }
+</style>
