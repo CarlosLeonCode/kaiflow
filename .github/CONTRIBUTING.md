@@ -106,4 +106,5 @@ Accessibility permission state (macOS) because many tracking issues depend on it
 ## License
 
 By contributing, you agree that your contributions are licensed under the
-[MIT License](../LICENSE).
+[GNU Affero General Public License v3](../LICENSE). Contributions grant no rights to the
+"Kaiflow" name or logo; see the [trademark policy](../TRADEMARKS.md).

@@ -6,7 +6,7 @@
 </h1>
 
 [![CI](https://github.com/CarlosLeonCode/kaiflow/actions/workflows/ci.yml/badge.svg)](https://github.com/CarlosLeonCode/kaiflow/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 [![Platforms: macOS, Windows (beta), Linux (beta)](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20beta%20%7C%20Linux%20beta-lightgrey.svg)](#platform-status)
 
 **A local-first time tracker you can fork and customize, by hand or with AI coding agents
@@ -204,5 +204,12 @@ If the project is useful to you, a star on GitHub helps others find it.
 
 ## License
 
-[MIT](LICENSE) © 2025-2026 Carlos León. You can use, modify and redistribute it, including for
-commercial work, as long as the copyright and license notice are kept.
+[GNU AGPL v3](LICENSE) © 2025-2026 CarlosLeonCode. You can use, modify and redistribute it,
+including for commercial work, as long as anyone who receives your version also gets its source
+code under the same license. See [NOTICE](NOTICE).
+
+The name "Kaiflow" and the ensō logo are trademarks and are not covered by the code license: a
+fork needs its own name and logo. See the [trademark policy](TRADEMARKS.md).
+
+Versions up to and including 0.1.1 were published under the MIT License and remain available
+under it.

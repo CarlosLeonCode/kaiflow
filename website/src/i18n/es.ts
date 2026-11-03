@@ -5,7 +5,7 @@ export const es: Content = {
   meta: {
     title: "Kaiflow: descubre en qué se va tu día",
     description:
-      "Un registro de tiempo privado y local que vive en la barra de menús de macOS, con Windows y Linux en beta. Seguimiento automático por app y ventana, objetivos, sesiones de enfoque y revisión semanal. Gratis, de código abierto (MIT) y fácil de adaptar con agentes de programación con IA.",
+      "Un registro de tiempo privado y local que vive en la barra de menús de macOS, con Windows y Linux en beta. Seguimiento automático por app y ventana, objetivos, sesiones de enfoque y revisión semanal. Gratis, de código abierto (AGPL-3.0) y fácil de adaptar con agentes de programación con IA.",
     ogAlt: "Kaiflow: mejora tu enfoque, un día a la vez. Un registro de tiempo privado que vive en la barra de menús.",
   },
   a11y: {
@@ -78,7 +78,7 @@ export const es: Content = {
         body: "Nada sale de tu equipo, salvo la comprobación de actualizaciones y la revisión con IA, si la ejecutas.",
       },
       {
-        title: "Código abierto, MIT",
+        title: "Código abierto, AGPL-3.0",
         body: "Gratis para siempre. Lee el código y úsala en cualquier trabajo.",
       },
     ],
@@ -129,7 +129,7 @@ export const es: Content = {
     items: [
       {
         q: "¿Es gratis?",
-        a: "Sí. Kaiflow es gratuita y de código abierto con licencia MIT, también para uso comercial. Sin cuentas, sin suscripciones y sin versiones de pago.",
+        a: "Sí. Kaiflow es gratuita y de código abierto con licencia GNU AGPL v3, también para uso comercial. Si compartes una versión modificada, comparte también su código fuente y usa un nombre propio. Sin cuentas, sin suscripciones y sin versiones de pago.",
       },
       {
         q: "¿Por qué macOS muestra un aviso al abrirla?",
@@ -148,7 +148,7 @@ export const es: Content = {
   footer: {
     tagline: "Mejora tu enfoque, un día a la vez.",
     nameNote: "El nombre une kaizen, el hábito de mejorar un poco cada día, y flow, el estado de concentración profunda.",
-    license: "Licencia MIT",
+    license: "Licencia AGPL-3.0",
     source: "Código fuente",
     releases: "Versiones",
     issues: "Informar de un problema",

@@ -21,6 +21,9 @@ Derived assets: `src-tauri/icons/` (app icons and `tray-template.png`),
 `website/public/` favicons and `website/src/assets/brand/app-icon.png`. See the rebrand
 checklist in [docs/forking.md](../../docs/forking.md) for how to regenerate them.
 
+The name and these files are trademarks covered by the [trademark policy](../../TRADEMARKS.md),
+not by the code license: a fork replaces them with its own.
+
 ## Colors
 
 | Name | Hex | Role |

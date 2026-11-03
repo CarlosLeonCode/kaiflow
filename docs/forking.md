@@ -2,8 +2,13 @@
 
 Kaiflow is meant to be a base you can fork: a working, private, local-first time
 tracker with a clean architecture, so you (or an AI coding agent) can bend it to your own
-workflow. It is MIT licensed: you can use, modify and redistribute it, including for
-commercial work, as long as you keep the copyright and license notice.
+workflow. It is licensed under the GNU AGPL v3: you can use, modify and redistribute it,
+including for commercial work, as long as your version keeps the copyright notices and anyone who
+receives it also gets its source code under the same license.
+
+The name "Kaiflow" and the ensō logo are not part of that license. If you distribute your fork,
+give it its own name, logo and bundle identifier (the checklist below covers all of them); you
+may say it is "based on Kaiflow". See the [trademark policy](../TRADEMARKS.md).
 
 ## 1. Fork and run it
 
@@ -21,8 +26,8 @@ change.
 
 ## 2. Rebrand checklist
 
-Do these before you distribute your own build, so it does not collide with the original app
-(same bundle id means macOS treats both as the same app: shared data and permissions).
+Do these before you distribute your own build. The trademark policy requires a new name and
+logo, and a new bundle identifier keeps it from colliding with the original app (same bundle id means macOS treats both as the same app: shared data and permissions).
 
 | What | Where |
 |---|---|
@@ -35,7 +40,7 @@ Do these before you distribute your own build, so it does not collide with the o
 | Repository links | `README.md`, `website/src/lib/links.ts`, `.github/` templates, `src/features/settings` (About block), `package.json` (`author`) |
 | Landing page | `website/` (Astro). Copy in `website/src/i18n/en.ts` and `es.ts`, site URL in `website/astro.config.mjs`, screenshots in `website/src/assets/screenshots/` (`npm --prefix website run screenshots` regenerates them from the mock UI). |
 | Release signing identity | `.github/workflows/release.yml` signs with a self-signed identity named "Kaiflow Release" when you provide it; see [release.md](release.md). Pick your own name and certificate. |
-| License notice | Keep the original copyright line in `LICENSE`; add your own line below it if you like. |
+| License notice | Keep `LICENSE` (AGPL v3) and the original copyright lines in `NOTICE`; add your own copyright line below them. Publish your source code with every build you distribute. |
 
 A quick way to find leftovers:
 

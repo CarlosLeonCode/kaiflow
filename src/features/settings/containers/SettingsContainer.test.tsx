@@ -61,13 +61,13 @@ describe("SettingsContainer", () => {
     expect(screen.queryByRole("button", { name: "Open System Settings" })).toBeNull();
   });
 
-  it("shows the version, the MIT license and the repository in About", async () => {
+  it("shows the version, the AGPL-3.0 license and the repository in About", async () => {
     mockBackend({ get_status: () => status() });
     renderWithProviders(<SettingsContainer />);
 
     const about = await screen.findByRole("region", { name: "About" });
     expect(within(about).getByText("0.0.0-test")).toBeInTheDocument();
-    expect(within(about).getByText("MIT")).toBeInTheDocument();
+    expect(within(about).getByText("AGPL-3.0")).toBeInTheDocument();
     expect(within(about).getByText("https://github.com/CarlosLeonCode/kaiflow")).toBeInTheDocument();
     expect(about).not.toHaveTextContent(/notari/i);
   });

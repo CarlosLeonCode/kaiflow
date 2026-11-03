@@ -5,7 +5,7 @@ export const en: Content = {
   meta: {
     title: "Kaiflow: see where your day actually goes",
     description:
-      "A private, local-first menu bar time tracker for macOS, with Windows and Linux in beta. Automatic tracking by app and window, goals, focus sessions and a weekly review. Free, open source (MIT) and easy to fork and customize with AI coding agents.",
+      "A private, local-first menu bar time tracker for macOS, with Windows and Linux in beta. Automatic tracking by app and window, goals, focus sessions and a weekly review. Free, open source (AGPL-3.0) and easy to fork and customize with AI coding agents.",
     ogAlt: "Kaiflow: improve your focus, one day at a time. A private time tracker that lives in your menu bar.",
   },
   a11y: {
@@ -78,7 +78,7 @@ export const en: Content = {
         body: "Nothing leaves your computer except the update check and the AI review, if you run it.",
       },
       {
-        title: "Open source, MIT",
+        title: "Open source, AGPL-3.0",
         body: "Free forever. Read the code, use it for any work.",
       },
     ],
@@ -129,7 +129,7 @@ export const en: Content = {
     items: [
       {
         q: "Is it free?",
-        a: "Yes. Kaiflow is free and open source under the MIT license, including for commercial work. There is no account, no subscription and no paid tier.",
+        a: "Yes. Kaiflow is free and open source under the GNU AGPL v3, including for commercial work. If you share a modified version, share its source code too and give it your own name. There is no account, no subscription and no paid tier.",
       },
       {
         q: "Why does macOS warn me when I open it?",
@@ -148,7 +148,7 @@ export const en: Content = {
   footer: {
     tagline: "Improve your focus, one day at a time.",
     nameNote: "The name blends kaizen, the habit of small continuous improvements, with flow, the state of deep focus.",
-    license: "MIT licensed",
+    license: "AGPL-3.0 licensed",
     source: "Source code",
     releases: "Releases",
     issues: "Report an issue",

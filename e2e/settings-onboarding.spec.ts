@@ -34,7 +34,7 @@ test.describe("Settings", () => {
     await openSection(page, "Settings");
     const about = page.getByRole("region", { name: "About" });
     await about.scrollIntoViewIfNeeded();
-    await expect(about.getByText("MIT", { exact: true })).toBeVisible();
+    await expect(about.getByText("AGPL-3.0", { exact: true })).toBeVisible();
     await expect(about.getByText(/^\d+\.\d+\.\d+/)).toBeVisible();
     await expect(about.getByText("https://github.com/CarlosLeonCode/kaiflow", { exact: true })).toBeVisible();
   });
