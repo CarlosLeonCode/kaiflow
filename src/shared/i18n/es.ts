@@ -191,6 +191,7 @@ export const es: Messages = {
     noActivityToday: "Aún no hay actividad registrada hoy.",
     globalShortcut: "Atajo global",
     openDashboard: "Abrir panel",
+    dashboard: "Panel",
   },
   today: {
     loadError: (message) => `No se pudo cargar el día de hoy: ${message}`,

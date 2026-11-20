@@ -44,10 +44,12 @@ export function TrackingFooter({ state, shortcut, pending, onToggle, onOpenDashb
   const t = useT();
   const action = toggleAction(state, t);
   return (
+    // The popover is 360 px wide: nothing here may shrink, or the shortcut slides under the button.
     <footer className="flex items-center gap-2 border-t border-border bg-surface px-4 py-2.5">
       {action ? (
         <Button
           variant="primary"
+          className="shrink-0"
           disabled={pending}
           onClick={() => onToggle(action.command)}
         >
@@ -55,15 +57,25 @@ export function TrackingFooter({ state, shortcut, pending, onToggle, onOpenDashb
           {action.label}
         </Button>
       ) : (
-        <Button variant="secondary" disabled>
+        <Button variant="secondary" className="shrink-0" disabled>
           <Pause aria-hidden="true" />
           {t.tracking.toggle.pause}
         </Button>
       )}
-      {shortcut && <Kbd title={t.tracking.globalShortcut}>{shortcut}</Kbd>}
-      <Button variant="ghost" className="ml-auto" onClick={onOpenDashboard}>
+      {shortcut && (
+        <Kbd className="shrink-0" title={t.tracking.globalShortcut}>
+          {shortcut}
+        </Kbd>
+      )}
+      <Button
+        variant="ghost"
+        className="ml-auto shrink-0"
+        aria-label={t.tracking.openDashboard}
+        title={t.tracking.openDashboard}
+        onClick={onOpenDashboard}
+      >
         <LayoutDashboard aria-hidden="true" />
-        {t.tracking.openDashboard}
+        {t.tracking.dashboard}
       </Button>
     </footer>
   );

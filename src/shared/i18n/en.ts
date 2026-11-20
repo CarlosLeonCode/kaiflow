@@ -210,6 +210,7 @@ export const en = {
     noActivityToday: "No activity recorded yet today.",
     globalShortcut: "Global shortcut",
     openDashboard: "Open dashboard",
+    dashboard: "Dashboard",
   },
   today: {
     loadError: (message: string) => `Could not load today: ${message}`,
