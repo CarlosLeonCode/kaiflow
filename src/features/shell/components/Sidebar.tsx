@@ -1,17 +1,16 @@
-import { CalendarDays, ChartNoAxesColumn, NotebookPen, Settings, ShieldCheck, Tags, Target, Timer, type LucideIcon } from "lucide-react";
+import { CalendarDays, ChartNoAxesColumn, Settings, ShieldCheck, Tags, Target, Timer, type LucideIcon } from "lucide-react";
 
 import type { OsDto } from "@/shared/ipc";
 import { cn } from "@/shared/lib/utils";
 import { Kbd } from "@/shared/ui/kbd";
 
-import { SECTIONS, sectionAriaShortcut, sectionShortcutLabel, type SectionId } from "../lib/sections";
+import { SECTION_GROUPS, SECTIONS, sectionAriaShortcut, sectionShortcutLabel, type SectionId } from "../lib/sections";
 
 const ICONS: Record<SectionId, LucideIcon> = {
   today: CalendarDays,
-  overview: ChartNoAxesColumn,
-  goals: Target,
   focus: Timer,
-  review: NotebookPen,
+  goals: Target,
+  insights: ChartNoAxesColumn,
   activities: Tags,
   privacy: ShieldCheck,
   settings: Settings,
@@ -27,41 +26,51 @@ interface Props {
 }
 
 /**
- * Left navigation. The top strip is the draggable title area: the traffic lights float over
+ * Left navigation, in three labelled groups (Daily, Look back, Setup). The top strip is the draggable title area: the traffic lights float over
  * it (overlay title bar), so it is 44 px tall and carries no controls.
  */
 export function Sidebar({ active, onSelect, status, os = "macos" }: Props) {
   return (
     <aside className="flex h-full w-52 shrink-0 flex-col border-r border-border bg-surface">
       <div data-tauri-drag-region className="h-11 shrink-0" />
-      <nav aria-label="Sections" className="flex-1 space-y-0.5 px-2">
-        {SECTIONS.map((section) => {
-          const Icon = ICONS[section.id];
-          const current = section.id === active;
+      <nav aria-label="Sections" className="flex-1 space-y-3 px-2">
+        {SECTION_GROUPS.map((group) => {
+          const headingId = `sidebar-group-${group.id}`;
           return (
-            <button
-              key={section.id}
-              type="button"
-              aria-current={current ? "page" : undefined}
-              aria-keyshortcuts={sectionAriaShortcut(section.digit, os)}
-              onClick={() => onSelect(section.id)}
-              // No color transition: the highlight must switch in the same frame as the
-              // section. An animated background is sampled from the animation timeline, which
-              // only advances while the webview paints, so a throttled or just-shown window
-              // kept showing the previous item highlighted.
-              className={cn(
-                "flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-left text-sm",
-                current
-                  ? "bg-accent font-medium text-foreground"
-                  : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
-              )}
-            >
-              <Icon className="size-4 shrink-0" aria-hidden="true" />
-              <span className="flex-1">{section.label}</span>
-              <Kbd aria-hidden="true" className="border-transparent bg-transparent">
-                {sectionShortcutLabel(section.digit, os)}
-              </Kbd>
-            </button>
+            <div key={group.id} role="group" aria-labelledby={headingId} className="space-y-0.5">
+              <p id={headingId} className="px-2 pb-1 text-2xs font-medium text-muted-foreground">
+                {group.label}
+              </p>
+              {SECTIONS.filter((section) => section.group === group.id).map((section) => {
+                const Icon = ICONS[section.id];
+                const current = section.id === active;
+                return (
+                  <button
+                    key={section.id}
+                    type="button"
+                    aria-current={current ? "page" : undefined}
+                    aria-keyshortcuts={sectionAriaShortcut(section.digit, os)}
+                    onClick={() => onSelect(section.id)}
+                    // No color transition: the highlight must switch in the same frame as the
+                    // section. An animated background is sampled from the animation timeline, which
+                    // only advances while the webview paints, so a throttled or just-shown window
+                    // kept showing the previous item highlighted.
+                    className={cn(
+                      "flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-left text-sm",
+                      current
+                        ? "bg-accent font-medium text-foreground"
+                        : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
+                    )}
+                  >
+                    <Icon className="size-4 shrink-0" aria-hidden="true" />
+                    <span className="flex-1">{section.label}</span>
+                    <Kbd aria-hidden="true" className="border-transparent bg-transparent">
+                      {sectionShortcutLabel(section.digit, os)}
+                    </Kbd>
+                  </button>
+                );
+              })}
+            </div>
           );
         })}
       </nav>

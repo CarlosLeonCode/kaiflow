@@ -105,7 +105,7 @@ describe("PrivacyContainer", () => {
       const { calls } = backend();
       renderWithProviders(<PrivacyContainer onOpenSettings={() => {}} />);
 
-      expect(await screen.findByText(/No apps listed/)).toBeInTheDocument();
+      expect(await screen.findByText(/No excluded apps/)).toBeInTheDocument();
       await user.type(screen.getByRole("combobox", { name: "App" }), "com.tinyspeck.slackmacgap");
       await user.click(screen.getByRole("button", { name: "Add app" }));
 
@@ -115,7 +115,7 @@ describe("PrivacyContainer", () => {
           mode: "exclude",
         }),
       );
-      const list = await screen.findByRole("list", { name: "App privacy rules" });
+      const list = await screen.findByRole("list", { name: "Excluded app list" });
       expect(within(list).getByText("Slack")).toBeInTheDocument();
       expect(within(list).getByRole("combobox", { name: "Privacy for Slack" })).toHaveValue("exclude");
     });
@@ -148,7 +148,7 @@ describe("PrivacyContainer", () => {
       await waitFor(() =>
         expect(calls.filter((c) => c.cmd === "privacy_set").at(-1)?.args).toEqual({ appId: XCODE.app_id, mode: null }),
       );
-      expect(await screen.findByText(/No apps listed/)).toBeInTheDocument();
+      expect(await screen.findByText(/No excluded apps/)).toBeInTheDocument();
     });
 
     it("chooses Hide titles for a new app and explains the difference", async () => {

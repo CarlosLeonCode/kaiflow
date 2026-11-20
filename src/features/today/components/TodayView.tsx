@@ -37,7 +37,7 @@ interface Props {
   items: readonly TimelineItemDto[];
   apps: readonly AppRow[];
   activities: readonly ActivityRow[];
-  /** Focused time (live), excludes idle and discarded time (R7.2). */
+  /** Active time (live): time at the computer, excludes idle and discarded time (R7.2). */
   totalMs: number;
   awayMs: number;
   /** Short breaks the app discarded without asking today. */
@@ -52,10 +52,13 @@ function dateLabel(range: RangeDto): string {
   });
 }
 
-function Card({ title, children, label }: { title: string; children: React.ReactNode; label?: string }) {
+function Card({ title, hint, children, label }: { title: string; hint?: string; children: React.ReactNode; label?: string }) {
   return (
     <section aria-label={label ?? title} className="rounded-lg border border-border bg-background p-4">
-      <h2 className="mb-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground">{title}</h2>
+      <div className="mb-2 flex items-baseline justify-between gap-3">
+        <h2 className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">{title}</h2>
+        {hint && <p className="truncate text-2xs text-muted-foreground">{hint}</p>}
+      </div>
       {children}
     </section>
   );
@@ -86,7 +89,7 @@ export function TodayView({
   const window = timelineWindow(items, range, now);
   const blocks = layoutTimeline(items, window, now);
   const presence = totalMs + awayMs;
-  const focusedPct = presence > 0 ? (totalMs / presence) * 100 : 0;
+  const activePct = presence > 0 ? (totalMs / presence) * 100 : 0;
 
   return (
     <Page
@@ -137,27 +140,27 @@ export function TodayView({
         <div className="space-y-4">
           {focus}
           {goals}
-          <Card title="Focused time" label="Focused and away time">
+          <Card title="Active time" hint="Time at your computer, not idle." label="Active and away time">
             <div className="flex flex-wrap items-end gap-x-10 gap-y-3">
               <p
                 data-testid="today-total"
                 className="tabular text-display font-semibold tracking-tight"
-                aria-label={`Focused time ${formatDuration(totalMs)}`}
+                aria-label={`Active time ${formatDuration(totalMs)}`}
               >
                 {formatClock(totalMs)}
               </p>
               <div className="min-w-48 flex-1 pb-1.5">
                 <div
                   role="img"
-                  aria-label={`Focused ${formatDuration(totalMs)}, away ${formatDuration(awayMs)}`}
+                  aria-label={`Active ${formatDuration(totalMs)}, away ${formatDuration(awayMs)}`}
                   className="flex h-1.5 overflow-hidden rounded-full bg-muted"
                 >
-                  <div className="h-full bg-primary" style={{ width: `${focusedPct}%` }} />
+                  <div className="h-full bg-primary" style={{ width: `${activePct}%` }} />
                 </div>
                 <dl className="mt-2 flex gap-6 text-xs">
                   <div className="flex items-center gap-1.5">
                     <span aria-hidden="true" className="size-2 rounded-full bg-primary" />
-                    <dt className="text-muted-foreground">Focused</dt>
+                    <dt className="text-muted-foreground">Active</dt>
                     <dd className="tabular font-medium">{formatDuration(totalMs)}</dd>
                   </div>
                   <div className="flex items-center gap-1.5">

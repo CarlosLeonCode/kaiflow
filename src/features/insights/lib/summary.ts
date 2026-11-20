@@ -12,7 +12,7 @@ import { formatDuration, formatHour, formatTimeOfDay } from "@/shared/lib/time";
 
 import { bucketNoun, previousLabel, type Period } from "./periods";
 
-/** Pure view-model helpers for the Overview (no IPC, no clock). */
+/** Pure view-model helpers for Insights (no IPC, no clock). */
 
 /** What the trend line under the total says. Direction is always spelled out, never only colored. */
 export interface TrendView {

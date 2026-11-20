@@ -131,10 +131,10 @@ describe("TodayContainer", () => {
     });
     renderWithProviders(<TodayContainer onOpenGoals={() => {}} />);
 
-    const summary = await screen.findByRole("region", { name: "Focused and away time" });
-    expect(within(summary).getByText("Focused").nextSibling).toHaveTextContent("2h 00m");
+    const summary = await screen.findByRole("region", { name: "Active and away time" });
+    expect(within(summary).getByText("Active").nextSibling).toHaveTextContent("2h 00m");
     expect(within(summary).getByText("Away").nextSibling).toHaveTextContent("30m");
-    expect(within(summary).getByRole("img", { name: "Focused 2h 00m, away 30m" })).toBeInTheDocument();
+    expect(within(summary).getByRole("img", { name: "Active 2h 00m, away 30m" })).toBeInTheDocument();
   });
 
   it("explains an empty day (R7 scenario)", async () => {
@@ -373,7 +373,7 @@ describe("TodayContainer", () => {
       mockBackend(tracked);
       renderWithProviders(<TodayContainer onOpenGoals={() => {}} />);
 
-      await screen.findByText("Focused time");
+      await screen.findByText("Active time");
       expect(screen.queryByRole("region", { name: "Active timer" })).not.toBeInTheDocument();
     });
   });

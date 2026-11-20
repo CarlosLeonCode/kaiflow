@@ -16,7 +16,7 @@ export const PRODUCTIVITY_MEANING: Record<ProductivityDto, string> = {
 
 /** Where the choice is used, so nobody has to guess why it matters. */
 export const PRODUCTIVITY_USE =
-  "It sets the focus percentage in Overview and Review. Goals and Focus sessions use the activities themselves, so a clear set of activities helps there too.";
+  "It sets the Productive time share in Insights. Goals and Focus sessions use the activities themselves, so a clear set of activities helps there too.";
 
 export const DEFAULT_PRODUCTIVITY: ProductivityDto = "neutral";
 

@@ -3,9 +3,19 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import type { AiReviewDto, AiSettingsDto, ReviewPreviewDto, WeeklyReviewDto } from "@/shared/ipc";
-import { aiReview, aiSettings, dashboard, focusSession, goal, mockBackend, renderWithProviders, review, settings } from "@/test/ipc";
+import {
+  aiReview,
+  aiSettings,
+  dashboard,
+  focusSession,
+  goal,
+  mockBackend,
+  renderWithProviders,
+  review,
+  settings,
+} from "@/test/ipc";
 
-import { ReviewContainer } from "./ReviewContainer";
+import { WeekReviewContainer } from "./WeekReviewContainer";
 
 const PREVIEW: ReviewPreviewDto = {
   id: "preview-1",
@@ -60,16 +70,15 @@ function backend(initial: Partial<Rig> = {}, extra: Record<string, (a: Record<st
 
 const sent = (calls: { cmd: string; args: Record<string, unknown> }[], cmd: string) => calls.filter((c) => c.cmd === cmd);
 
-function renderReview() {
-  const onOpenGoals = vi.fn();
+function renderReview(weeksAgo = 0) {
   const onOpenSettings = vi.fn();
-  renderWithProviders(<ReviewContainer onOpenGoals={onOpenGoals} onOpenSettings={onOpenSettings} />);
-  return { onOpenGoals, onOpenSettings };
+  renderWithProviders(<WeekReviewContainer weeksAgo={weeksAgo} onOpenSettings={onOpenSettings} />);
+  return { onOpenSettings };
 }
 
-describe("ReviewContainer without AI", () => {
-  it("builds the week locally and never touches an AI command", async () => {
-    const { calls } = backend({
+describe("WeekReviewContainer goals", () => {
+  it("shows how each goal fared this week, with streaks", async () => {
+    backend({
       week: review({
         goals: [
           {
@@ -84,18 +93,32 @@ describe("ReviewContainer without AI", () => {
             best_streak: 3,
           },
         ],
-        focus: [focusSession()],
       }),
     });
     renderReview();
 
-    expect(await screen.findByTestId("review-total")).toHaveTextContent("3h 00m");
-    expect(screen.getByTestId("review-week")).toHaveTextContent("2026-10-12 to 2026-10-18");
-    expect(screen.getByTestId("review-heading")).toHaveTextContent("This week");
-    expect(screen.getByRole("list", { name: "Time by activity" })).toHaveTextContent("Deep work");
-    expect(screen.getByRole("list", { name: "Goals this week" })).toHaveTextContent("Met on 1 of 2 active days.");
-    expect(screen.getByTestId("review-focus")).toHaveTextContent("1 session (1 completed)");
-    expect(screen.getByRole("heading", { name: "Busiest hours" })).toBeInTheDocument();
+    const list = await screen.findByRole("list", { name: "Goals this week" });
+    expect(list).toHaveTextContent("Write daily");
+    expect(list).toHaveTextContent("Met on 1 of 2 active days.");
+    expect(list).toHaveTextContent("Streak 0 · best 3");
+  });
+
+  it("shows no goals card when there are no goals", async () => {
+    backend({ week: review({ goals: [], focus: [] }) });
+    renderReview();
+
+    expect(await screen.findByTestId("review-focus")).toBeInTheDocument();
+    expect(screen.queryByRole("list", { name: "Goals this week" })).not.toBeInTheDocument();
+  });
+});
+
+describe("WeekReviewContainer without AI", () => {
+  it("builds the week locally and never touches an AI command", async () => {
+    const { calls } = backend({ week: review({ focus: [focusSession()] }) });
+    renderReview();
+
+    expect(await screen.findByTestId("review-focus")).toHaveTextContent("1 session (1 completed)");
+    expect(sent(calls, "review_get")[0]?.args).toEqual({ weeksAgo: 0 });
 
     // AI is off: the card explains it and offers Settings; nothing was sent or listed.
     expect(await screen.findByText(/nothing is sent anywhere until you switch a provider on/i)).toBeInTheDocument();
@@ -106,11 +129,11 @@ describe("ReviewContainer without AI", () => {
     expect(cmds).not.toContain("ai_test");
   });
 
-  it("shows the empty state for a week without data and still allows a note", async () => {
+  it("still allows a note for a week without data", async () => {
     backend({ week: review({ dashboard: dashboard(), goals: [], focus: [] }) });
     renderReview();
 
-    expect(await screen.findByText("Nothing tracked this week yet")).toBeInTheDocument();
+    expect(await screen.findByTestId("review-focus")).toHaveTextContent("No focus sessions this week.");
     expect(screen.getByLabelText("Your note about this week")).toBeInTheDocument();
   });
 
@@ -130,33 +153,33 @@ describe("ReviewContainer without AI", () => {
     expect(sent(calls, "review_note_set")[0]?.args).toEqual({ firstDay: 20_738, note: "Felt rushed on Tuesday" });
   });
 
-  it("navigates to earlier weeks one call per week, never past the current one", async () => {
-    const user = userEvent.setup();
+  it("asks for the week it is given", async () => {
     const { calls } = backend();
-    renderReview();
+    renderReview(3);
 
-    expect(await screen.findByTestId("review-total")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Next week" })).toBeDisabled();
-    await user.click(screen.getByRole("button", { name: "Previous week" }));
-    await waitFor(() => expect(screen.getByTestId("review-heading")).toHaveTextContent("Last week"));
-    expect(sent(calls, "review_get").map((c) => c.args.weeksAgo)).toEqual([0, 1]);
-    await user.click(screen.getByRole("button", { name: "This week" }));
-    await waitFor(() => expect(screen.getByTestId("review-heading")).toHaveTextContent("This week"));
+    await screen.findByLabelText("Your note about this week");
+    expect(sent(calls, "review_get").map((c) => c.args.weeksAgo)).toEqual([3]);
   });
 
-  it("sends the user to Goals and to Settings from the empty spots", async () => {
+  it("explains that weeks older than the review keeps have no note or analysis", async () => {
+    const { calls } = backend();
+    renderReview(105);
+
+    expect(screen.getByText("Notes and AI analysis cover the last 104 weeks.")).toBeInTheDocument();
+    expect(sent(calls, "review_get")).toHaveLength(0);
+  });
+
+  it("sends the user to Settings to set up AI", async () => {
     const user = userEvent.setup();
     backend();
-    const { onOpenGoals, onOpenSettings } = renderReview();
+    const { onOpenSettings } = renderReview();
 
-    await user.click(await screen.findByRole("button", { name: "Create a goal" }));
-    expect(onOpenGoals).toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: /Set up AI in Settings/ }));
+    await user.click(await screen.findByRole("button", { name: /Set up AI in Settings/ }));
     expect(onOpenSettings).toHaveBeenCalled();
   });
 });
 
-describe("ReviewContainer with AI switched on", () => {
+describe("WeekReviewContainer with AI switched on", () => {
   const on = () => aiSettings({}, { enabled: true, consented_at: 1, has_key: true });
 
   it("previews the exact request first and sends only after confirmation", async () => {

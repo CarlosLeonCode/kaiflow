@@ -21,7 +21,7 @@ import type {
   ReviewPreviewDto,
   WeeklyReviewDto,
 } from "@/shared/ipc";
-import { periodRange } from "@/features/overview/lib/periods";
+import { periodRange } from "@/features/insights/lib/periods";
 import { addLocalDays } from "@/shared/lib/time";
 
 import type { MockGoal } from "./mockGoals";

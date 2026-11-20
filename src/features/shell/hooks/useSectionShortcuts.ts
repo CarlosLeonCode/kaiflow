@@ -4,7 +4,7 @@ import type { OsDto } from "@/shared/ipc";
 
 import { isReservedShortcut, type SectionId, sectionForShortcut } from "../lib/sections";
 
-/** ⌘1..⌘8 (Ctrl off macOS) switch sections; ⌘K is swallowed for the future command palette. */
+/** ⌘1..⌘7 (Ctrl off macOS) switch sections; ⌘K is swallowed for the future command palette. */
 export function useSectionShortcuts(onSelect: (section: SectionId) => void, os: OsDto = "macos"): void {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

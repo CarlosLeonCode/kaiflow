@@ -4,8 +4,7 @@ import { BackupNoticeContainer } from "@/features/data/containers/BackupNoticeCo
 import { ActivitiesContainer } from "@/features/activities/containers/ActivitiesContainer";
 import { FocusContainer } from "@/features/focus/containers/FocusContainer";
 import { GoalsContainer } from "@/features/goals/containers/GoalsContainer";
-import { OverviewContainer } from "@/features/overview/containers/OverviewContainer";
-import { ReviewContainer } from "@/features/review/containers/ReviewContainer";
+import { InsightsContainer } from "@/features/insights/containers/InsightsContainer";
 import { PrivacyContainer } from "@/features/privacy/containers/PrivacyContainer";
 import { Sidebar } from "@/features/shell/components/Sidebar";
 import { useSectionShortcuts } from "@/features/shell/hooks/useSectionShortcuts";
@@ -20,18 +19,15 @@ function SectionView({ section, onNavigate }: { section: SectionId; onNavigate: 
   switch (section) {
     case "today":
       return <TodayContainer onOpenGoals={() => onNavigate("goals")} onOpenActivities={() => onNavigate("activities")} />;
-    case "overview":
-      return <OverviewContainer onOpenActivities={() => onNavigate("activities")} />;
-    case "goals":
-      return <GoalsContainer />;
     case "focus":
       return <FocusContainer />;
-    case "review":
+    case "goals":
+      return <GoalsContainer />;
+    case "insights":
       return (
-        <ReviewContainer
-          onOpenGoals={() => onNavigate("goals")}
-          onOpenSettings={() => onNavigate("settings")}
+        <InsightsContainer
           onOpenActivities={() => onNavigate("activities")}
+          onOpenSettings={() => onNavigate("settings")}
         />
       );
     case "activities":
@@ -44,7 +40,7 @@ function SectionView({ section, onNavigate }: { section: SectionId; onNavigate: 
 }
 
 /**
- * Dashboard window: sidebar + one section. Navigation is plain state, not a router: eight
+ * Dashboard window: sidebar + one section. Navigation is plain state, not a router: seven
  * fixed sections, no deep links (a webview has no address bar), and the window is hidden
  * rather than closed, so the selection survives. This avoids a routing dependency
  * (deviation from the design's `react-router` note, which assumed deep links).

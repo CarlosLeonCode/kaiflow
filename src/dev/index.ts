@@ -34,7 +34,7 @@ function mockPlatform(params: URLSearchParams): PlatformInfoDto {
  *   `?focus=drift` has the drift alert already showing, `?focus=break` runs a short break,
  *   `?focus=paused` holds a paused timer and `?focus=ended` shows the end card.
  * - `?backup=failing`: the daily backup cannot write (Settings > Data error state).
- * - `?ai=on`: the Ollama provider is already switched on (Review can analyze right away);
+ * - `?ai=on`: the Ollama provider is already switched on (Insights can analyze a week right away);
  *   `?ai=offline` makes every analysis fail as if the network were down.
  * - `?keychain=missing`: the OS has no secure key store (keys are refused, like Linux without
  *   a Secret Service).

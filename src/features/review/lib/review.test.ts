@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { AiProviderInfoDto, AiSettingsDto, FocusSessionDto, GoalWeekDto } from "@/shared/ipc";
-import { dashboard, focusSession, goal } from "@/test/ipc";
+import { focusSession, goal } from "@/test/ipc";
 
 import {
   activeProvider,
@@ -10,10 +10,8 @@ import {
   focusWeek,
   focusWeekLine,
   goalWeekLine,
-  isEmptyWeek,
   missingKey,
   titlesText,
-  weekHeading,
 } from "./review";
 
 const HOUR = 3_600_000;
@@ -56,20 +54,6 @@ function settings(overrides: Partial<AiProviderInfoDto> = {}): AiSettingsDto {
     secret_store: { available: true, reason: null },
   };
 }
-
-describe("weekHeading", () => {
-  it("names the current and the previous week, then counts", () => {
-    expect([0, 1, 5].map(weekHeading)).toEqual(["This week", "Last week", "5 weeks ago"]);
-  });
-});
-
-describe("isEmptyWeek", () => {
-  it("needs both no tracked time and no focus session", () => {
-    expect(isEmptyWeek({ dashboard: dashboard(), focus: [] })).toBe(true);
-    expect(isEmptyWeek({ dashboard: dashboard({ total_ms: 1 }), focus: [] })).toBe(false);
-    expect(isEmptyWeek({ dashboard: dashboard(), focus: [focusSession()] })).toBe(false);
-  });
-});
 
 describe("goalWeekLine", () => {
   it("counts the active days of a daily goal that were met", () => {

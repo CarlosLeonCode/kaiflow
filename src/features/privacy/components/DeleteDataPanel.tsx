@@ -139,7 +139,7 @@ export function DeleteDataPanel({ today, onRequest, busy }: Props) {
           )}
         </Block>
 
-        <Block title="Delete everything" description="Removes all tracked time and history. Your settings, activities and rules stay.">
+        <Block title="Delete everything" description="Removes all tracked time and history. Your settings, activities, sorting rules and excluded apps stay.">
           <Button
             disabled={busy}
             onClick={() => onRequest({ kind: "all" })}

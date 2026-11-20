@@ -24,7 +24,7 @@ interface Props {
 }
 
 /**
- * Per-app privacy rules. "Never record" drops the app entirely (no segment, no title);
+ * Excluded apps (per-app privacy rules in code). "Never record" drops the app entirely (no segment, no title);
  * "Hide titles" keeps the time but never stores the window title (R10.2, R10.3). Both only
  * affect what is recorded from now on (R10.5).
  */
@@ -60,15 +60,15 @@ export function AppRulesPanel({ rows, apps, onSet, onFailure }: Props) {
   }
 
   return (
-    <section aria-label="Apps" className="space-y-2">
+    <section aria-label="Excluded apps" className="space-y-2">
       <div className="px-1">
-        <h2 className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">Apps</h2>
+        <h2 className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">Excluded apps</h2>
         <p className="mt-0.5 text-xs text-muted-foreground">
           Applies from now on. Time and titles already recorded stay until you delete them below.
         </p>
       </div>
       <div className="divide-y divide-border rounded-lg border border-border bg-background">
-        <form onSubmit={submit} aria-label="Add app rule" className="space-y-2.5 px-3 py-3">
+        <form onSubmit={submit} aria-label="Add excluded app" className="space-y-2.5 px-3 py-3">
           <div>
             <label htmlFor={`${id}-app`} className="mb-1 block text-xs font-medium text-muted-foreground">
               App
@@ -117,10 +117,10 @@ export function AppRulesPanel({ rows, apps, onSet, onFailure }: Props) {
 
         {rows.length === 0 ? (
           <p className="px-3 py-5 text-center text-xs text-muted-foreground">
-            No apps listed. Add a password manager or a private chat app to keep it out of your records.
+            No excluded apps. Add a password manager or a private chat app to keep it out of your records.
           </p>
         ) : (
-          <ul aria-label="App privacy rules" className="px-1.5 py-1.5">
+          <ul aria-label="Excluded app list" className="px-1.5 py-1.5">
             {rows.map((row) => (
               <li key={row.appId} className="flex items-center gap-2 rounded-md px-1.5 py-1 hover:bg-accent/50">
                 <span className="min-w-0 flex-1">

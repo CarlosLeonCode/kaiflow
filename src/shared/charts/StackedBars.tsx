@@ -13,7 +13,7 @@ const MAX_BAR = 56;
 interface Props {
   bars: readonly Bar[];
   dark: boolean;
-  /** Describes the chart for assistive tech, e.g. "Focused time per day". */
+  /** Describes the chart for assistive tech, e.g. "Tracked time per day". */
   label: string;
 }
 

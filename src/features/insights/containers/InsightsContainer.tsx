@@ -11,7 +11,9 @@ import {
 } from "@/shared/ipc";
 import { useIsDark } from "@/shared/lib/theme";
 
-import { OverviewView } from "../components/OverviewView";
+import { WeekReviewContainer } from "@/features/review/containers/WeekReviewContainer";
+
+import { InsightsView } from "../components/InsightsView";
 import {
   bucketsFor,
   canGoNext,
@@ -20,6 +22,7 @@ import {
   periodRange,
   previousRange,
   shiftAnchor,
+  weeksAgoOf,
   type Period,
 } from "../lib/periods";
 import {
@@ -34,19 +37,22 @@ import {
   trendView,
 } from "../lib/summary";
 
-/**
- * Wires the Overview to the backend with one `get_dashboard` call per view. The frontend owns
- * the calendar: it computes local day, week and month boundaries (DST-safe) and sends UTC
- * ranges, the buckets to stack and the previous period; the backend folds everything in one
- * pass (design section 8).
- */
 interface Props {
   /** Takes the user to Activities (the next step of an empty period). */
   onOpenActivities?: () => void;
+  /** Takes the user to Settings (to set up the optional AI analysis of a week). */
+  onOpenSettings?: () => void;
 }
 
-export function OverviewContainer({ onOpenActivities }: Props = {}) {
-  const intro = useSectionIntro("overview");
+/**
+ * Wires Insights to the backend with one `get_dashboard` call per view. The frontend owns
+ * the calendar: it computes local day, week and month boundaries (DST-safe) and sends UTC
+ * ranges, the buckets to stack and the previous period; the backend folds everything in one
+ * pass (design section 8). The Week view also shows the weekly review of the same week (focus
+ * sessions, note, AI analysis), which the backend keys by weeks back from the current week.
+ */
+export function InsightsContainer({ onOpenActivities, onOpenSettings = () => {} }: Props = {}) {
+  const intro = useSectionIntro("insights");
   const now = useNow(60_000);
   const dark = useIsDark();
   const [period, setPeriod] = useState<Period>("week");
@@ -69,6 +75,7 @@ export function OverviewContainer({ onOpenActivities }: Props = {}) {
   const bars = useMemo(() => (data ? bucketBars(period, data) : []), [period, data]);
   const totalMs = data?.total_ms ?? 0;
   const current = range.from <= now && now < range.to;
+  const weeksAgo = period === "week" ? weeksAgoOf(range.from, now, weekStart) : null;
 
   function clearExport() {
     setExportedTo(null);
@@ -81,7 +88,7 @@ export function OverviewContainer({ onOpenActivities }: Props = {}) {
   }
 
   return (
-    <OverviewView
+    <InsightsView
       intro={intro}
       period={period}
       onPeriodChange={(next) => {
@@ -119,6 +126,7 @@ export function OverviewContainer({ onOpenActivities }: Props = {}) {
       exportError={exportJson.error ? errorMessage(exportJson.error) : null}
       onExport={() => exportJson.mutate(range, { onSuccess: (path) => setExportedTo(path) })}
       onDismissExport={() => setExportedTo(null)}
+      weekReview={weeksAgo !== null ? <WeekReviewContainer weeksAgo={weeksAgo} onOpenSettings={onOpenSettings} /> : undefined}
     />
   );
 }

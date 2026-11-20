@@ -19,6 +19,7 @@ import { GoalSummary } from "@/features/goals/components/GoalSummary";
 import { periodNoun, type Period, type WeekStart } from "../lib/periods";
 import type { Averages, Row, TrendView } from "../lib/summary";
 import { BreakdownList } from "./BreakdownList";
+import { Card } from "./Card";
 import { PeriodNav } from "./PeriodNav";
 import { SummaryCard } from "./SummaryCard";
 
@@ -65,22 +66,16 @@ interface Props {
   exportError: string | null;
   onExport: () => void;
   onDismissExport: () => void;
+  /** Week view only: the weekly review of the week on screen. */
+  weekReview?: ReactNode;
 }
 
-function Card({ title, hint, children, className }: { title: string; hint?: string; children: ReactNode; className?: string }) {
-  return (
-    <section aria-label={title} className={`min-w-0 rounded-lg border border-border bg-background p-4 ${className ?? ""}`}>
-      <div className="mb-3 flex items-baseline justify-between gap-3">
-        <h2 className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">{title}</h2>
-        {hint && <p className="truncate text-2xs text-muted-foreground">{hint}</p>}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-/** Overview section (presentational): period navigation, summary, charts and breakdowns. */
-export function OverviewView(props: Props) {
+/**
+ * Insights section (presentational): period navigation, summary, charts and breakdowns. In the
+ * Week view the container also passes `weekReview` (focus sessions, the note and the optional
+ * AI analysis of that same week), drawn below the cards.
+ */
+export function InsightsView(props: Props) {
   const { period, loading, error, data } = props;
   const noun = periodNoun(period);
   const totalMs = data?.total_ms ?? 0;
@@ -94,7 +89,7 @@ export function OverviewView(props: Props) {
 
   return (
     <Page
-      title="Overview"
+      title="Insights"
       subtitle="Where your time went, and how it compares."
       intro={props.intro}
       actions={
@@ -137,10 +132,10 @@ export function OverviewView(props: Props) {
         {error ? (
           <Alert variant="warning" role="alert">
             <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-            <AlertDescription>Could not load the overview: {error}</AlertDescription>
+            <AlertDescription>Could not load insights: {error}</AlertDescription>
           </Alert>
         ) : loading || !data ? (
-          <div className="space-y-4" aria-label="Loading overview">
+          <div className="space-y-4" aria-label="Loading insights">
             <Skeleton className="h-28" />
             <Skeleton className="h-52" />
           </div>
@@ -183,7 +178,7 @@ export function OverviewView(props: Props) {
                   bucket={props.bucket}
                 />
               </Card>
-              <Card title="Focus ratio">
+              <Card title="Productive time">
                 <RatioBar
                   productiveMs={data.productivity.productive_ms}
                   neutralMs={data.productivity.neutral_ms}
@@ -237,6 +232,8 @@ export function OverviewView(props: Props) {
             </Card>
           </>
         )}
+
+        {props.weekReview}
       </div>
     </Page>
   );

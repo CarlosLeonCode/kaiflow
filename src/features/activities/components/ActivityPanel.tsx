@@ -141,11 +141,11 @@ export function ActivityPanel({
                     {system && (
                       <HelpTip label="Unassigned">
                         <p>
-                          Unassigned is not an activity you create. It holds the time that no rule matches yet, so
+                          Unassigned is not an activity you create. It holds the time that no sorting rule matches yet, so
                           nothing is lost.
                         </p>
                         <p className="mt-1.5">
-                          Add a rule, or accept a suggestion, and that time moves to the right activity, past time
+                          Add a sorting rule, or accept a suggestion, and that time moves to the right activity, past time
                           included.
                         </p>
                       </HelpTip>

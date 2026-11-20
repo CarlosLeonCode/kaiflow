@@ -2,7 +2,7 @@ import type { RangeDto } from "@/shared/ipc";
 import { addLocalDays, HOUR } from "@/shared/lib/time";
 
 /**
- * Period math for the Overview. Every boundary is a local calendar date turned into an instant
+ * Period math for Insights. Every boundary is a local calendar date turned into an instant
  * (`new Date(y, m, d)`), never `+ 24 h`, so a 23 h or 25 h DST day keeps its real length
  * and week/month ranges stay aligned with local midnights (R8.3, design section 8). The
  * ranges are half-open `[from, to)` UTC milliseconds, ready for the backend.
@@ -89,7 +89,7 @@ export function shiftAnchor(
   return shiftPeriod(period, range.from, delta, weekStart);
 }
 
-/** The next period only exists while it has started: the Overview never navigates into the future. */
+/** The next period only exists while it has started: Insights never navigates into the future. */
 export function canGoNext(
   period: Period,
   range: RangeDto,
@@ -97,6 +97,22 @@ export function canGoNext(
   weekStart: WeekStart = DEFAULT_WEEK_START,
 ): boolean {
   return periodRange(period, shiftAnchor(period, range, 1, weekStart), weekStart).from <= now;
+}
+
+/** Local calendar day number of an instant, so DST-length days still count as one. */
+function localDayNumber(ms: number): number {
+  const date = new Date(ms);
+  return Math.round(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86_400_000);
+}
+
+/**
+ * How many weeks before the current one the week starting at `weekFrom` is: the `weeksAgo` the
+ * weekly review (note and AI analysis) is keyed by. The backend counts the same way: whole weeks
+ * back from the start of the current week, with the same first day of the week.
+ */
+export function weeksAgoOf(weekFrom: number, now: number, weekStart: WeekStart = DEFAULT_WEEK_START): number {
+  const current = periodStart("week", now, weekStart);
+  return Math.round((localDayNumber(current) - localDayNumber(weekFrom)) / 7);
 }
 
 /** One range per local calendar day inside `range`. */

@@ -114,7 +114,7 @@ describe("guided setup", () => {
     await user.click(screen.getByRole("button", { name: "Add Design activities" }));
     await waitFor(() => expect(calls.find((c) => c.cmd === "presets_apply")?.args).toEqual({ key: "design" }));
     expect(await screen.findByText("Design: added 2 activities and 1 rule for apps you already used.")).toBeInTheDocument();
-    const step = await screen.findByRole("heading", { name: "Step 2 of 3: Add rules" });
+    const step = await screen.findByRole("heading", { name: "Step 2 of 3: Add sorting rules" });
     expect(step).toHaveFocus();
   });
 
@@ -142,7 +142,7 @@ describe("guided setup", () => {
     await user.type(within(guide).getByRole("textbox", { name: "Name" }), "Deep work");
     await user.click(within(guide).getByRole("button", { name: "Add activity" }));
     await waitFor(() => expect(calls.find((c) => c.cmd === "activities_create")?.args).toMatchObject({ name: "Deep work" }));
-    expect(await within(guide).findByRole("heading", { name: "Step 2 of 3: Add rules" })).toBeInTheDocument();
+    expect(await within(guide).findByRole("heading", { name: "Step 2 of 3: Add sorting rules" })).toBeInTheDocument();
   });
 
   it("explains both kinds of rules and how each activity counts, and saves the choice", async () => {
@@ -152,13 +152,13 @@ describe("guided setup", () => {
 
     await user.click(await screen.findByRole("button", { name: "How this works" }));
     const guide = await findGuide();
-    await user.click(within(guide).getByRole("button", { name: "Next: Add rules" }));
+    await user.click(within(guide).getByRole("button", { name: "Next: Add sorting rules" }));
     expect(guide).toHaveTextContent("By app:");
     expect(guide).toHaveTextContent("By window title:");
     expect(within(guide).getByRole("button", { name: "Add a rule" })).toBeInTheDocument();
 
     await user.click(within(guide).getByRole("button", { name: "Next: Mark how each activity counts" }));
-    expect(guide).toHaveTextContent("focus percentage in Overview and Review");
+    expect(guide).toHaveTextContent("Productive time share in Insights");
     expect(guide).toHaveTextContent("Goals and Focus sessions");
     await user.click(within(guide).getByRole("radio", { name: "Distracting" }));
     await waitFor(() =>
@@ -263,7 +263,7 @@ describe("Unassigned", () => {
     expect(row).toHaveTextContent("Time no rule matches yet");
 
     await user.click(within(row).getByRole("button", { name: "About Unassigned" }));
-    expect(await screen.findByRole("dialog", { name: "Unassigned" })).toHaveTextContent("no rule matches yet");
+    expect(await screen.findByRole("dialog", { name: "Unassigned" })).toHaveTextContent("no sorting rule matches yet");
     await user.keyboard("{Escape}");
 
     await user.click(within(row).getByRole("button", { name: "See suggestions" }));

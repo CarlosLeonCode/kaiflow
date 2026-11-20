@@ -89,7 +89,7 @@ export interface MockOptions {
   announceUpdate?: boolean;
   /** Start with only the system activity and no rules (first-run preset choice). */
   emptyActivities?: boolean;
-  /** Start without any tracked time (empty states of Today and Overview). */
+  /** Start without any tracked time (empty states of Today and Insights). */
   emptyHistory?: boolean;
   /** Start with a handful of goals (progress bars, an exceeded limit, streaks). */
   demoGoals?: boolean;
@@ -104,7 +104,7 @@ export interface MockOptions {
   keychainMissing?: boolean;
   /** Every AI analysis fails as if the network were down. */
   aiOffline?: boolean;
-  /** Start with the Ollama provider switched on, so Review can run without opening Settings. */
+  /** Start with the Ollama provider switched on, so the Insights week analysis can run without opening Settings. */
   aiOn?: boolean;
   /** The automatic backup has failed (Settings > Data shows the error, "Back up now" fails). */
   backupFails?: boolean;

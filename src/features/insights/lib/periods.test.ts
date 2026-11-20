@@ -13,6 +13,7 @@ import {
   previousRange,
   shiftAnchor,
   shiftPeriod,
+  weeksAgoOf,
 } from "./periods";
 
 const originalTz = process.env.TZ;
@@ -34,6 +35,16 @@ describe("period math in a DST time zone (America/New_York)", () => {
     // 2026-03-08 is the spring-forward day: local midnight is UTC-5, noon is UTC-4.
     expect(new Date(2026, 2, 8, 0).getTimezoneOffset()).toBe(300);
     expect(new Date(2026, 2, 8, 12).getTimezoneOffset()).toBe(240);
+  });
+
+  it("counts weeks back across a DST change like the backend's weekly review", () => {
+    // Thursday after spring forward; the weeks before it start on Mondays across the change.
+    const now = local(2026, 3, 12, 9);
+    expect(weeksAgoOf(periodStart("week", now), now)).toBe(0);
+    expect(weeksAgoOf(local(2026, 3, 2), now)).toBe(1);
+    expect(weeksAgoOf(local(2026, 2, 23), now)).toBe(2);
+    // Fall back: the week of Nov 2 is 25 h longer, still exactly one week.
+    expect(weeksAgoOf(local(2026, 10, 26), local(2026, 11, 3, 12))).toBe(1);
   });
 
   it("a day is 23 hours on spring forward and 25 on fall back", () => {
@@ -207,6 +218,12 @@ describe("weeks with a configurable first day", () => {
     expect(periodRange("week", shiftAnchor("week", range, -1, 6), 6)).toEqual(previousRange("week", range, 6));
     expect(canGoNext("week", range, wednesday, 6)).toBe(false);
     expect(canGoNext("week", previousRange("week", range, 6), wednesday, 6)).toBe(true);
+  });
+
+  it("keys the weekly review by weeks back from the current week with the same first day", () => {
+    expect(weeksAgoOf(local(2026, 10, 18), wednesday, 6)).toBe(0);
+    expect(weeksAgoOf(local(2026, 10, 11), wednesday, 6)).toBe(1);
+    expect(weeksAgoOf(previousRange("week", periodRange("week", wednesday), 0).from, wednesday)).toBe(1);
   });
 
   it("does not change days, months or the rolling 90 days", () => {

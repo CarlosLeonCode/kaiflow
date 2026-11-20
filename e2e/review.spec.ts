@@ -2,10 +2,12 @@ import { expect, expectNoA11yViolations, openWindow, test } from "./fixtures";
 
 type Page = Parameters<typeof openWindow>[0];
 
+/** The weekly review lives in Insights, below the cards of the Week view (the default period). */
 async function openReview(page: Page, query = "") {
   await openWindow(page, "main", query);
-  await page.getByRole("navigation").getByRole("button", { name: /^Review/ }).click();
-  await expect(page.getByRole("heading", { level: 1, name: "Review" })).toBeVisible();
+  await page.getByRole("navigation").getByRole("button", { name: /^Insights/ }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Insights" })).toBeVisible();
+  await expect(page.getByRole("radio", { name: "Week" })).toBeChecked();
 }
 
 async function openAiSettings(page: Page, query = "") {
@@ -21,12 +23,10 @@ test.describe("Weekly review without AI", () => {
   test("builds the week locally and explains that AI is off, with no AI traffic", async ({ page }) => {
     await openReview(page);
 
-    await expect(page.getByTestId("review-heading")).toHaveText("This week");
-    await expect(page.getByTestId("review-week")).toHaveText("2026-03-16 to 2026-03-22");
-    await expect(page.getByTestId("review-total")).not.toHaveText("0s");
+    await expect(page.getByText("Mar 16 – 22, 2026")).toBeVisible();
+    await expect(page.getByTestId("insights-total")).not.toHaveText("0s");
     await expect(page.getByRole("list", { name: "Time by activity" })).toBeVisible();
     await expect(page.getByRole("grid", { name: "Tracked time by weekday and hour" })).toBeVisible();
-    await expect(page.getByRole("region", { name: "Goals" })).toContainText("No goals to review.");
     await expect(page.getByRole("region", { name: "Focus sessions" })).toContainText("No focus sessions this week.");
 
     // The privacy story, in plain words, and the next step.
@@ -46,7 +46,7 @@ test.describe("Weekly review without AI", () => {
   test("an empty week shows an explanation and still takes a note", async ({ page }) => {
     await openReview(page, "?data=empty");
 
-    await expect(page.getByRole("heading", { name: "Nothing tracked this week yet" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Nothing tracked this week" })).toBeVisible();
     await expect(page.getByLabel("Your note about this week")).toBeVisible();
     await expectNoA11yViolations(page);
   });
@@ -59,20 +59,11 @@ test.describe("Weekly review without AI", () => {
     await expect(page.getByText("Saved.")).toBeVisible();
 
     await page.getByRole("button", { name: "Previous week" }).click();
-    await expect(page.getByTestId("review-heading")).toHaveText("Last week");
+    await expect(page.getByText("Mar 9 – 15, 2026")).toBeVisible();
     await expect(page.getByLabel("Your note about this week")).toHaveValue("");
-    await page.getByRole("button", { name: "This week" }).click();
+    await page.getByRole("main").getByRole("button", { name: "Today" }).click();
+    await expect(page.getByText("Mar 16 – 22, 2026")).toBeVisible();
     await expect(page.getByLabel("Your note about this week")).toHaveValue("Felt rushed on Tuesday");
-  });
-
-  test("shows how goals fared and offers to create one", async ({ page }) => {
-    await openReview(page, "?goals=demo");
-
-    const goals = page.getByRole("list", { name: "Goals this week" });
-    await expect(goals).toContainText("Deep work");
-    await expect(goals).toContainText("Slack limit");
-    await expect(goals).toContainText(/Met on \d of \d active days?\./);
-    await expect(goals).toContainText("Weekly development");
   });
 });
 

@@ -56,7 +56,7 @@ function ProviderFields({
         description={
           info.local
             ? "Runs on this computer. Your data never leaves it."
-            : `Off by default. When on, you can send your weekly totals to ${info.label} from the Review section, after seeing exactly what is sent. Their privacy terms apply to what you send.`
+            : `Off by default. When on, you can send your weekly totals to ${info.label} from the Week view in Insights, after seeing exactly what is sent. Their privacy terms apply to what you send.`
         }
       >
         <Switch
@@ -190,7 +190,7 @@ export function AiSettingsPanel(props: Props) {
   return (
     <Panel
       title="AI analysis"
-      description="Optional. Everything works without it. Nothing is sent to any AI provider unless you switch one on here and press Send in Review."
+      description="Optional. Everything works without it. Nothing is sent to any AI provider unless you switch one on here and press Send in Insights."
     >
       {!settings || !selected ? (
         <div className="p-3" aria-label="Loading AI settings">

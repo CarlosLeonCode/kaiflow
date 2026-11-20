@@ -15,11 +15,11 @@ export const INTROS: Record<SectionId, IntroContent> = {
     can: "Check today's total, see time per activity and per app, and pause tracking from the menu bar.",
     example: "See that the morning went to email and the afternoon to the quarterly report.",
   },
-  overview: {
-    title: "The bigger picture",
-    what: "Your tracked time over a day, a week, a month or the last 90 days.",
-    can: "Switch periods, compare with the period before, and see your busiest hours and focus percentage.",
-    example: "Compare this week's time on client work with last week's.",
+  focus: {
+    title: "Focused blocks of time",
+    what: "A timed block for one task, with a quiet nudge if you drift somewhere else.",
+    can: "Start a session, choose which activities or apps count as on target, and see how it went.",
+    example: "45 minutes to finish the budget review, with only the spreadsheet and the docs on target.",
   },
   goals: {
     title: "Targets for your time",
@@ -27,22 +27,16 @@ export const INTROS: Record<SectionId, IntroContent> = {
     can: "Set a minimum for an activity or a limit for an app, per day or week, and build a streak.",
     example: "At least 3 hours of Deep work on weekdays, or at most 30 minutes of social media a day.",
   },
-  focus: {
-    title: "Focused blocks of time",
-    what: "A timed block for one task, with a quiet nudge if you drift somewhere else.",
-    can: "Start a session, choose which activities or apps count as on target, and see how it went.",
-    example: "45 minutes to finish the budget review, with only the spreadsheet and the docs on target.",
-  },
-  review: {
-    title: "Your week in review",
-    what: "A calm summary of your week, built on this computer.",
-    can: "See where time went and how goals and focus sessions did, and keep a note. AI analysis is optional and off by default.",
-    example: "Notice that meetings took half of Tuesday and plan a quieter one next week.",
+  insights: {
+    title: "Look back on your time",
+    what: "Your tracked time over a day, a week, a month or the last 90 days.",
+    can: "Compare periods and see your busiest hours. In the Week view, keep a note and run the optional AI analysis.",
+    example: "Compare this week's client work with last week's, then note what to change.",
   },
   activities: {
     title: "What activities are for",
     what: "Apps tell you where you were. Activities tell you what you were doing, like Deep work or Client A.",
-    can: "Add rules that sort your time by app or by words in the window title. Past time is sorted too.",
+    can: "Add sorting rules that file your time by app or by words in the window title. Past time is sorted too.",
     example: "The same browser can be research in one tab and a distraction in another:",
     diagram: [
       { from: "Chrome + “YouTube” in the title", to: "Distraction" },

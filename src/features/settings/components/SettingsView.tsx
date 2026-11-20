@@ -112,7 +112,7 @@ export function SettingsView({
           <Panel title="Calendar">
             <Row
               label="Week starts on"
-              description="Weekly goals and the Overview count weeks from this day."
+              description="Weekly goals and Insights count weeks from this day."
               controlId="setting-week-start"
             >
               <Select

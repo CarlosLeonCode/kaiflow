@@ -25,13 +25,13 @@ export function SummaryCard({ period, totalMs, trend, averages, busiest, bucket 
     <div className="flex flex-wrap items-end gap-x-10 gap-y-4">
       <div className="min-w-0">
         <p
-          data-testid="overview-total"
+          data-testid="insights-total"
           className="tabular text-display font-semibold tracking-tight"
           aria-label={`Tracked time ${formatDuration(totalMs)}`}
         >
           {formatDuration(totalMs)}
         </p>
-        <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground" data-testid="overview-comparison">
+        <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground" data-testid="insights-comparison">
           <Icon className="size-3.5 shrink-0" aria-hidden="true" />
           {trend.text}
         </p>

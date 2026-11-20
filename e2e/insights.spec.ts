@@ -9,23 +9,37 @@ async function calls(page: Page): Promise<string[]> {
 
 const count = (log: string[], cmd: string) => log.filter((entry) => entry === cmd).length;
 
-test.describe("Overview", () => {
+test.describe("Insights", () => {
   test("opens on the current week with the summary and every chart", async ({ page }) => {
-    await openSection(page, "Overview");
+    await openSection(page, "Insights");
 
-    await expect(page.getByRole("heading", { level: 1, name: "Overview" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Insights" })).toBeVisible();
     await expect(page.getByText("Mar 16 – 22, 2026")).toBeVisible();
     await expect(page.getByRole("button", { name: "Next week" })).toBeDisabled();
     await expect(page.getByRole("group", { name: "Tracked time per day, stacked by activity" })).toBeVisible();
     await expect(page.getByRole("grid", { name: "Tracked time by weekday and hour" })).toBeVisible();
     await expect(page.getByRole("img", { name: /^Tracked time per day\. 3 points/ })).toBeVisible();
     await expect(page.getByTestId("focus-ratio")).toBeVisible();
-    await expect(page.getByTestId("overview-comparison")).toContainText(/previous week/);
+    await expect(page.getByTestId("insights-comparison")).toContainText(/previous week/);
     await expect(page.getByRole("list", { name: "Time by window title" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Productive time" })).toBeVisible();
+  });
+
+  test("shows the weekly review in the Week view only", async ({ page }) => {
+    await openSection(page, "Insights");
+
+    await expect(page.getByRole("region", { name: "Focus sessions" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Your note" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "AI analysis (optional)" })).toBeVisible();
+
+    await page.getByRole("radio", { name: "Month" }).click();
+    await expect(page.getByText("March 2026").first()).toBeVisible();
+    await expect(page.getByRole("region", { name: "Focus sessions" })).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "Your note" })).toHaveCount(0);
   });
 
   test("goes back through weeks and returns to today", async ({ page }) => {
-    await openSection(page, "Overview");
+    await openSection(page, "Insights");
 
     await page.getByRole("button", { name: "Previous week" }).click();
     await expect(page.getByText("Mar 9 – 15, 2026")).toBeVisible();
@@ -36,7 +50,7 @@ test.describe("Overview", () => {
   });
 
   test("switches between day, week, month and 90 days", async ({ page }) => {
-    await openSection(page, "Overview");
+    await openSection(page, "Insights");
 
     await page.getByRole("radio", { name: "Day", exact: true }).click();
     await expect(page.getByText("Wednesday, March 18, 2026").first()).toBeVisible();
@@ -62,7 +76,7 @@ test.describe("Overview", () => {
   });
 
   test("a month costs exactly one dashboard call, never one per day", async ({ page }) => {
-    await openSection(page, "Overview");
+    await openSection(page, "Insights");
     await expect(page.getByText("Mar 16 – 22, 2026")).toBeVisible();
     const before = await calls(page);
     expect(count(before, "get_dashboard")).toBe(1);
@@ -73,12 +87,12 @@ test.describe("Overview", () => {
 
     const after = await calls(page);
     expect(count(after, "get_dashboard") - count(before, "get_dashboard")).toBe(1);
-    // Opening the Overview and the month view added no per-day report at all.
+    // Opening Insights and the month view added no per-day report at all.
     expect(count(after, "get_report")).toBe(count(before, "get_report"));
   });
 
   test("exports the visible range and reports where it was saved", async ({ page }) => {
-    await openSection(page, "Overview");
+    await openSection(page, "Insights");
 
     await page.getByRole("button", { name: "Export JSON" }).click();
 
@@ -87,17 +101,17 @@ test.describe("Overview", () => {
 
   test("explains an empty history and offers a way forward", async ({ page }) => {
     await openWindow(page, "main", "?data=empty");
-    await page.getByRole("navigation").getByRole("button", { name: /^Overview/ }).click();
+    await page.getByRole("navigation").getByRole("button", { name: /^Insights/ }).click();
 
     await expect(page.getByRole("heading", { name: "Nothing tracked this week" })).toBeVisible();
-    await expect(page.getByTestId("overview-comparison")).toContainText("No comparison");
+    await expect(page.getByTestId("insights-comparison")).toContainText("No comparison");
     await expect(page.getByRole("alert")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Previous week" })).toBeEnabled();
     await expectNoA11yViolations(page);
   });
 
   test("has no accessibility violations in light and dark", async ({ page }) => {
-    await openSection(page, "Overview");
+    await openSection(page, "Insights");
     await expect(page.getByText("Mar 16 – 22, 2026")).toBeVisible();
     await expectNoA11yViolations(page);
 
@@ -112,7 +126,7 @@ test.describe("Overview", () => {
 });
 
 test("y-axis labels are compact and stay on one line", async ({ page }) => {
-  await openSection(page, "Overview");
+  await openSection(page, "Insights");
   await expect(page.getByText("Mar 16 – 22, 2026")).toBeVisible();
 
   const labels = page.getByTestId("chart-y-axis").locator("span");

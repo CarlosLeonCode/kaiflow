@@ -41,7 +41,7 @@ export function DataPanel(props: Props) {
     <>
       <Panel
         title="Data"
-        description="Your tracked time can be backed up automatically and restored from a backup or export file. Exports of a date range live in Overview."
+        description="Your tracked time can be backed up automatically and restored from a backup or export file. Exports of a date range live in Insights."
       >
         {!status ? (
           <div className="p-3" aria-label="Loading data settings">

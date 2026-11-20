@@ -75,7 +75,7 @@ export function impactParagraphs(impact: RetentionImpactDto | undefined): string
  * `impact` is the dry run of a purge (`older_than_days` only).
  */
 export function deleteCopy(op: DeleteOpDto, trackingWillRestart = false, impact?: RetentionImpactDto): DeleteCopy {
-  const kept = "Activities, rules, privacy rules and settings are kept.";
+  const kept = "Activities, sorting rules, excluded apps and settings are kept.";
   switch (op.kind) {
     case "range": {
       const from = new Date(op.range.from).toLocaleDateString(undefined, dayFormat);

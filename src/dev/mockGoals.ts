@@ -7,7 +7,7 @@
 
 import type { GoalDto, GoalEventKindDto, GoalStateDto, GoalStatusDto, RangeDto } from "@/shared/ipc";
 import { addLocalDays } from "@/shared/lib/time";
-import { periodRange, type Period } from "@/features/overview/lib/periods";
+import { periodRange, type Period } from "@/features/insights/lib/periods";
 
 import type { MockSegment } from "./seed";
 

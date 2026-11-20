@@ -41,7 +41,7 @@ export function useReportQuery(range: RangeDto, buckets: readonly RangeDto[] = [
 }
 
 /**
- * Everything the Overview shows for a range in one call: totals, breakdowns, stacked buckets,
+ * Everything Insights shows for a range in one call: totals, breakdowns, stacked buckets,
  * heatmap, trend against `previous` and the focus ratio.
  */
 export function useDashboardQuery(range: RangeDto, buckets: readonly RangeDto[], previous: RangeDto | null) {
@@ -211,7 +211,7 @@ export function useUpdateSettingsMutation() {
       void client.invalidateQueries({ queryKey: queryKeys.status });
       // The privacy page mirrors `store_titles` and the retention policy.
       void client.invalidateQueries({ queryKey: queryKeys.privacy });
-      // The first day of the week moves weekly goals and the Overview periods.
+      // The first day of the week moves weekly goals and the Insights periods.
       void client.invalidateQueries({ queryKey: queryKeys.goals });
     },
     onError: () => {
@@ -511,7 +511,7 @@ export function useGoalsQuery() {
 }
 
 /**
- * Progress and streak of every active goal: what Today, the popover and Overview show.
+ * Progress and streak of every active goal: what Today, the popover and Insights show.
  * Refreshed by backend events like every other query; the time of the open segment is added
  * on screen (`withLiveTime`), so no polling is needed.
  */

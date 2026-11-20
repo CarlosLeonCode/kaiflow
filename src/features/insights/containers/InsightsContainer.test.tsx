@@ -4,9 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { DashboardDto, RangeDto } from "@/shared/ipc";
 import { HOUR } from "@/shared/lib/time";
-import { dashboard, goalStatus, mockBackend, renderWithProviders, settings } from "@/test/ipc";
+import { aiSettings, dashboard, focusSession, goalStatus, mockBackend, renderWithProviders, review, settings } from "@/test/ipc";
 
-import { OverviewContainer } from "./OverviewContainer";
+import { InsightsContainer } from "./InsightsContainer";
 
 const H = HOUR;
 const local = (y: number, m: number, d: number, h = 0) => new Date(y, m - 1, d, h).getTime();
@@ -67,6 +67,9 @@ function backend(overrides: Handlers = {}) {
       if (range.from === WEEK.from && range.to === WEEK.to) return weekDashboard(args.buckets as RangeDto[]);
       return dashboard({ range, buckets: (args.buckets as RangeDto[]).map((r) => ({ range: r, total_ms: 0, by_activity: [] })) });
     },
+    review_get: (args) => review({ weeks_ago: args.weeksAgo as number, first_day: 20_738 - 7 * (args.weeksAgo as number) }),
+    ai_settings_get: () => aiSettings(),
+    ai_reviews_list: () => [],
     ...overrides,
   });
 }
@@ -79,7 +82,7 @@ interface DashboardArgs {
 const dashboardCalls = (calls: { cmd: string; args: Record<string, unknown> }[]) =>
   calls.filter((c) => c.cmd === "get_dashboard").map((c) => c.args as unknown as DashboardArgs);
 
-describe("OverviewContainer", () => {
+describe("InsightsContainer", () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ["Date"], now: NOW });
   });
@@ -89,9 +92,9 @@ describe("OverviewContainer", () => {
 
   it("loads the whole week in ONE call with local day boundaries sent as UTC ranges", async () => {
     const { calls } = backend();
-    renderWithProviders(<OverviewContainer />);
+    renderWithProviders(<InsightsContainer />);
 
-    expect(await screen.findByTestId("overview-total")).toHaveTextContent("3h 00m");
+    expect(await screen.findByTestId("insights-total")).toHaveTextContent("3h 00m");
     const sent = dashboardCalls(calls);
     // One data call carries the range, its seven day buckets and the previous week: no
     // report per day, no report for the comparison.
@@ -106,9 +109,9 @@ describe("OverviewContainer", () => {
 
   it("states the trend in words without relying on color", async () => {
     backend();
-    renderWithProviders(<OverviewContainer />);
+    renderWithProviders(<InsightsContainer />);
 
-    expect(await screen.findByTestId("overview-comparison")).toHaveTextContent(
+    expect(await screen.findByTestId("insights-comparison")).toHaveTextContent(
       "1h 00m more than the previous week (+50%)",
     );
   });
@@ -117,9 +120,9 @@ describe("OverviewContainer", () => {
     backend({
       get_dashboard: (args) => ({ ...weekDashboard(args.buckets as RangeDto[]), previous_total_ms: 0, trend: { kind: "no_comparison" } }),
     });
-    renderWithProviders(<OverviewContainer />);
+    renderWithProviders(<InsightsContainer />);
 
-    expect(await screen.findByTestId("overview-comparison")).toHaveTextContent(
+    expect(await screen.findByTestId("insights-comparison")).toHaveTextContent(
       "No comparison: nothing was tracked in the previous week",
     );
   });
@@ -127,7 +130,7 @@ describe("OverviewContainer", () => {
   it("draws one accessible bar per day, stacked by activity, and moves between bars with the arrow keys", async () => {
     const user = userEvent.setup();
     backend();
-    renderWithProviders(<OverviewContainer />);
+    renderWithProviders(<InsightsContainer />);
 
     const chart = await screen.findByRole("group", { name: "Tracked time per day, stacked by activity" });
     const monday = await within(chart).findByRole("img", { name: /October 19: 2h 00m\. Work 1h 30m, Unassigned 30m/ });
@@ -144,9 +147,9 @@ describe("OverviewContainer", () => {
     expect(document.activeElement).toBe(within(chart).getByRole("img", { name: /October 25/ }));
   });
 
-  it("shows the heatmap, the trend line and the focus ratio from the same response", async () => {
+  it("shows the heatmap, the trend line and the productive time from the same response", async () => {
     backend();
-    renderWithProviders(<OverviewContainer />);
+    renderWithProviders(<InsightsContainer />);
 
     const grid = await screen.findByRole("grid", { name: "Tracked time by weekday and hour" });
     expect(within(grid).getAllByRole("gridcell")).toHaveLength(168);
@@ -158,7 +161,7 @@ describe("OverviewContainer", () => {
 
   it("lists totals by activity, app and window title with the Unassigned name mapped", async () => {
     backend();
-    renderWithProviders(<OverviewContainer />);
+    renderWithProviders(<InsightsContainer />);
 
     const activities = await screen.findByRole("list", { name: "Time by activity" });
     expect(within(activities).getAllByRole("listitem").map((li) => li.textContent)).toEqual([
@@ -178,7 +181,7 @@ describe("OverviewContainer", () => {
         focus_ratio: { kind: "no_signal" },
       }),
     });
-    renderWithProviders(<OverviewContainer />);
+    renderWithProviders(<InsightsContainer />);
 
     expect(await screen.findByTestId("focus-ratio")).toHaveTextContent("No productive or distracting data");
   });
@@ -193,9 +196,9 @@ describe("OverviewContainer", () => {
           : weekDashboard(args.buckets as RangeDto[]);
       },
     });
-    renderWithProviders(<OverviewContainer />);
+    renderWithProviders(<InsightsContainer />);
 
-    await screen.findByTestId("overview-total");
+    await screen.findByTestId("insights-total");
     expect(screen.getByRole("button", { name: "Next week" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Today" })).toBeDisabled();
 
@@ -206,19 +209,19 @@ describe("OverviewContainer", () => {
     const back = dashboardCalls(calls).find((c) => c.range.from === PREVIOUS_WEEK.from);
     // Two weeks back is the comparison base, still in the same call.
     expect(back?.previous).toEqual({ from: local(2026, 10, 5), to: local(2026, 10, 12) });
-    await waitFor(() => expect(screen.getByTestId("overview-total")).toHaveTextContent("2h 00m"));
+    await waitFor(() => expect(screen.getByTestId("insights-total")).toHaveTextContent("2h 00m"));
     expect(screen.getByRole("button", { name: "Next week" })).toBeEnabled();
 
     await user.click(screen.getByRole("button", { name: "Today" }));
-    expect(await screen.findByTestId("overview-total")).toHaveTextContent("3h 00m");
+    expect(await screen.findByTestId("insights-total")).toHaveTextContent("3h 00m");
     expect(screen.getByRole("button", { name: "Next week" })).toBeDisabled();
   });
 
   it("switches to day (hourly), month (daily) and 90 days (weekly), one call each", async () => {
     const user = userEvent.setup();
     const { calls } = backend();
-    renderWithProviders(<OverviewContainer />);
-    await screen.findByTestId("overview-total");
+    renderWithProviders(<InsightsContainer />);
+    await screen.findByTestId("insights-total");
 
     await user.click(screen.getByRole("radio", { name: "Day" }));
     await waitFor(() => expect(dashboardCalls(calls).some((c) => c.buckets.length === 24)).toBe(true));
@@ -250,7 +253,7 @@ describe("OverviewContainer", () => {
         range: args.range as RangeDto,
       }),
     });
-    renderWithProviders(<OverviewContainer />);
+    renderWithProviders(<InsightsContainer />);
     await screen.findByRole("grid", { name: "Tracked time by weekday and hour" });
 
     await user.click(screen.getByRole("radio", { name: "Day" }));
@@ -260,8 +263,8 @@ describe("OverviewContainer", () => {
   it("exports the visible range as JSON and shows where it was saved", async () => {
     const user = userEvent.setup();
     const { calls } = backend({ export_json: () => "/Users/me/Downloads/kaiflow-export.json" });
-    renderWithProviders(<OverviewContainer />);
-    await screen.findByTestId("overview-total");
+    renderWithProviders(<InsightsContainer />);
+    await screen.findByTestId("insights-total");
 
     await user.click(screen.getByRole("button", { name: /Export JSON/ }));
 
@@ -280,8 +283,8 @@ describe("OverviewContainer", () => {
         throw { kind: "internal", message: "disk is read-only" };
       },
     });
-    renderWithProviders(<OverviewContainer />);
-    await screen.findByTestId("overview-total");
+    renderWithProviders(<InsightsContainer />);
+    await screen.findByTestId("insights-total");
 
     await user.click(screen.getByRole("button", { name: /Export JSON/ }));
     await waitFor(() => expect(screen.getByRole("button", { name: /Export JSON/ })).toBeEnabled());
@@ -295,11 +298,11 @@ describe("OverviewContainer", () => {
 
   it("explains an empty period and still lets the user move on", async () => {
     backend({ get_dashboard: (args) => dashboard({ range: args.range as RangeDto }) });
-    renderWithProviders(<OverviewContainer />);
+    renderWithProviders(<InsightsContainer />);
 
     expect(await screen.findByText("Nothing tracked this week")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Previous week" })).toBeEnabled();
-    expect(screen.getByTestId("overview-comparison")).toHaveTextContent("No comparison");
+    expect(screen.getByTestId("insights-comparison")).toHaveTextContent("No comparison");
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
@@ -309,9 +312,9 @@ describe("OverviewContainer", () => {
         throw { kind: "storage", message: "database is locked" };
       },
     });
-    renderWithProviders(<OverviewContainer />);
+    renderWithProviders(<InsightsContainer />);
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Could not load the overview: database is locked");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not load insights: database is locked");
   });
 
   it("lists the goals of the dashboard with their progress", async () => {
@@ -321,7 +324,7 @@ describe("OverviewContainer", () => {
         goals: [goalStatus({ streak: { current: 4, best: 6, at_risk: false } }, { label: "Deep work" })],
       }),
     });
-    renderWithProviders(<OverviewContainer />);
+    renderWithProviders(<InsightsContainer />);
 
     const card = await screen.findByRole("region", { name: "Goals" });
     expect(within(card).getByText("Deep work")).toBeInTheDocument();
@@ -332,12 +335,72 @@ describe("OverviewContainer", () => {
   it("starts weeks on the configured day and orders the heatmap rows the same way", async () => {
     // Sunday-first: the week of Wed Oct 21 runs Sun Oct 18 .. Sun Oct 25.
     const { calls } = backend({ settings_get: () => settings({ week_start: 6 }) });
-    renderWithProviders(<OverviewContainer />);
+    renderWithProviders(<InsightsContainer />);
 
     await waitFor(() => {
       const sent = dashboardCalls(calls).at(-1);
       expect(sent?.range).toEqual({ from: local(2026, 10, 18), to: local(2026, 10, 25) });
       expect(sent?.previous).toEqual({ from: local(2026, 10, 11), to: local(2026, 10, 18) });
     });
+  });
+  it("names the productive share card Productive time", async () => {
+    backend();
+    renderWithProviders(<InsightsContainer />);
+
+    expect(await screen.findByRole("region", { name: "Productive time" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Focus ratio" })).not.toBeInTheDocument();
+  });
+
+  it("adds the weekly review of the same week below the cards in the Week view only", async () => {
+    const user = userEvent.setup();
+    const { calls } = backend({
+      review_get: () => review({ focus: [focusSession()], note: "Felt rushed on Tuesday" }),
+    });
+    renderWithProviders(<InsightsContainer />);
+
+    expect(await screen.findByTestId("review-focus")).toHaveTextContent("1 session (1 completed)");
+    expect(screen.getByLabelText("Your note about this week")).toHaveValue("Felt rushed on Tuesday");
+    expect(await screen.findByText(/nothing is sent anywhere until you switch a provider on/i)).toBeInTheDocument();
+    expect(calls.filter((c) => c.cmd === "review_get").map((c) => c.args.weeksAgo)).toEqual([0]);
+    // No duplicate cards: Summary, productive time and goals come from the dashboard once.
+    expect(screen.getAllByRole("region", { name: "Summary" })).toHaveLength(1);
+    expect(screen.getAllByRole("region", { name: "Productive time" })).toHaveLength(1);
+
+    await user.click(screen.getByRole("radio", { name: "Month" }));
+    await waitFor(() => expect(screen.queryByTestId("review-focus")).not.toBeInTheDocument());
+    expect(screen.queryByLabelText("Your note about this week")).not.toBeInTheDocument();
+  });
+
+  it("binds the note and the AI analysis to the week on screen as weeks back", async () => {
+    const user = userEvent.setup();
+    const { calls } = backend();
+    renderWithProviders(<InsightsContainer />);
+    await screen.findByLabelText("Your note about this week");
+
+    await user.click(screen.getByRole("button", { name: "Previous week" }));
+    await user.click(screen.getByRole("button", { name: "Previous week" }));
+    await waitFor(() => expect(calls.filter((c) => c.cmd === "review_get").map((c) => c.args.weeksAgo)).toEqual([0, 1, 2]));
+
+    await user.type(await screen.findByLabelText("Your note about this week"), "Two weeks back");
+    await user.click(screen.getByRole("button", { name: "Save note" }));
+    // The note goes to the first day the backend reported for that same week.
+    await waitFor(() =>
+      expect(calls.find((c) => c.cmd === "review_note_set")?.args).toEqual({ firstDay: 20_738 - 14, note: "Two weeks back" }),
+    );
+  });
+
+  it("keys the weekly review by the configured first day of the week", async () => {
+    const user = userEvent.setup();
+    // Sunday-first: Wed Oct 21 is in the week of Sun Oct 18, the current week (weeksAgo 0).
+    const { calls } = backend({ settings_get: () => settings({ week_start: 6 }) });
+    renderWithProviders(<InsightsContainer />);
+    await screen.findByLabelText("Your note about this week");
+
+    await user.click(screen.getByRole("button", { name: "Previous week" }));
+    await waitFor(() =>
+      expect(dashboardCalls(calls).some((c) => c.range.from === local(2026, 10, 11) && c.range.to === local(2026, 10, 18))).toBe(true),
+    );
+    await waitFor(() => expect(calls.filter((c) => c.cmd === "review_get").at(-1)?.args.weeksAgo).toBe(1));
+    expect(calls.filter((c) => c.cmd === "review_get").every((c) => (c.args.weeksAgo as number) <= 1)).toBe(true);
   });
 });

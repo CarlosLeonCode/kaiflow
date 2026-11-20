@@ -18,7 +18,7 @@ import type { Submit } from "../lib/submit";
 import { ActivityForm } from "./ActivityForm";
 import { PresetChooser } from "./PresetChooser";
 
-export const GUIDE_STEPS = ["Create or pick activities", "Add rules", "Mark how each activity counts"] as const;
+export const GUIDE_STEPS = ["Create or pick activities", "Add sorting rules", "Mark how each activity counts"] as const;
 
 type Step = 0 | 1 | 2;
 
@@ -168,7 +168,7 @@ export function GuidedSetup({
 
         {step === 1 && (
           <div className="mt-1 space-y-3 text-xs">
-            <p className="text-muted-foreground">A rule tells the app which time belongs to an activity. There are two kinds:</p>
+            <p className="text-muted-foreground">A sorting rule tells the app which time belongs to an activity. There are two kinds:</p>
             <ul className="space-y-1.5">
               <li>
                 <span className="font-medium">By app:</span> everything in one app. For example, all of Excel goes to
@@ -181,8 +181,8 @@ export function GuidedSetup({
               </li>
             </ul>
             <p className="text-muted-foreground">
-              While you write a rule, the form shows how much of your last {previewDays} days it would cover. Rules
-              sort time you already tracked too.
+              While you write a rule, the form shows how much of your last {previewDays} days it would cover. Sorting
+              rules apply to time you already tracked too.
             </p>
             <div className="flex flex-wrap items-center gap-2">
               {own.length === 0 ? (

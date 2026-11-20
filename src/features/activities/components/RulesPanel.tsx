@@ -70,12 +70,12 @@ export function RulesPanel({
   }
 
   return (
-    <section aria-label="Rules" className="space-y-2">
+    <section aria-label="Sorting rules" className="space-y-2">
       <div className="px-1">
-        <h2 className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">Rules</h2>
+        <h2 className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">Sorting rules</h2>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          A rule says which time belongs to an activity. Rules also sort time you already tracked, and you can change
-          them any time.
+          A sorting rule says which time belongs to an activity. Sorting rules also apply to time you already tracked,
+          and you can change them any time.
         </p>
       </div>
 
@@ -93,7 +93,7 @@ export function RulesPanel({
 
         {rules.length === 0 ? (
           <p className="px-3 py-6 text-center text-xs text-muted-foreground">
-            No rules yet. Add one above: matching time, past and new, moves out of Unassigned.
+            No sorting rules yet. Add one above: matching time, past and new, moves out of Unassigned.
           </p>
         ) : (
           GROUPS.map((group) => {

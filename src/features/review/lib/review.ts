@@ -7,28 +7,16 @@ import type {
   GoalWeekDto,
   ReviewPreviewDto,
   WeekResultDto,
-  WeeklyReviewDto,
 } from "@/shared/ipc";
 import { formatDuration } from "@/shared/lib/time";
 
 /** Pure view-model helpers for the weekly review (no IPC, no clock). */
 
-/** Furthest week the review can go back (the backend refuses more). */
+/** Furthest week the review (note and AI analysis) can go back; the backend refuses more. */
 export const MAX_WEEKS_AGO = 104;
 
 /** Longest personal note (the backend refuses more). */
 export const MAX_NOTE_LENGTH = 4000;
-
-export function weekHeading(weeksAgo: number): string {
-  if (weeksAgo === 0) return "This week";
-  if (weeksAgo === 1) return "Last week";
-  return `${weeksAgo} weeks ago`;
-}
-
-/** A week is empty when nothing was tracked and no focus session ran. */
-export function isEmptyWeek(review: Pick<WeeklyReviewDto, "dashboard" | "focus">): boolean {
-  return review.dashboard.total_ms === 0 && review.focus.length === 0;
-}
 
 /** `Mon`, `Tue`... for a local day number (days since 1970-01-01). */
 export function dayName(day: number): string {
