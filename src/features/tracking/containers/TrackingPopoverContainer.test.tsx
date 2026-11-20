@@ -348,7 +348,7 @@ describe("TrackingPopoverContainer", () => {
       await waitFor(() => expect(calls.map((c) => c.cmd).filter((c) => c.startsWith("focus_p") || c.startsWith("focus_r"))).toEqual(["focus_pause", "focus_resume"]));
     });
 
-    it("starts a timer in one click, with an optional task", async () => {
+    it("starts a timer in one click", async () => {
       const user = userEvent.setup();
       const { calls } = mockBackend({
         get_status: () => status(),
@@ -357,12 +357,11 @@ describe("TrackingPopoverContainer", () => {
       });
       renderWithProviders(<TrackingPopoverContainer />);
 
-      const start = await screen.findByRole("region", { name: "Start a timer" });
-      await user.type(within(start).getByRole("textbox", { name: "Task (optional)" }), "Read the doc");
+      const start = await screen.findByRole("region", { name: "Start focus" });
       await user.click(within(start).getByRole("button", { name: "50 min" }));
       await waitFor(() =>
         expect(calls.filter((c) => c.cmd === "focus_start").map((c) => c.args.start)).toEqual([
-          { kind: "timer", intent: "Read the doc", planned_minutes: 50, allowed: { activity_ids: [], app_ids: [] } },
+          { kind: "timer", intent: "", planned_minutes: 50, allowed: { activity_ids: [], app_ids: [] } },
         ]),
       );
       expect(await screen.findByRole("region", { name: "Active timer" })).toBeInTheDocument();

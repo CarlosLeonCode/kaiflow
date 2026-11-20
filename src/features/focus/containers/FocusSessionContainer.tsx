@@ -107,7 +107,7 @@ export function FocusSessionContainer({ variant = "page" }: { variant?: FocusVar
       <QuickStart
         busy={start.isPending}
         error={start.error ? errorMessage(start.error, t) : null}
-        onStart={(minutes, intent) => start.mutate(quickTimer(minutes, intent))}
+        onStart={(minutes) => start.mutate(quickTimer(minutes, ""))}
       />
     );
   }

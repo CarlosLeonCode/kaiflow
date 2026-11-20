@@ -46,8 +46,8 @@ describe("IdlePromptContainer", () => {
     setup([gap()]);
     renderWithProviders(<IdlePromptContainer />);
 
-    expect(await screen.findByRole("heading", { name: /You were away for 20m/ })).toBeInTheDocument();
-    expect(screen.getByText("Xcode")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /Away 20m/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Xcode/ })).toBeInTheDocument();
   });
 
   it("discards through resolve_idle_gap and removes the card", async () => {
@@ -67,7 +67,7 @@ describe("IdlePromptContainer", () => {
     const { calls } = setup([gap()]);
     renderWithProviders(<IdlePromptContainer />);
 
-    await user.click(await screen.findByRole("button", { name: "Assign to previous app" }));
+    await user.click(await screen.findByRole("button", { name: "Keep" }));
 
     await waitFor(() => expect(calls.some((c) => c.cmd === "resolve_idle_gap")).toBe(true));
     expect(calls.find((c) => c.cmd === "resolve_idle_gap")?.args).toEqual({
@@ -81,11 +81,11 @@ describe("IdlePromptContainer", () => {
     const { calls } = setup([gap()]);
     renderWithProviders(<IdlePromptContainer />);
 
-    await user.click(await screen.findByRole("button", { name: /Assign to activity/ }));
+    await user.click(await screen.findByRole("button", { name: "Assign to an activity" }));
     await user.click(screen.getByRole("button", { name: "Back to idle options" }));
     expect(screen.getByRole("button", { name: "Discard" })).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: /Assign to activity/ }));
+    await user.click(screen.getByRole("button", { name: "Assign to an activity" }));
     await user.click(await screen.findByRole("button", { name: "Meetings" }));
 
     await waitFor(() => expect(calls.some((c) => c.cmd === "resolve_idle_gap")).toBe(true));
@@ -100,7 +100,7 @@ describe("IdlePromptContainer", () => {
     renderWithProviders(<IdlePromptContainer />);
 
     await screen.findByRole("button", { name: "Discard" });
-    expect(screen.queryByRole("button", { name: "Assign to previous app" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Keep" })).toBeNull();
   });
 
   it("shows the oldest gap first and mentions the others", async () => {

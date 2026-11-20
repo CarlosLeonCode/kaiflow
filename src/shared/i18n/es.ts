@@ -309,8 +309,7 @@ export const es: Messages = {
       badLength: "Un bloque dura entre 1 minuto y 12 horas.",
     },
     quick: {
-      title: "Iniciar un temporizador",
-      task: "Tarea (opcional)",
+      title: "Iniciar enfoque",
     },
     unavailable: {
       title: "Los avisos de desvío no están disponibles",
@@ -468,16 +467,15 @@ export const es: Messages = {
   },
   idlePrompt: {
     label: "Estuviste ausente",
-    awayFor: "Estuviste ausente durante",
-    lastIn: " · antes en ",
+    away: (duration) => `Ausente ${duration}`,
     back: "Volver a las opciones de inactividad",
     assignTitle: "Asigna este tiempo a una actividad",
     noActivities: "Aún no hay actividades.",
     activities: "Actividades",
     discard: "Descartar",
-    assignPrevious: "Asignar a la app anterior",
-    assignActivity: "Asignar a actividad…",
-    expires: "Si no haces nada, el tiempo se descarta a las",
+    keep: "Conservar",
+    keepTitle: (app) => `Contar este tiempo como ${app}`,
+    assignActivity: "Asignar a una actividad",
     moreWaiting: (count) => `${count} más en espera.`,
   },
   updates: {

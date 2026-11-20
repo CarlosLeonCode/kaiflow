@@ -35,7 +35,7 @@ export interface TrackingPopoverProps {
   /** Progress of the goals; the popover shows the two most relevant. */
   goals?: readonly GoalStatusDto[];
   togglePending: boolean;
-  /** Slot above the totals, used for the idle-return card. */
+  /** Slot below the totals, used for the idle-return card. */
   notice?: ReactNode;
   /** The running focus session, with its drift card when one is due. */
   focus?: ReactNode;
@@ -66,11 +66,14 @@ export function TrackingPopover(props: TrackingPopoverProps) {
           {shortcut.kind === "unavailable" && (
             <ShortcutBanner shortcut={formatShortcut(shortcut.shortcut, os)} reason={shortcut.reason} os={os} />
           )}
-          {props.focus}
-          {props.notice}
         </div>
+        {/* The day comes first; what needs an answer (away time) and focus follow it. */}
         <TodayTotal totalMs={props.totalMs} live={props.state === "running"} />
         <CurrentActivity state={props.state} current={props.current} elapsedMs={props.currentElapsedMs} os={os} />
+        <div className="mt-3 space-y-3 px-4 empty:hidden">
+          {props.notice}
+          {props.focus}
+        </div>
         <div className="mt-4">
           <TopApps rows={props.topApps} loading={props.topAppsLoading} />
         </div>

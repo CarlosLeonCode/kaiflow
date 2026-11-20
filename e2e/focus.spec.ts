@@ -156,13 +156,11 @@ test.describe("Focus", () => {
   test("the popover starts a timer in one click and shows it", async ({ page }) => {
     await openWindow(page, "popover");
 
-    const start = page.getByRole("region", { name: "Start a timer" });
-    await start.getByRole("textbox", { name: "Task (optional)" }).fill("Inbox zero");
+    const start = page.getByRole("region", { name: "Start focus" });
     await expectNoA11yViolations(page);
     await start.getByRole("button", { name: "25 min" }).click();
 
     const card = page.getByRole("region", { name: "Active timer" });
-    await expect(card).toContainText("Inbox zero");
     await expect(card.getByTestId("focus-countdown")).toHaveText("25:00");
     await expect(card.getByRole("button", { name: "Pause" })).toBeEnabled();
     await expectNoA11yViolations(page);

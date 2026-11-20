@@ -1,55 +1,41 @@
-import { useId, useState } from "react";
+import { useId } from "react";
 
 import { useT } from "@/shared/i18n";
-import { Input } from "@/shared/ui/input";
 
-import { DURATION_PRESETS, MAX_INTENT_LENGTH } from "../lib/focus";
+import { DURATION_PRESETS } from "../lib/focus";
 
 interface Props {
   busy?: boolean;
   /** Why starting failed, when it did. */
   error?: string | null;
-  onStart: (minutes: number, intent: string) => void;
+  onStart: (minutes: number) => void;
 }
 
-/** The popover's one-click timer: an optional task name and a chip per preset length. */
+/** The popover's one-click timer: one chip per preset length. Naming the task lives in Focus. */
 export function QuickStart({ busy = false, error, onStart }: Props) {
   const t = useT();
   const id = useId();
-  const [intent, setIntent] = useState("");
   return (
-    <section aria-labelledby={`${id}-title`} className="rounded-xl border border-border bg-surface p-3">
-      <h2 id={`${id}-title`} className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+    <section aria-labelledby={`${id}-title`} className="flex flex-wrap items-center justify-between gap-2">
+      <h2 id={`${id}-title`} className="text-xs font-medium text-muted-foreground">
         {t.focus.quick.title}
       </h2>
-      <Input
-        aria-label={t.focus.quick.task}
-        placeholder={t.focus.start.placeholder}
-        className="mt-2 h-8 w-full"
-        maxLength={MAX_INTENT_LENGTH}
-        value={intent}
-        onChange={(event) => setIntent(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" && !busy) onStart(DURATION_PRESETS[0], intent);
-        }}
-      />
-      <div className="mt-2 grid grid-cols-3 gap-2">
+      <div className="flex gap-1.5">
         {DURATION_PRESETS.map((minutes) => (
           <button
             key={minutes}
             type="button"
             disabled={busy}
             aria-label={t.focus.minutes(minutes)}
-            onClick={() => onStart(minutes, intent)}
-            className="flex h-12 flex-col items-center justify-center rounded-lg border border-border bg-background transition-colors hover:border-primary/50 hover:bg-accent disabled:opacity-50"
+            onClick={() => onStart(minutes)}
+            className="tabular h-7 min-w-11 rounded-md border border-border bg-background px-2 text-xs font-medium transition-colors hover:border-primary/50 hover:bg-accent disabled:opacity-50"
           >
-            <span className="tabular text-lg font-semibold leading-none">{minutes}</span>{" "}
-            <span className="mt-1 text-2xs text-muted-foreground">min</span>
+            {minutes}
           </button>
         ))}
       </div>
       {error && (
-        <p role="alert" className="mt-2 text-xs text-destructive">
+        <p role="alert" className="w-full text-xs text-destructive">
           {error}
         </p>
       )}

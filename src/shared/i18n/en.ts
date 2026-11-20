@@ -328,8 +328,7 @@ export const en = {
       badLength: "A block lasts between 1 minute and 12 hours.",
     },
     quick: {
-      title: "Start a timer",
-      task: "Task (optional)",
+      title: "Start focus",
     },
     unavailable: {
       title: "Drift nudges are unavailable",
@@ -476,16 +475,15 @@ export const en = {
   },
   idlePrompt: {
     label: "You were away",
-    awayFor: "You were away for",
-    lastIn: " · last in ",
+    away: (duration: string) => `Away ${duration}`,
     back: "Back to idle options",
     assignTitle: "Assign this time to an activity",
     noActivities: "No activities yet.",
     activities: "Activities",
     discard: "Discard",
-    assignPrevious: "Assign to previous app",
-    assignActivity: "Assign to activity…",
-    expires: "If you do nothing, the time is discarded at",
+    keep: "Keep",
+    keepTitle: (app: string) => `Count this time as ${app}`,
+    assignActivity: "Assign to an activity",
     moreWaiting: (count: number) => `${count} more waiting.`,
   },
   updates: {

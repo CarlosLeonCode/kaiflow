@@ -24,7 +24,9 @@ test.describe("Spanish interface", () => {
     await expect(page.getByRole("region", { name: "Hoy", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: /Pausar registro/ })).toBeVisible();
     await expect(page.getByRole("button", { name: /Abrir panel/ })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Iniciar un temporizador" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Iniciar enfoque" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Ausente 12m/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Conservar" })).toBeVisible();
     await expect(page.locator("html")).toHaveAttribute("lang", "es");
     await expectNoA11yViolations(page);
   });
