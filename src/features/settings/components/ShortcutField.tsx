@@ -1,6 +1,7 @@
 import { RotateCcw } from "lucide-react";
 import { type KeyboardEvent, useState } from "react";
 
+import { useT } from "@/shared/i18n";
 import type { OsDto } from "@/shared/ipc";
 import { defaultShortcut, formatShortcut, shortcutFromKeyEvent, shortcutKeys } from "@/shared/lib/shortcut";
 import { Button } from "@/shared/ui/button";
@@ -22,6 +23,7 @@ interface Props {
  * so the field stays keyboard operable (Enter/Space starts recording like a click).
  */
 export function ShortcutField({ id, value, os = "macos", invalid, describedBy, disabled, onChange }: Props) {
+  const words = useT().settings.tracking;
   const [recording, setRecording] = useState(false);
   const fallback = defaultShortcut(os);
 
@@ -47,7 +49,7 @@ export function ShortcutField({ id, value, os = "macos", invalid, describedBy, d
         disabled={disabled}
         aria-invalid={invalid || undefined}
         aria-describedby={describedBy}
-        aria-label={recording ? "Press the new shortcut" : `Global shortcut ${formatShortcut(value, os)}, change`}
+        aria-label={recording ? words.pressNew : words.current(formatShortcut(value, os))}
         onClick={() => setRecording((r) => !r)}
         onBlur={() => setRecording(false)}
         onKeyDown={onKeyDown}
@@ -56,7 +58,7 @@ export function ShortcutField({ id, value, os = "macos", invalid, describedBy, d
         } ${recording ? "bg-accent text-muted-foreground" : "bg-background"}`}
       >
         {recording ? (
-          <span>Press shortcut…</span>
+          <span>{words.recording}</span>
         ) : (
           shortcutKeys(value, os).map((key, index) => <Kbd key={`${key}-${index}`}>{key}</Kbd>)
         )}
@@ -65,7 +67,7 @@ export function ShortcutField({ id, value, os = "macos", invalid, describedBy, d
         <Button
           size="icon"
           variant="ghost"
-          aria-label="Reset shortcut to default"
+          aria-label={words.reset}
           disabled={disabled}
           onClick={() => onChange(fallback)}
         >

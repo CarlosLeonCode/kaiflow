@@ -1,5 +1,6 @@
 import { Check, X } from "lucide-react";
 
+import { useT } from "@/shared/i18n";
 import type { SuggestionDto } from "@/shared/ipc";
 import { Button } from "@/shared/ui/button";
 
@@ -20,6 +21,8 @@ interface Props {
  * happens until you accept; accepting adds an app rule, so past time is sorted too.
  */
 export function SuggestionsPanel({ suggestions, onAccept, onDismiss, onFailure }: Props) {
+  const t = useT();
+  const words = t.activities.suggestions;
   if (suggestions.length === 0) return null;
 
   async function run(action: Submit<string>, appId: string) {
@@ -28,15 +31,12 @@ export function SuggestionsPanel({ suggestions, onAccept, onDismiss, onFailure }
   }
 
   return (
-    <section id={SUGGESTIONS_ID} tabIndex={-1} aria-label="Suggestions" className="mb-6 space-y-2">
+    <section id={SUGGESTIONS_ID} tabIndex={-1} aria-label={words.title} className="mb-6 space-y-2">
       <div className="px-1">
-        <h2 className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">Suggestions</h2>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          These apps are still Unassigned. Accept a suggestion to add a rule for the app (its past time moves too), or
-          dismiss it and it will not come back.
-        </p>
+        <h2 className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">{words.title}</h2>
+        <p className="mt-0.5 text-xs text-muted-foreground">{words.intro}</p>
       </div>
-      <ul aria-label="Suggestion list" className="divide-y divide-border rounded-lg border border-border bg-background">
+      <ul aria-label={words.list} className="divide-y divide-border rounded-lg border border-border bg-background">
         {suggestions.map((suggestion) => (
           <li key={suggestion.app_id} className="flex items-center gap-2.5 px-3 py-2">
             <span className="min-w-0 flex-1">
@@ -44,24 +44,24 @@ export function SuggestionsPanel({ suggestions, onAccept, onDismiss, onFailure }
                 {suggestion.app_name}
               </span>
               <span className="block text-xs text-muted-foreground">
-                Suggested activity: {suggestion.activity_name}
-                {suggestion.activity_id === null && " (new)"}
+                {words.suggested(suggestion.activity_name)}
+                {suggestion.activity_id === null && words.isNew}
               </span>
             </span>
             <Button
               size="sm"
-              aria-label={`Accept ${suggestion.app_name} as ${suggestion.activity_name}`}
+              aria-label={words.acceptLabel(suggestion.app_name, suggestion.activity_name)}
               onClick={() => void run(onAccept, suggestion.app_id)}
             >
-              <Check aria-hidden="true" /> Accept
+              <Check aria-hidden="true" /> {words.accept}
             </Button>
             <Button
               size="sm"
               variant="ghost"
-              aria-label={`Dismiss suggestion for ${suggestion.app_name}`}
+              aria-label={words.dismissLabel(suggestion.app_name)}
               onClick={() => void run(onDismiss, suggestion.app_id)}
             >
-              <X aria-hidden="true" /> Dismiss
+              <X aria-hidden="true" /> {t.common.dismiss}
             </Button>
           </li>
         ))}

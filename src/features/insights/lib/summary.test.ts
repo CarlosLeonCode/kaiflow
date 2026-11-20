@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { en, es } from "@/shared/i18n";
 import { MINUTE } from "@/shared/lib/time";
 import { dashboard } from "@/test/ipc";
 
@@ -18,25 +19,34 @@ const range = (offset: number) => ({ from: offset * 1000, to: (offset + 1) * 100
 
 describe("trendView", () => {
   it("states the change and its direction in words", () => {
-    expect(trendView("week", { kind: "change", delta_ms: 30 * MINUTE, pct: 50 })).toEqual({
+    expect(trendView("week", { kind: "change", delta_ms: 30 * MINUTE, pct: 50 }, en)).toEqual({
       direction: "up",
       text: "30m more than the previous week (+50%)",
     });
-    expect(trendView("month", { kind: "change", delta_ms: -30 * MINUTE, pct: -50 })).toEqual({
+    expect(trendView("month", { kind: "change", delta_ms: -30 * MINUTE, pct: -50 }, en)).toEqual({
       direction: "down",
       text: "30m less than the previous month (-50%)",
     });
-    expect(trendView("day", { kind: "change", delta_ms: 0, pct: 0 })).toEqual({
+    expect(trendView("day", { kind: "change", delta_ms: 0, pct: 0 }, en)).toEqual({
       direction: "same",
       text: "Same as the previous day",
     });
   });
 
   it("says there is no comparison instead of inventing a percentage", () => {
-    expect(trendView("last90", { kind: "no_comparison" })).toEqual({
+    expect(trendView("last90", { kind: "no_comparison" }, en)).toEqual({
       direction: "none",
       text: "No comparison: nothing was tracked in the previous 90 days",
     });
+  });
+
+  it("speaks Spanish with the Spanish messages", () => {
+    expect(trendView("week", { kind: "change", delta_ms: 30 * MINUTE, pct: 50 }, es).text).toBe(
+      "30m más que la semana anterior (+50 %)",
+    );
+    expect(trendView("last90", { kind: "no_comparison" }, es).text).toBe(
+      "Sin comparación: no se registró nada en los 90 días anteriores",
+    );
   });
 });
 
@@ -61,7 +71,7 @@ describe("bucketBars", () => {
   });
 
   it("names and colors the slices the backend already split, Unassigned by id", () => {
-    const bars = bucketBars("week", data);
+    const bars = bucketBars("week", data, en);
     expect(bars[0]?.segments.map((s) => [s.name, s.color, s.ms])).toEqual([
       ["Work", "#3b82f6", 2000],
       ["Unassigned", "#6b7280", 1000],
@@ -71,13 +81,13 @@ describe("bucketBars", () => {
   });
 
   it("labels bars for each period", () => {
-    expect(bucketBars("month", data)[0]?.label).toMatch(/^\d+$/);
-    expect(bucketBars("last90", data)[0]?.fullLabel).toMatch(/^Week of /);
-    expect(bucketBars("week", data)[0]?.fullLabel).toContain(",");
+    expect(bucketBars("month", data, en)[0]?.label).toMatch(/^\d+$/);
+    expect(bucketBars("last90", data, en)[0]?.fullLabel).toMatch(/^Week of /);
+    expect(bucketBars("week", data, en)[0]?.fullLabel).toContain(",");
   });
 
   it("turns bars into trend points", () => {
-    const points = trendPoints(bucketBars("week", data));
+    const points = trendPoints(bucketBars("week", data, en));
     expect(points.map((p) => p.totalMs)).toEqual([3000, 0]);
     expect(points[0]?.key).toBe(0);
   });
@@ -92,11 +102,11 @@ describe("bar statistics", () => {
         { range: range(2), total_ms: 300, by_activity: [] },
       ],
     });
-    const bars = bucketBars("week", data);
+    const bars = bucketBars("week", data, en);
     expect(averages(bars)).toEqual({ perActiveBucketMs: 200, activeBuckets: 2 });
     expect(busiest(bars)?.totalMs).toBe(300);
     expect(averages([])).toEqual({ perActiveBucketMs: 0, activeBuckets: 0 });
-    expect(busiest(bucketBars("week", dashboard({ buckets: [{ range: range(0), total_ms: 0, by_activity: [] }] })))).toBeNull();
+    expect(busiest(bucketBars("week", dashboard({ buckets: [{ range: range(0), total_ms: 0, by_activity: [] }] }), en))).toBeNull();
   });
 });
 
@@ -108,6 +118,7 @@ describe("breakdown rows", () => {
         { app_id: "a", app_name: "Xcode", total_ms: 300 },
       ],
       400,
+      en,
     );
     expect(apps.map((r) => r.name)).toEqual(["Xcode", "Assigned manually"]);
     expect(apps[0]?.fraction).toBe(0.75);
@@ -118,12 +129,13 @@ describe("breakdown rows", () => {
         { activity_id: 2, name: "Work", color: "#3b82f6", productivity: "productive", total_ms: 150 },
       ],
       200,
+      en,
     );
     expect(activities.map((r) => r.name)).toEqual(["Work", "Unassigned"]);
   });
 
   it("has zero shares for an empty period", () => {
-    expect(appRows([{ app_id: "a", app_name: "A", total_ms: 0 }], 0)[0]?.fraction).toBe(0);
+    expect(appRows([{ app_id: "a", app_name: "A", total_ms: 0 }], 0, en)[0]?.fraction).toBe(0);
   });
 
   it("lists window titles with their app", () => {
@@ -133,6 +145,7 @@ describe("breakdown rows", () => {
         { app_id: null, app_name: null, window_title: "Notes", total_ms: 400 },
       ],
       1000,
+      en,
     );
     expect(rows.map((r) => [r.name, r.detail, r.fraction])).toEqual([
       ["Tracker.swift", "Xcode", 0.6],

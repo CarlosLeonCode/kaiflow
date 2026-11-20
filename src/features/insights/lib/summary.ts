@@ -7,10 +7,11 @@ import type {
   TitleTotalDto,
   TrendDto,
 } from "@/shared/ipc";
-import { activityLabel, appLabel, NO_TITLE_LABEL } from "@/shared/lib/labels";
+import type { Messages } from "@/shared/i18n";
+import { activityLabel, appLabel } from "@/shared/lib/labels";
 import { formatDuration, formatHour, formatTimeOfDay } from "@/shared/lib/time";
 
-import { bucketNoun, previousLabel, type Period } from "./periods";
+import type { Period } from "./periods";
 
 /** Pure view-model helpers for Insights (no IPC, no clock). */
 
@@ -20,46 +21,45 @@ export interface TrendView {
   text: string;
 }
 
-export function trendView(period: Period, trend: TrendDto): TrendView {
-  const against = previousLabel(period);
-  if (trend.kind === "no_comparison") {
-    return { direction: "none", text: `No comparison: nothing was tracked in ${against}` };
-  }
-  if (trend.delta_ms === 0) return { direction: "same", text: `Same as ${against}` };
+export function trendView(period: Period, trend: TrendDto, t: Messages): TrendView {
+  const words = t.insights.trendText;
+  const against = t.insights.previousPeriod[period];
+  if (trend.kind === "no_comparison") return { direction: "none", text: words.none(against) };
+  if (trend.delta_ms === 0) return { direction: "same", text: words.same(against) };
   const amount = formatDuration(Math.abs(trend.delta_ms));
   const more = trend.delta_ms > 0;
-  const sign = trend.pct > 0 ? "+" : "";
+  const pct = `${trend.pct > 0 ? "+" : ""}${trend.pct}`;
   return {
     direction: more ? "up" : "down",
-    text: `${amount} ${more ? "more" : "less"} than ${against} (${sign}${trend.pct}%)`,
+    text: more ? words.more(amount, against, pct) : words.less(amount, against, pct),
   };
 }
 
-function axisLabel(period: Period, from: number): string {
+function axisLabel(period: Period, from: number, locale?: string): string {
   const date = new Date(from);
   switch (period) {
     case "day":
-      return formatHour(from);
+      return formatHour(from, locale);
     case "week":
-      return date.toLocaleDateString(undefined, { weekday: "short" });
+      return date.toLocaleDateString(locale, { weekday: "short" });
     case "month":
       return String(date.getDate());
     case "last90":
-      return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      return date.toLocaleDateString(locale, { month: "short", day: "numeric" });
   }
 }
 
-function fullLabel(period: Period, from: number, to: number): string {
+function fullLabel(period: Period, from: number, to: number, t: Messages, locale?: string): string {
   const date = new Date(from);
   switch (period) {
     case "day":
-      return formatTimeOfDay(from);
+      return formatTimeOfDay(from, locale);
     case "last90": {
       const format = { month: "short", day: "numeric" } as const;
-      return `Week of ${new Intl.DateTimeFormat(undefined, format).formatRange(from, Math.max(from, to - 1))}`;
+      return t.insights.weekOf(new Intl.DateTimeFormat(locale, format).formatRange(from, Math.max(from, to - 1)));
     }
     default:
-      return date.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+      return date.toLocaleDateString(locale, { weekday: "long", month: "long", day: "numeric" });
   }
 }
 
@@ -72,7 +72,7 @@ function activitiesById(dashboard: DashboardDto): Map<number, DashboardActivityD
  * Bars of the stacked chart: one per bucket (hour, day or week), each split by activity with
  * the biggest slice first. The backend already did the splitting; this only names and colors.
  */
-export function bucketBars(period: Period, dashboard: DashboardDto): Bar[] {
+export function bucketBars(period: Period, dashboard: DashboardDto, t: Messages, locale?: string): Bar[] {
   const activities = activitiesById(dashboard);
   return dashboard.buckets.map((bucket) => {
     const segments: BarSegment[] = bucket.by_activity
@@ -81,15 +81,15 @@ export function bucketBars(period: Period, dashboard: DashboardDto): Bar[] {
         const activity = activities.get(slice.activity_id);
         return {
           key: `activity-${slice.activity_id}`,
-          name: activityLabel(slice.activity_id, activity?.name ?? ""),
+          name: activityLabel(slice.activity_id, activity?.name ?? "", t),
           color: activity?.color ?? "#9ca3af",
           ms: slice.total_ms,
         };
       });
     return {
       range: bucket.range,
-      label: axisLabel(period, bucket.range.from),
-      fullLabel: fullLabel(period, bucket.range.from, bucket.range.to),
+      label: axisLabel(period, bucket.range.from, locale),
+      fullLabel: fullLabel(period, bucket.range.from, bucket.range.to, t, locale),
       totalMs: bucket.total_ms,
       segments,
     };
@@ -124,12 +124,6 @@ export function busiest(bars: readonly Bar[]): Bar | null {
   return best;
 }
 
-/** Singular and plural nouns for the bucket of a period (`hour`, `day`, `week`). */
-export function bucketWords(period: Period): { singular: string; plural: string } {
-  const singular = bucketNoun(period);
-  return { singular, plural: `${singular}s` };
-}
-
 export interface Row {
   key: string;
   name: string;
@@ -141,34 +135,34 @@ export interface Row {
   fraction: number;
 }
 
-export function appRows(byApp: readonly AppTotalDto[], totalMs: number): Row[] {
+export function appRows(byApp: readonly AppTotalDto[], totalMs: number, t: Messages): Row[] {
   return [...byApp]
     .sort((a, b) => b.total_ms - a.total_ms)
     .map((app) => ({
       key: app.app_id ?? "manual",
-      name: appLabel(app.app_id, app.app_name),
+      name: appLabel(app.app_id, app.app_name, t),
       totalMs: app.total_ms,
       fraction: totalMs > 0 ? app.total_ms / totalMs : 0,
     }));
 }
 
-export function activityRows(byActivity: readonly DashboardActivityDto[], totalMs: number): Row[] {
+export function activityRows(byActivity: readonly DashboardActivityDto[], totalMs: number, t: Messages): Row[] {
   return [...byActivity]
     .sort((a, b) => b.total_ms - a.total_ms)
     .map((c) => ({
       key: String(c.activity_id),
-      name: activityLabel(c.activity_id, c.name),
+      name: activityLabel(c.activity_id, c.name, t),
       color: c.color,
       totalMs: c.total_ms,
       fraction: totalMs > 0 ? c.total_ms / totalMs : 0,
     }));
 }
 
-export function titleRows(titles: readonly TitleTotalDto[], totalMs: number): Row[] {
+export function titleRows(titles: readonly TitleTotalDto[], totalMs: number, t: Messages): Row[] {
   return titles.map((title, index) => ({
     key: `${index}-${title.app_id ?? "manual"}-${title.window_title ?? ""}`,
-    name: title.window_title ?? NO_TITLE_LABEL,
-    detail: appLabel(title.app_id, title.app_name),
+    name: title.window_title ?? t.common.labels.noTitle,
+    detail: appLabel(title.app_id, title.app_name, t),
     totalMs: title.total_ms,
     fraction: totalMs > 0 ? title.total_ms / totalMs : 0,
   }));

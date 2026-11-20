@@ -1,5 +1,6 @@
 import { CircleAlert, X } from "lucide-react";
 
+import { useLocale, useT } from "@/shared/i18n";
 import type { BackupStatusDto, RestorePreviewDto } from "@/shared/ipc";
 import { Alert, AlertDescription } from "@/shared/ui/alert";
 import { Button } from "@/shared/ui/button";
@@ -36,15 +37,15 @@ interface Props {
 
 /** Settings > Data (presentational): the daily backup, its folder and restoring a file. */
 export function DataPanel(props: Props) {
+  const t = useT();
+  const locale = useLocale();
+  const words = t.data;
   const { status } = props;
   return (
     <>
-      <Panel
-        title="Data"
-        description="Your tracked time can be backed up automatically and restored from a backup or export file. Exports of a date range live in Insights."
-      >
+      <Panel title={words.title} description={words.description}>
         {!status ? (
-          <div className="p-3" aria-label="Loading data settings">
+          <div className="p-3" aria-label={words.loading}>
             <Skeleton className="h-16" />
           </div>
         ) : (
@@ -55,7 +56,7 @@ export function DataPanel(props: Props) {
                   <span data-selectable className="min-w-0 break-all">
                     {props.notice}
                   </span>
-                  <Button variant="ghost" size="icon" aria-label="Dismiss" onClick={props.onDismiss}>
+                  <Button variant="ghost" size="icon" aria-label={t.common.dismiss} onClick={props.onDismiss}>
                     <X />
                   </Button>
                 </Alert>
@@ -71,8 +72,8 @@ export function DataPanel(props: Props) {
             )}
 
             <Row
-              label="Daily backup"
-              description="A compressed copy once a day, kept as 7 daily and 4 weekly backups. Made the first time the app runs after midnight."
+              label={words.daily}
+              description={words.dailyHint}
               controlId="data-backup-enabled"
             >
               <Switch
@@ -83,20 +84,24 @@ export function DataPanel(props: Props) {
               />
             </Row>
 
-            <Row label="Backup folder" controlId="data-backup-folder" description={status.custom_dir ? "A folder you chose." : "The default folder inside the app data."}>
+            <Row
+              label={words.folder}
+              controlId="data-backup-folder"
+              description={status.custom_dir ? words.folderCustom : words.folderDefault}
+            >
               <div className="flex items-center gap-2">
                 <Button
                   id="data-backup-folder"
                   size="sm"
-                  aria-label="Choose folder…"
+                  aria-label={words.chooseFolder}
                   disabled={props.busy}
                   onClick={props.onChooseFolder}
                 >
-                  Choose folder…
+                  {words.chooseFolder}
                 </Button>
                 {status.custom_dir && (
                   <Button size="sm" variant="ghost" disabled={props.busy} onClick={props.onUseDefaultFolder}>
-                    Use default
+                    {words.useDefault}
                   </Button>
                 )}
               </div>
@@ -106,22 +111,22 @@ export function DataPanel(props: Props) {
             </p>
 
             <Row
-              label="Last backup"
-              description={status.stored === 1 ? "1 backup stored in the folder." : `${status.stored} backups stored in the folder.`}
+              label={words.last}
+              description={words.stored(status.stored)}
               controlId="data-backup-now"
             >
               <div className="flex items-center gap-3">
                 <span className="tabular text-muted-foreground" data-testid="last-backup">
-                  {lastBackupLabel(status.last_backup_at, props.now)}
+                  {lastBackupLabel(status.last_backup_at, props.now, t, locale)}
                 </span>
                 <Button
                   id="data-backup-now"
                   size="sm"
-                  aria-label={props.backingUp ? "Backing up…" : "Back up now"}
+                  aria-label={props.backingUp ? words.backingUp : words.backUpNow}
                   disabled={props.busy}
                   onClick={props.onBackUpNow}
                 >
-                  {props.backingUp ? "Backing up…" : "Back up now"}
+                  {props.backingUp ? words.backingUp : words.backUpNow}
                 </Button>
               </div>
             </Row>
@@ -129,27 +134,24 @@ export function DataPanel(props: Props) {
               <div className="px-3 py-2.5">
                 <Alert variant="warning" role="alert">
                   <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-                  <AlertDescription>
-                    The last backup failed: {status.last_error} Check that the folder exists and can be written to, or
-                    choose another folder.
-                  </AlertDescription>
+                  <AlertDescription>{words.lastFailed(status.last_error)}</AlertDescription>
                 </Alert>
               </div>
             )}
 
             <Row
-              label="Restore"
-              description="Replace all current data with a backup or export file. You will see what it contains first."
+              label={words.restore}
+              description={words.restoreHint}
               controlId="data-restore"
             >
               <Button
                 id="data-restore"
                 size="sm"
-                aria-label="Restore from file…"
+                aria-label={words.restoreFromFile}
                 disabled={props.busy}
                 onClick={props.onChooseRestoreFile}
               >
-                Restore from file…
+                {words.restoreFromFile}
               </Button>
             </Row>
           </>
@@ -161,9 +163,11 @@ export function DataPanel(props: Props) {
         onOpenChange={(open) => {
           if (!open && !props.restoring) props.onCancelRestore();
         }}
-        title="Restore this file?"
-        description={props.preview ? restoreParagraphs(props.preview).map((text) => <p key={text}>{text}</p>) : null}
-        confirmLabel="Restore and replace"
+        title={words.restoreTitle}
+        description={
+          props.preview ? restoreParagraphs(props.preview, t, locale).map((text) => <p key={text}>{text}</p>) : null
+        }
+        confirmLabel={words.restoreConfirm}
         destructive
         busy={props.restoring}
         error={props.restoreError}

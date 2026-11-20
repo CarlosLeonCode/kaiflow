@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { useT } from "@/shared/i18n";
 import {
   errorMessage,
   useAiModelsMutation,
@@ -23,6 +24,8 @@ function patch(changes: Partial<AiSettingsPatchDto>): AiSettingsPatchDto {
  * keychain is not opened. Listing models and testing the connection are buttons.
  */
 export function AiSettingsPanelContainer() {
+  const t = useT();
+  const words = t.review.settings;
   const settings = useAiSettingsQuery();
   const update = useUpdateAiSettingsMutation();
   const setKey = useSetAiKeyMutation();
@@ -35,7 +38,7 @@ export function AiSettingsPanelContainer() {
 
   const busy =
     update.isPending || setKey.isPending || deleteKey.isPending || listModels.isPending || test.isPending;
-  const fail = (e: unknown) => setError(errorMessage(e));
+  const fail = (e: unknown) => setError(errorMessage(e, t));
   const reset = () => {
     setError(null);
     setNotice(null);
@@ -52,7 +55,7 @@ export function AiSettingsPanelContainer() {
     <AiSettingsPanel
       settings={settings.data}
       busy={busy}
-      error={error ?? (settings.isError ? `Could not load AI settings: ${errorMessage(settings.error)}` : null)}
+      error={error ?? (settings.isError ? t.review.ai.loadError(errorMessage(settings.error, t)) : null)}
       notice={notice}
       models={models}
       onSelect={(provider) => {
@@ -86,7 +89,7 @@ export function AiSettingsPanelContainer() {
         listModels.mutate(provider, {
           onSuccess: (ids) => {
             setModels(ids);
-            setNotice(ids.length === 0 ? "The provider lists no models." : `${ids.length} models available.`);
+            setNotice(ids.length === 0 ? words.noModels : words.modelsAvailable(ids.length));
             // Ollama has no default: choose the first installed one so a run can start.
             const current = settings.data?.providers.find((p) => p.provider === provider);
             const first = ids[0];
@@ -98,7 +101,7 @@ export function AiSettingsPanelContainer() {
       onTest={(provider) => {
         reset();
         test.mutate(provider, {
-          onSuccess: (count) => setNotice(`Connected. The provider lists ${count} models.`),
+          onSuccess: (count) => setNotice(words.connected(count)),
           onError: fail,
         });
       }}

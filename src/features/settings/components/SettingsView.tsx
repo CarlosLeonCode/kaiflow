@@ -20,13 +20,13 @@ import {
   LONG_BREAK_EVERY,
   LONG_BREAK_MINUTES,
   SHORT_BREAK_MINUTES,
-  TRAY_DISPLAY_OPTIONS,
   autoDiscardOptions,
   focusDriftOptions,
   minuteOptions,
   idleThresholdOptions,
   parseTrayDisplay,
   promptTimeoutOptions,
+  trayDisplayOptions,
   weekStartOptions,
 } from "../lib/options";
 import { AboutPanel } from "./AboutPanel";
@@ -91,13 +91,14 @@ export function SettingsView({
   diagnostics,
 }: Props) {
   const { os } = platform;
-  const words = platformWords(os);
   const t = useT();
-  const appearance = t.settings.appearance;
+  const words = platformWords(os, t);
+  const s = t.settings;
+  const appearance = s.appearance;
   return (
-    <Page title={t.shell.sections.settings} subtitle="Changes apply immediately." intro={intro}>
+    <Page title={t.shell.sections.settings} subtitle={s.subtitle} intro={intro}>
       {!settings ? (
-        <div className="max-w-xl space-y-3" aria-label="Loading settings">
+        <div className="max-w-xl space-y-3" aria-label={s.loading}>
           <Skeleton className="h-24" />
           <Skeleton className="h-32" />
         </div>
@@ -136,10 +137,10 @@ export function SettingsView({
             </Row>
           </Panel>
 
-          <Panel title="Calendar">
+          <Panel title={s.calendar.title}>
             <Row
-              label="Week starts on"
-              description="Weekly goals and Insights count weeks from this day."
+              label={s.calendar.weekStart}
+              description={s.calendar.weekStartHint}
               controlId="setting-week-start"
             >
               <Select
@@ -148,7 +149,7 @@ export function SettingsView({
                 value={settings.week_start}
                 onChange={(event) => onChange({ week_start: Number(event.target.value) })}
               >
-                {weekStartOptions(settings.week_start).map((option) => (
+                {weekStartOptions(settings.week_start, t).map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
@@ -159,12 +160,8 @@ export function SettingsView({
 
           <Panel title={words.Tray}>
             <Row
-              label={os === "windows" ? "Show in the icon tooltip" : "Show next to the icon"}
-              description={
-                os === "windows"
-                  ? "Windows shows no text next to tray icons, so it appears when you point at the icon. Updates once a minute while tracking. Paused time shows ⏸. The top goal is the first one still in progress today."
-                  : "Updates once a minute while tracking. Paused time shows ⏸. The top goal is the first one still in progress today."
-              }
+              label={os === "windows" ? s.tray.showWindows : s.tray.show}
+              description={os === "windows" ? s.tray.hintWindows : s.tray.hint}
               controlId="setting-tray-display"
             >
               <Select
@@ -173,7 +170,7 @@ export function SettingsView({
                 value={settings.tray_display}
                 onChange={(event) => onChange({ tray_display: parseTrayDisplay(event.target.value) })}
               >
-                {TRAY_DISPLAY_OPTIONS.map((option) => (
+                {trayDisplayOptions(t).map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
@@ -182,10 +179,10 @@ export function SettingsView({
             </Row>
           </Panel>
 
-          <Panel title="Idle">
+          <Panel title={s.idle.title}>
             <Row
-              label="Idle after"
-              description="No keyboard or mouse input for this long counts as away."
+              label={s.idle.after}
+              description={s.idle.afterHint}
               controlId="setting-idle"
             >
               <Select
@@ -194,7 +191,7 @@ export function SettingsView({
                 value={settings.idle_threshold_secs}
                 onChange={(event) => onChange({ idle_threshold_secs: Number(event.target.value) })}
               >
-                {idleThresholdOptions(settings.idle_threshold_secs).map((option) => (
+                {idleThresholdOptions(settings.idle_threshold_secs, t).map((option) => (
                   <option key={option.secs} value={option.secs}>
                     {option.label}
                   </option>
@@ -202,8 +199,8 @@ export function SettingsView({
               </Select>
             </Row>
             <Row
-              label="Skip the prompt for short breaks"
-              description="Breaks shorter than this are discarded without asking. Changes apply right away."
+              label={s.idle.skip}
+              description={s.idle.skipHint}
               controlId="setting-auto-discard"
             >
               <Select
@@ -212,7 +209,7 @@ export function SettingsView({
                 value={settings.idle_auto_discard_below_secs}
                 onChange={(event) => onChange({ idle_auto_discard_below_secs: Number(event.target.value) })}
               >
-                {autoDiscardOptions(settings.idle_auto_discard_below_secs).map((option) => (
+                {autoDiscardOptions(settings.idle_auto_discard_below_secs, t).map((option) => (
                   <option key={option.secs} value={option.secs}>
                     {option.label}
                   </option>
@@ -220,8 +217,8 @@ export function SettingsView({
               </Select>
             </Row>
             <Row
-              label="Answer the prompt within"
-              description="If you do not answer in time, the away time is discarded."
+              label={s.idle.answerWithin}
+              description={s.idle.answerWithinHint}
               controlId="setting-prompt-timeout"
             >
               <Select
@@ -230,7 +227,7 @@ export function SettingsView({
                 value={settings.idle_prompt_timeout_secs}
                 onChange={(event) => onChange({ idle_prompt_timeout_secs: Number(event.target.value) })}
               >
-                {promptTimeoutOptions(settings.idle_prompt_timeout_secs).map((option) => (
+                {promptTimeoutOptions(settings.idle_prompt_timeout_secs, t).map((option) => (
                   <option key={option.secs} value={option.secs}>
                     {option.label}
                   </option>
@@ -239,10 +236,10 @@ export function SettingsView({
             </Row>
           </Panel>
 
-          <Panel title="Focus sessions">
+          <Panel title={s.focus.title}>
             <Row
-              label="Pomodoro cycle"
-              description="Offer a break after each block, and a long one every few blocks."
+              label={s.focus.cycle}
+              description={s.focus.cycleHint}
               controlId="setting-focus-cycle"
             >
               <Switch
@@ -254,7 +251,7 @@ export function SettingsView({
             </Row>
             {settings.focus_timer.cycle_enabled && (
               <>
-                <Row label="Short break" controlId="setting-focus-short-break">
+                <Row label={s.focus.shortBreak} controlId="setting-focus-short-break">
                   <Select
                     id="setting-focus-short-break"
                     value={settings.focus_timer.short_break_minutes}
@@ -264,12 +261,12 @@ export function SettingsView({
                   >
                     {minuteOptions(SHORT_BREAK_MINUTES, settings.focus_timer.short_break_minutes).map((minutes) => (
                       <option key={minutes} value={minutes}>
-                        {minutes} min
+                        {s.units.minutes(minutes)}
                       </option>
                     ))}
                   </Select>
                 </Row>
-                <Row label="Long break" controlId="setting-focus-long-break">
+                <Row label={s.focus.longBreak} controlId="setting-focus-long-break">
                   <Select
                     id="setting-focus-long-break"
                     value={settings.focus_timer.long_break_minutes}
@@ -279,12 +276,12 @@ export function SettingsView({
                   >
                     {minuteOptions(LONG_BREAK_MINUTES, settings.focus_timer.long_break_minutes).map((minutes) => (
                       <option key={minutes} value={minutes}>
-                        {minutes} min
+                        {s.units.minutes(minutes)}
                       </option>
                     ))}
                   </Select>
                 </Row>
-                <Row label="Long break after" controlId="setting-focus-long-every">
+                <Row label={s.focus.longBreakAfter} controlId="setting-focus-long-every">
                   <Select
                     id="setting-focus-long-every"
                     value={settings.focus_timer.long_break_every}
@@ -294,14 +291,14 @@ export function SettingsView({
                   >
                     {minuteOptions(LONG_BREAK_EVERY, settings.focus_timer.long_break_every).map((blocks) => (
                       <option key={blocks} value={blocks}>
-                        {blocks === 1 ? "1 block" : `${blocks} blocks`}
+                        {s.units.blocks(blocks)}
                       </option>
                     ))}
                   </Select>
                 </Row>
                 <Row
-                  label="Start the next block automatically"
-                  description="Off: the end card asks first."
+                  label={s.focus.autoStart}
+                  description={s.focus.autoStartHint}
                   controlId="setting-focus-auto-start"
                 >
                   <Switch
@@ -316,8 +313,8 @@ export function SettingsView({
               </>
             )}
             <Row
-              label="Sound"
-              description="A short chime when a block or a break ends."
+              label={s.focus.sound}
+              description={s.focus.soundHint}
               controlId="setting-focus-sound"
             >
               <Switch
@@ -328,8 +325,8 @@ export function SettingsView({
               />
             </Row>
             <Row
-              label="One-minute heads-up"
-              description="A notification one minute before a block ends."
+              label={s.focus.headsUp}
+              description={s.focus.headsUpHint}
               controlId="setting-focus-heads-up"
             >
               <Switch
@@ -340,8 +337,8 @@ export function SettingsView({
               />
             </Row>
             <Row
-              label="Nudge me after"
-              description="Focus blocks with allowed apps: time away from them, in a row, before a gentle alert. Never more than one alert every 5 minutes."
+              label={s.focus.drift}
+              description={s.focus.driftHint}
               controlId="setting-focus-drift"
             >
               <Select
@@ -350,7 +347,7 @@ export function SettingsView({
                 value={settings.focus_drift_after_secs}
                 onChange={(event) => onChange({ focus_drift_after_secs: Number(event.target.value) })}
               >
-                {focusDriftOptions(settings.focus_drift_after_secs).map((option) => (
+                {focusDriftOptions(settings.focus_drift_after_secs, t).map((option) => (
                   <option key={option.secs} value={option.secs}>
                     {option.label}
                   </option>
@@ -359,10 +356,10 @@ export function SettingsView({
             </Row>
           </Panel>
 
-          <Panel title="Tracking">
+          <Panel title={s.tracking.title}>
             <Row
-              label="Open at login"
-              description={`Start tracking when you log in to ${words.device}.`}
+              label={s.tracking.openAtLogin}
+              description={s.tracking.openAtLoginHint(words.device)}
               controlId="setting-autostart"
             >
               <Switch
@@ -373,8 +370,8 @@ export function SettingsView({
               />
             </Row>
             <Row
-              label="Pause / resume shortcut"
-              description="Works from any app. Click, then press the new keys."
+              label={s.tracking.shortcut}
+              description={s.tracking.shortcutHint}
               controlId="setting-shortcut"
               error={shortcutError}
             >
@@ -391,10 +388,10 @@ export function SettingsView({
             </Row>
           </Panel>
 
-          <Panel title="Privacy">
+          <Panel title={s.privacy.title}>
             <Row
-              label="Record window titles"
-              description={titlesDescription(platform)}
+              label={s.privacy.recordTitles}
+              description={titlesDescription(platform, t)}
               controlId="setting-titles"
             >
               <Switch
@@ -426,13 +423,9 @@ export function SettingsView({
 }
 
 /** Only macOS gates titles behind a permission; Wayland cannot read them at all. */
-function titlesDescription(platform: PlatformInfoDto): string {
-  if (platform.needs_accessibility_permission) {
-    return "Needs Accessibility access. Off means only app names are stored. Everything stays on this Mac.";
-  }
-  const device = platformWords(platform.os).device;
-  if (isWayland(platform)) {
-    return `Titles cannot be read in a Wayland session; they are recorded once you use an X11 session. Off means only app names are stored. Everything stays on ${device}.`;
-  }
-  return `Off means only app names are stored. Everything stays on ${device}.`;
+function titlesDescription(platform: PlatformInfoDto, t: Messages): string {
+  const words = t.settings.privacy;
+  if (platform.needs_accessibility_permission) return words.titlesMac;
+  const device = platformWords(platform.os, t).device;
+  return isWayland(platform) ? words.titlesWayland(device) : words.titlesOther(device);
 }

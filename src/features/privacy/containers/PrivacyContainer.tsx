@@ -2,6 +2,7 @@ import { useSectionIntro } from "@/features/shell/hooks/useSectionIntro";
 import { useMemo, useState } from "react";
 
 import { useNow } from "@/features/tracking/hooks/useNow";
+import { useT } from "@/shared/i18n";
 import {
   errorMessage,
   IpcError,
@@ -46,6 +47,7 @@ interface Props {
  * (the matching delete command consumes the token).
  */
 export function PrivacyContainer({ onOpenSettings }: Props) {
+  const t = useT();
   const intro = useSectionIntro("privacy");
   const now = useNow(60_000);
   const today = addLocalDays(now, 0);
@@ -93,7 +95,7 @@ export function PrivacyContainer({ onOpenSettings }: Props) {
       const token = await prepare.mutateAsync(op);
       setPending({ op, token, restart: op.kind === "all" && trackingWillRestart });
     } catch (failure) {
-      setError(errorMessage(failure));
+      setError(errorMessage(failure, t));
     }
   }
 
@@ -105,11 +107,11 @@ export function PrivacyContainer({ onOpenSettings }: Props) {
       if (restart) await tracking.mutateAsync("stop");
       const removed = await deleteData.mutateAsync({ op, token });
       setPending(null);
-      setNotice(deletedMessage(op, removed));
+      setNotice(deletedMessage(op, removed, t));
     } catch (failure) {
       const expired = failure instanceof IpcError && failure.error.kind === "confirmation_required";
       setDeleteError(
-        expired ? "The confirmation expired. Close this dialog and try again." : errorMessage(failure),
+        expired ? t.privacy.confirm.expired : errorMessage(failure, t),
       );
     } finally {
       if (restart) await tracking.mutateAsync("start").catch(() => undefined);
@@ -124,7 +126,7 @@ export function PrivacyContainer({ onOpenSettings }: Props) {
       retentionDays={settings.data?.retention_days ?? null}
       apps={apps}
       today={today}
-      error={privacy.error ? errorMessage(privacy.error) : error}
+      error={privacy.error ? errorMessage(privacy.error, t) : error}
       notice={notice}
       pending={pending?.op ?? null}
       trackingWillRestart={pending?.restart ?? false}
@@ -138,12 +140,12 @@ export function PrivacyContainer({ onOpenSettings }: Props) {
           await setPrivacy.mutateAsync({ appId, mode });
           return null;
         } catch (failure) {
-          return errorMessage(failure);
+          return errorMessage(failure, t);
         }
       }}
       onRetentionChange={(value) => {
         setError(null);
-        updateSettings.mutate({ retention: retentionPatch(value) }, { onError: (e) => setError(errorMessage(e)) });
+        updateSettings.mutate({ retention: retentionPatch(value) }, { onError: (e) => setError(errorMessage(e, t)) });
       }}
       onRequestDelete={(op) => void request(op)}
       onConfirmDelete={() => void confirm()}

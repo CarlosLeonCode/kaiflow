@@ -1,6 +1,7 @@
 import { CircleAlert, ShieldAlert } from "lucide-react";
 import { useState } from "react";
 
+import { useT } from "@/shared/i18n";
 import type { AiProviderDto, AiProviderInfoDto, AiSettingsDto } from "@/shared/ipc";
 import { Alert, AlertDescription } from "@/shared/ui/alert";
 import { Button } from "@/shared/ui/button";
@@ -9,6 +10,8 @@ import { Input } from "@/shared/ui/input";
 import { Select } from "@/shared/ui/select";
 import { Skeleton } from "@/shared/ui/skeleton";
 import { Switch } from "@/shared/ui/switch";
+
+import { providerLabel } from "../lib/review";
 
 interface Props {
   /** `undefined` while loading. */
@@ -41,6 +44,9 @@ function ProviderFields({
   settings: AiSettingsDto;
   props: Props;
 }) {
+  const t = useT();
+  const words = t.review.settings;
+  const label = providerLabel(info, t);
   const [keyDraft, setKeyDraft] = useState("");
   const [model, setModel] = useState(info.model);
   const [address, setAddress] = useState(info.base_url ?? "");
@@ -51,13 +57,9 @@ function ProviderFields({
   return (
     <>
       <Row
-        label={`Use ${info.label}`}
+        label={words.use(label)}
         controlId="ai-enabled"
-        description={
-          info.local
-            ? "Runs on this computer. Your data never leaves it."
-            : `Off by default. When on, you can send your weekly totals to ${info.label} from the Week view in Insights, after seeing exactly what is sent. Their privacy terms apply to what you send.`
-        }
+        description={info.local ? words.localHint : words.remoteHint(label)}
       >
         <Switch
           id="ai-enabled"
@@ -73,9 +75,7 @@ function ProviderFields({
           <Alert variant="warning" role="alert">
             <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
             <AlertDescription data-testid="ai-keychain-unavailable">
-              There is no secure place to keep API keys on this computer ({store.reason ?? "no key store"}). Keys are
-              never stored in plain text, so {info.label} cannot be used here. A model on this computer (Ollama) still
-              can.
+              {words.keychainUnavailable(store.reason ?? words.noKeyStore, label)}
             </AlertDescription>
           </Alert>
         </div>
@@ -83,17 +83,13 @@ function ProviderFields({
 
       {info.needs_key && !keyBlocked && (
         <Row
-          label="API key"
+          label={words.apiKey}
           controlId="ai-key"
-          description={
-            info.has_key
-              ? "Saved in your system keychain. It is never shown again and never leaves this computer except to reach the provider."
-              : "Paste your key. It goes straight to your system keychain: it is not saved in the app, in backups or in exports."
-          }
+          description={info.has_key ? words.keySaved : words.keyPaste}
         >
           {info.has_key ? (
             <Button size="sm" disabled={props.busy} onClick={() => props.onDeleteKey(info.provider)}>
-              Remove key
+              {words.removeKey}
             </Button>
           ) : (
             <form
@@ -112,11 +108,11 @@ function ProviderFields({
                 spellCheck={false}
                 className="w-48"
                 value={keyDraft}
-                placeholder="Paste API key"
+                placeholder={words.keyPlaceholder}
                 onChange={(event) => setKeyDraft(event.target.value)}
               />
               <Button type="submit" size="sm" disabled={props.busy || keyDraft.trim() === ""}>
-                Save key
+                {words.saveKey}
               </Button>
             </form>
           )}
@@ -124,13 +120,9 @@ function ProviderFields({
       )}
 
       <Row
-        label="Model"
+        label={words.model}
         controlId="ai-model"
-        description={
-          info.local
-            ? "Pick one of the models installed in Ollama (use Refresh list)."
-            : `The cheapest current model is the default (${info.default_model}). You can type another one.`
-        }
+        description={info.local ? words.modelLocal : words.modelRemote(info.default_model)}
       >
         <div className="flex items-center gap-2">
           <Input
@@ -138,7 +130,7 @@ function ProviderFields({
             className="w-48"
             list={listId}
             value={model}
-            placeholder={info.default_model || "Model name"}
+            placeholder={info.default_model || words.modelPlaceholder}
             onChange={(event) => setModel(event.target.value)}
             onBlur={() => model !== info.model && props.onModelChange(info.provider, model)}
           />
@@ -148,16 +140,16 @@ function ProviderFields({
             ))}
           </datalist>
           <Button size="sm" disabled={props.busy || !info.enabled} onClick={() => props.onRefreshModels(info.provider)}>
-            Refresh list
+            {words.refresh}
           </Button>
         </div>
       </Row>
 
       {info.local && (
         <Row
-          label="Ollama address"
+          label={words.address}
           controlId="ai-address"
-          description="Only this computer is allowed (localhost or 127.0.0.1), whatever the scheme."
+          description={words.addressHint}
         >
           <Input
             id="ai-address"
@@ -171,12 +163,12 @@ function ProviderFields({
       )}
 
       <Row
-        label="Test connection"
+        label={words.testConnection}
         controlId="ai-test"
-        description="Checks the key and the connection by listing the available models. Nothing about your time is sent."
+        description={words.testHint}
       >
         <Button id="ai-test" size="sm" disabled={props.busy || !info.enabled} onClick={() => props.onTest(info.provider)}>
-          Test
+          {words.test}
         </Button>
       </Row>
     </>
@@ -185,15 +177,17 @@ function ProviderFields({
 
 /** Settings > AI (presentational): opt-in per provider, the key, the model and the defaults. */
 export function AiSettingsPanel(props: Props) {
+  const t = useT();
+  const words = t.review.settings;
   const { settings } = props;
   const selected = settings?.providers.find((p) => p.provider === settings.selected);
   return (
     <Panel
-      title="AI analysis"
-      description="Optional. Everything works without it. Nothing is sent to any AI provider unless you switch one on here and press Send in Insights."
+      title={words.title}
+      description={words.description}
     >
       {!settings || !selected ? (
-        <div className="p-3" aria-label="Loading AI settings">
+        <div className="p-3" aria-label={words.loading}>
           <Skeleton className="h-16" />
         </div>
       ) : (
@@ -213,7 +207,7 @@ export function AiSettingsPanel(props: Props) {
               </Alert>
             </div>
           )}
-          <Row label="Provider" controlId="ai-provider">
+          <Row label={words.provider} controlId="ai-provider">
             <Select
               id="ai-provider"
               value={settings.selected}
@@ -221,7 +215,7 @@ export function AiSettingsPanel(props: Props) {
             >
               {settings.providers.map((p) => (
                 <option key={p.provider} value={p.provider}>
-                  {p.label}
+                  {providerLabel(p, t)}
                 </option>
               ))}
             </Select>
@@ -230,9 +224,9 @@ export function AiSettingsPanel(props: Props) {
           <ProviderFields key={selected.provider} info={selected} settings={settings} props={props} />
 
           <Row
-            label="Include window titles by default"
+            label={words.includeTitles}
             controlId="ai-titles"
-            description="Window titles can contain private details. When on, the 20 busiest titles (shortened) are added to what you can send. You still review everything first."
+            description={words.includeTitlesHint}
           >
             <Switch
               id="ai-titles"
@@ -244,10 +238,10 @@ export function AiSettingsPanel(props: Props) {
           </Row>
 
           <Row
-            label="Monday review"
+            label={words.monday}
             controlId="ai-monday"
-            description="On its own, the app analyzes last week once a new week starts, using the provider above (it must be switched on). Nothing is sent otherwise. If you are offline it tries again the next time the app starts."
-            error={settings.last_auto_error ? `The last automatic review failed: ${settings.last_auto_error}` : null}
+            description={words.mondayHint}
+            error={settings.last_auto_error ? words.mondayFailed(settings.last_auto_error) : null}
           >
             <Switch
               id="ai-monday"

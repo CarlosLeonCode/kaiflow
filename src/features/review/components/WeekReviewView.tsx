@@ -1,13 +1,14 @@
 import { CircleAlert } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { useLocale, useT } from "@/shared/i18n";
 import type { GoalWeekDto } from "@/shared/ipc";
 import { Alert, AlertDescription } from "@/shared/ui/alert";
 import { Skeleton } from "@/shared/ui/skeleton";
 
 import { Card } from "@/features/insights/components/Card";
 
-import { dayName, goalWeekLine, MAX_WEEKS_AGO, RESULT_LABEL } from "../lib/review";
+import { dayName, goalWeekLine, MAX_WEEKS_AGO } from "../lib/review";
 
 interface Props {
   /** The week is older than the review keeps (no note or analysis can be stored for it). */
@@ -30,24 +31,23 @@ interface Props {
  * card is built on this computer, so the week is useful with AI switched off, which is the default.
  */
 export function WeekReviewView({ tooFarBack, loading, error, goals = [], focusLine, note, ai }: Props) {
+  const t = useT();
+  const locale = useLocale();
+  const words = t.review;
   if (tooFarBack) {
-    return (
-      <p className="text-xs text-muted-foreground">
-        Notes and AI analysis cover the last {MAX_WEEKS_AGO} weeks.
-      </p>
-    );
+    return <p className="text-xs text-muted-foreground">{words.tooFarBack(MAX_WEEKS_AGO)}</p>;
   }
   if (error) {
     return (
       <Alert variant="warning" role="alert">
         <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-        <AlertDescription>Could not load the weekly review: {error}</AlertDescription>
+        <AlertDescription>{words.loadError(error)}</AlertDescription>
       </Alert>
     );
   }
   if (loading) {
     return (
-      <div aria-label="Loading the weekly review">
+      <div aria-label={words.loading}>
         <Skeleton className="h-28" />
       </div>
     );
@@ -56,19 +56,19 @@ export function WeekReviewView({ tooFarBack, loading, error, goals = [], focusLi
     <>
       {/* Without goals there is nothing to review; goals are created in the Goals section. */}
       {goals.length > 0 && (
-        <Card title="Goals this week" hint="How each goal fared this week">
-          <ul aria-label="Goals this week" className="divide-y divide-border">
+        <Card title={words.goalsThisWeek} hint={words.goalsHint}>
+          <ul aria-label={words.goalsThisWeek} className="divide-y divide-border">
             {goals.map((week) => (
               <li key={week.goal.id} className="flex items-baseline justify-between gap-4 py-2">
                 <div className="min-w-0">
                   <p className="truncate font-medium">{week.goal.label}</p>
-                  <p className="text-xs text-muted-foreground">{goalWeekLine(week)}</p>
+                  <p className="text-xs text-muted-foreground">{goalWeekLine(week, t)}</p>
                   {week.goal.period === "daily" && (
                     <p className="mt-1 flex gap-1" aria-hidden="true">
                       {week.periods.map((p) => (
                         <span
                           key={p.start_day}
-                          title={`${dayName(p.start_day)}: ${RESULT_LABEL[p.result]}`}
+                          title={`${dayName(p.start_day, locale)}: ${words.results[p.result]}`}
                           className={`rounded px-1 text-2xs ${
                             p.result === "met"
                               ? "bg-success/20 text-foreground"
@@ -77,14 +77,14 @@ export function WeekReviewView({ tooFarBack, loading, error, goals = [], focusLi
                                 : "bg-muted text-muted-foreground"
                           }`}
                         >
-                          {dayName(p.start_day)}
+                          {dayName(p.start_day, locale)}
                         </span>
                       ))}
                     </p>
                   )}
                 </div>
                 <p className="tabular shrink-0 text-xs text-muted-foreground">
-                  Streak {week.current_streak} · best {week.best_streak}
+                  {words.streak(week.current_streak, week.best_streak)}
                 </p>
               </li>
             ))}
@@ -92,13 +92,13 @@ export function WeekReviewView({ tooFarBack, loading, error, goals = [], focusLi
         </Card>
       )}
 
-      <Card title="Focus sessions">
+      <Card title={words.focusSessions}>
         <p data-testid="review-focus" className="text-sm">
           {focusLine}
         </p>
       </Card>
 
-      <Card title="Your note" hint="Private. Never sent to an AI">
+      <Card title={words.yourNote} hint={words.noteHint}>
         {note}
       </Card>
 

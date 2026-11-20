@@ -1,3 +1,4 @@
+import type { Messages } from "@/shared/i18n";
 import type { ApplyPresetResultDto, PresetActivityDto } from "@/shared/ipc";
 
 /**
@@ -15,18 +16,7 @@ export function exampleApps(activity: Pick<PresetActivityDto, "example_apps">): 
   return activity.example_apps.map(capitalize).join(", ");
 }
 
-function counted(count: number, one: string, many: string): string {
-  return `${count} ${count === 1 ? one : many}`;
-}
-
 /** Plain-words confirmation of what a pack did. */
-export function applySummary(packName: string, result: ApplyPresetResultDto): string {
-  if (result.activities_created === 0 && result.rules_created === 0) {
-    return `${packName} was already set up: nothing changed.`;
-  }
-  const parts = [
-    result.activities_created > 0 ? `added ${counted(result.activities_created, "activity", "activities")}` : null,
-    result.rules_created > 0 ? `${counted(result.rules_created, "rule", "rules")} for apps you already used` : null,
-  ].filter((part): part is string => part !== null);
-  return `${packName}: ${parts.join(" and ")}.`;
+export function applySummary(packName: string, result: ApplyPresetResultDto, t: Messages): string {
+  return t.activities.presets.applied(packName, result.activities_created, result.rules_created);
 }

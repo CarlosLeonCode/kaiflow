@@ -1,4 +1,5 @@
 import { useSectionIntro } from "@/features/shell/hooks/useSectionIntro";
+import { useT } from "@/shared/i18n";
 import {
   IpcError,
   useOpenAccessibilitySettingsMutation,
@@ -18,12 +19,9 @@ import { UpdatesPanelContainer } from "@/features/updates/containers/UpdateConta
 import { SettingsView } from "../components/SettingsView";
 import { DiagnosticsPanelContainer } from "./DiagnosticsPanelContainer";
 
-function shortcutMessage(shortcut: string, reason: string): string {
-  return `${shortcut} is unavailable: ${reason}. Choose another combination.`;
-}
-
 /** Wires Settings to the backend. A taken shortcut becomes a field error, not a toast. */
 export function SettingsContainer() {
+  const t = useT();
   const intro = useSectionIntro("settings");
   const settings = useSettingsQuery();
   const status = useStatusQuery();
@@ -31,7 +29,7 @@ export function SettingsContainer() {
   const openSettings = useOpenAccessibilitySettingsMutation();
   const platform = usePlatformQuery().data ?? DEFAULT_PLATFORM;
   const describe = (shortcut: string, reason: string) =>
-    shortcutMessage(formatShortcut(shortcut, platform.os), reason);
+    t.settings.tracking.shortcutUnavailable(formatShortcut(shortcut, platform.os), reason);
 
   const failure = update.error;
   const shortcutFailure =
@@ -43,8 +41,8 @@ export function SettingsContainer() {
       ? describe(unavailable.shortcut, unavailable.reason)
       : null;
 
-  const otherError = failure && !shortcutFailure ? errorMessage(failure) : null;
-  const loadError = settings.isError ? `Could not load settings: ${errorMessage(settings.error)}` : null;
+  const otherError = failure && !shortcutFailure ? errorMessage(failure, t) : null;
+  const loadError = settings.isError ? t.settings.loadError(errorMessage(settings.error, t)) : null;
 
   return (
     <SettingsView

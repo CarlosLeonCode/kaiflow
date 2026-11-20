@@ -65,11 +65,11 @@ export function ActivitiesView(props: Props) {
   return (
     <Page
       title={t.shell.sections.activities}
-      subtitle="Sort your time into the kinds of work you do."
+      subtitle={t.activities.subtitle}
       intro={props.intro}
       actions={
         <Button size="sm" variant="ghost" aria-expanded={guide !== null} onClick={props.onOpenGuide}>
-          How this works
+          {t.activities.howItWorks}
         </Button>
       }
     >
@@ -80,7 +80,7 @@ export function ActivitiesView(props: Props) {
             <AlertDescription>{error}</AlertDescription>
           </span>
           <button type="button" onClick={props.onDismissError} className="shrink-0 underline underline-offset-2">
-            Dismiss
+            {t.common.dismiss}
           </button>
         </Alert>
       )}
@@ -88,7 +88,7 @@ export function ActivitiesView(props: Props) {
         <Alert className="mb-4 items-start justify-between">
           <AlertDescription>{notice}</AlertDescription>
           <button type="button" onClick={props.onDismissNotice} className="shrink-0 underline underline-offset-2">
-            Dismiss
+            {t.common.dismiss}
           </button>
         </Alert>
       )}
@@ -117,7 +117,7 @@ export function ActivitiesView(props: Props) {
         />
       )}
       {loading ? (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]" aria-label="Loading activities">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]" aria-label={t.activities.loading}>
           <Skeleton className="h-48" />
           <Skeleton className="h-64" />
         </div>

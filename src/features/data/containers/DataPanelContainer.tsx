@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { useNow } from "@/features/tracking/hooks/useNow";
+import { useT } from "@/shared/i18n";
 import {
   errorMessage,
   IpcError,
@@ -21,6 +22,8 @@ import { DataPanel } from "../components/DataPanel";
  * file only previews it (the backend answers with a token), and confirming sends the token back.
  */
 export function DataPanelContainer() {
+  const t = useT();
+  const words = t.data;
   const now = useNow(60_000);
   const status = useBackupStatusQuery();
   const setEnabled = useSetBackupEnabledMutation();
@@ -55,27 +58,27 @@ export function DataPanelContainer() {
       busy={busy}
       backingUp={backupNow.isPending}
       notice={notice}
-      error={error ?? (status.isError ? `Could not load backup settings: ${errorMessage(status.error)}` : null)}
+      error={error ?? (status.isError ? words.loadError(errorMessage(status.error, t)) : null)}
       preview={preview}
       restoring={apply.isPending}
       restoreError={restoreError}
       onToggle={(enabled) => {
         reset();
-        setEnabled.mutate(enabled, { onError: (e) => setError(errorMessage(e)) });
+        setEnabled.mutate(enabled, { onError: (e) => setError(errorMessage(e, t)) });
       }}
       onChooseFolder={() => {
         reset();
-        chooseDir.mutate(undefined, { onError: (e) => setError(errorMessage(e)) });
+        chooseDir.mutate(undefined, { onError: (e) => setError(errorMessage(e, t)) });
       }}
       onUseDefaultFolder={() => {
         reset();
-        resetDir.mutate(undefined, { onError: (e) => setError(errorMessage(e)) });
+        resetDir.mutate(undefined, { onError: (e) => setError(errorMessage(e, t)) });
       }}
       onBackUpNow={() => {
         reset();
         backupNow.mutate(undefined, {
-          onSuccess: (report) => setNotice(`Backup saved to ${report.path}`),
-          onError: (e) => setError(`The backup failed: ${errorMessage(e)}`),
+          onSuccess: (report) => setNotice(words.saved(report.path)),
+          onError: (e) => setError(words.failed(errorMessage(e, t))),
         });
       }}
       onChooseRestoreFile={() => {
@@ -84,7 +87,7 @@ export function DataPanelContainer() {
         prepare.mutate(undefined, {
           // `null` means the user cancelled the file picker.
           onSuccess: (result) => setPreview(result),
-          onError: (e) => setError(errorMessage(e)),
+          onError: (e) => setError(errorMessage(e, t)),
         });
       }}
       onConfirmRestore={() => {
@@ -93,13 +96,13 @@ export function DataPanelContainer() {
         apply.mutate(preview.token, {
           onSuccess: (result) => {
             setPreview(null);
-            setNotice(`Restored. A safety copy of the previous data was saved to ${result.safety_copy}`);
+            setNotice(words.restored(result.safety_copy));
           },
           onError: (failure) =>
             setRestoreError(
               failure instanceof IpcError && failure.error.kind === "confirmation_required"
-                ? "The confirmation expired. Close this dialog and choose the file again."
-                : errorMessage(failure),
+                ? words.expired
+                : errorMessage(failure, t),
             ),
         });
       }}

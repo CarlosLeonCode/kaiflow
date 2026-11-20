@@ -163,34 +163,20 @@ export function bucketsFor(period: Period, range: RangeDto): RangeDto[] {
 const dayFormat = { weekday: "long", month: "long", day: "numeric", year: "numeric" } as const;
 const shortDate = { month: "short", day: "numeric", year: "numeric" } as const;
 
-/** `Tuesday, October 20, 2026`, `Oct 19 – 25, 2026` or `October 2026`. */
-export function periodLabel(period: Period, range: RangeDto): string {
+/** `Tuesday, October 20, 2026`, `Oct 19 – 25, 2026` or `October 2026`, in `locale`. */
+export function periodLabel(period: Period, range: RangeDto, locale?: string): string {
   switch (period) {
     case "day":
-      return new Date(range.from).toLocaleDateString(undefined, dayFormat);
+      return new Date(range.from).toLocaleDateString(locale, dayFormat);
     case "week": {
       const last = addLocalDays(range.from, 6);
-      return new Intl.DateTimeFormat(undefined, shortDate).formatRange(range.from, last);
+      return new Intl.DateTimeFormat(locale, shortDate).formatRange(range.from, last);
     }
     case "month":
-      return new Date(range.from).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+      return new Date(range.from).toLocaleDateString(locale, { month: "long", year: "numeric" });
     case "last90":
-      return new Intl.DateTimeFormat(undefined, shortDate).formatRange(range.from, addLocalDays(range.to, -1));
+      return new Intl.DateTimeFormat(locale, shortDate).formatRange(range.from, addLocalDays(range.to, -1));
   }
-}
-
-/** What the comparison is against. */
-export function previousLabel(period: Period): string {
-  return {
-    day: "the previous day",
-    week: "the previous week",
-    month: "the previous month",
-    last90: "the previous 90 days",
-  }[period];
-}
-
-export function periodNoun(period: Period): string {
-  return { day: "day", week: "week", month: "month", last90: "90 days" }[period];
 }
 
 /** What one bar of the stacked chart stands for. */

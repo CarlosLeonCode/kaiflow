@@ -17,19 +17,14 @@ import { Skeleton } from "@/shared/ui/skeleton";
 
 import { GoalSummary } from "@/features/goals/components/GoalSummary";
 
-import { periodNoun, type Period, type WeekStart } from "../lib/periods";
+import type { Period, WeekStart } from "../lib/periods";
 import type { Averages, Row, TrendView } from "../lib/summary";
 import { BreakdownList } from "./BreakdownList";
 import { Card } from "./Card";
 import { PeriodNav } from "./PeriodNav";
 import { SummaryCard } from "./SummaryCard";
 
-const PERIODS: readonly SegmentedOption<Period>[] = [
-  { value: "day", label: "Day" },
-  { value: "week", label: "Week" },
-  { value: "month", label: "Month" },
-  { value: "last90", label: "90 days" },
-];
+const PERIODS: readonly Period[] = ["day", "week", "month", "last90"];
 
 interface Props {
   /** Section intro and its header help button, rendered by `Page`. */
@@ -55,7 +50,8 @@ interface Props {
   trend: TrendView;
   averages: Averages;
   busiest: Bar | null;
-  bucket: { singular: string; plural: string };
+  /** What one bar stands for. */
+  bucket: "hour" | "day" | "week";
   bars: readonly Bar[];
   trendPoints: readonly TrendPoint[];
   activities: readonly Row[];
@@ -79,26 +75,21 @@ interface Props {
 export function InsightsView(props: Props) {
   const t = useT();
   const { period, loading, error, data } = props;
-  const noun = periodNoun(period);
+  const words = t.insights;
+  const bucket = words.buckets[props.bucket];
   const totalMs = data?.total_ms ?? 0;
-  const chartLabel =
-    period === "day"
-      ? "Tracked time per hour, stacked by activity"
-      : period === "last90"
-        ? "Tracked time per week, stacked by activity"
-        : "Tracked time per day, stacked by activity";
-  const bucketTitle = period === "day" ? "By hour" : period === "last90" ? "By week" : "By day";
+  const periods: SegmentedOption<Period>[] = PERIODS.map((value) => ({ value, label: words.periods[value] }));
 
   return (
     <Page
       title={t.shell.sections.insights}
-      subtitle="Where your time went, and how it compares."
+      subtitle={words.subtitle}
       intro={props.intro}
       actions={
         <>
-          <Segmented aria-label="Period" value={period} options={PERIODS} onChange={props.onPeriodChange} />
+          <Segmented aria-label={words.periodLabel} value={period} options={periods} onChange={props.onPeriodChange} />
           <Button size="sm" onClick={props.onExport} disabled={props.exporting}>
-            <Download aria-hidden="true" /> Export JSON
+            <Download aria-hidden="true" /> {words.exportJson}
           </Button>
         </>
       }
@@ -117,9 +108,9 @@ export function InsightsView(props: Props) {
         {props.exportedTo && (
           <Alert variant="neutral" className="items-center justify-between">
             <span data-selectable className="min-w-0 truncate">
-              Exported to {props.exportedTo}
+              {words.exportedTo(props.exportedTo)}
             </span>
-            <Button variant="ghost" size="icon" aria-label="Dismiss" onClick={props.onDismissExport}>
+            <Button variant="ghost" size="icon" aria-label={t.common.dismiss} onClick={props.onDismissExport}>
               <X />
             </Button>
           </Alert>
@@ -127,23 +118,23 @@ export function InsightsView(props: Props) {
         {props.exportError && (
           <Alert variant="warning" role="alert">
             <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-            <AlertDescription>Could not export: {props.exportError}</AlertDescription>
+            <AlertDescription>{words.exportError(props.exportError)}</AlertDescription>
           </Alert>
         )}
 
         {error ? (
           <Alert variant="warning" role="alert">
             <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-            <AlertDescription>Could not load insights: {error}</AlertDescription>
+            <AlertDescription>{words.loadError(error)}</AlertDescription>
           </Alert>
         ) : loading || !data ? (
-          <div className="space-y-4" aria-label="Loading insights">
+          <div className="space-y-4" aria-label={words.loading}>
             <Skeleton className="h-28" />
             <Skeleton className="h-52" />
           </div>
         ) : totalMs === 0 ? (
           <>
-            <Card title="Summary">
+            <Card title={words.summary}>
               <SummaryCard
                 period={period}
                 totalMs={0}
@@ -155,22 +146,20 @@ export function InsightsView(props: Props) {
             </Card>
             <EmptyState
               className="mt-10"
-              title={`Nothing tracked this ${noun}`}
+              title={words.empty.title[period]}
               action={
                 props.isCurrent
-                  ? props.onOpenActivities && { label: "Set up activities", onClick: props.onOpenActivities }
-                  : { label: `Jump to this ${noun}`, onClick: props.onToday }
+                  ? props.onOpenActivities && { label: t.today.empty.setUpActivities, onClick: props.onOpenActivities }
+                  : { label: words.empty.jump[period], onClick: props.onToday }
               }
             >
-              {props.isCurrent
-                ? "Your time shows up here as it is tracked. Meanwhile, set up activities so it is sorted for you."
-                : `Nothing was recorded in this ${noun}. Go back to the current one to see your latest time.`}
+              {props.isCurrent ? words.empty.current : words.empty.past[period]}
             </EmptyState>
           </>
         ) : (
           <>
             <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-              <Card title="Summary">
+              <Card title={words.summary}>
                 <SummaryCard
                   period={period}
                   totalMs={totalMs}
@@ -180,7 +169,7 @@ export function InsightsView(props: Props) {
                   bucket={props.bucket}
                 />
               </Card>
-              <Card title="Productive time">
+              <Card title={words.productiveTime}>
                 <RatioBar
                   productiveMs={data.productivity.productive_ms}
                   neutralMs={data.productivity.neutral_ms}
@@ -191,8 +180,8 @@ export function InsightsView(props: Props) {
             </div>
 
             {data.goals.length > 0 && (
-              <Card title="Goals" hint="Progress in the current period">
-                <ul aria-label="Goal progress" className="divide-y divide-border">
+              <Card title={words.goals} hint={words.goalsHint}>
+                <ul aria-label={t.goals.progress} className="divide-y divide-border">
                   {data.goals.map((status) => (
                     <GoalSummary key={status.goal.id} status={status} onMarkSeen={props.onMarkGoalSeen} />
                   ))}
@@ -200,36 +189,41 @@ export function InsightsView(props: Props) {
               </Card>
             )}
 
-            <Card title={bucketTitle}>
-              <StackedBars bars={props.bars} dark={props.dark} label={chartLabel} />
+            <Card title={bucket.title}>
+              <StackedBars bars={props.bars} dark={props.dark} label={bucket.chart} />
             </Card>
 
             {period !== "day" && (
               <div className="grid gap-4 lg:grid-cols-2">
-                <Card title="Busiest hours" hint="Local time">
-                  <Heatmap cells={data.heatmap} weekStart={props.weekStart} label="Tracked time by weekday and hour" />
+                <Card title={words.busiestHours} hint={words.localTime}>
+                  <Heatmap cells={data.heatmap} weekStart={props.weekStart} label={words.heatmapLabel} />
                 </Card>
-                <Card title="Trend">
-                  <TrendLine points={props.trendPoints} label={`Tracked time per ${props.bucket.singular}`} />
+                <Card title={words.trend}>
+                  <TrendLine points={props.trendPoints} label={bucket.trend} />
                 </Card>
               </div>
             )}
 
             <div className="grid gap-4 lg:grid-cols-2">
-              <Card title="By activity">
-                <BreakdownList rows={props.activities} label="Time by activity" dark={props.dark} empty="No classified time." />
+              <Card title={words.byActivity}>
+                <BreakdownList
+                  rows={props.activities}
+                  label={words.timeByActivity}
+                  dark={props.dark}
+                  empty={words.noActivityTime}
+                />
               </Card>
-              <Card title="By app">
-                <BreakdownList rows={props.apps} label="Time by app" dark={props.dark} empty="No app time." />
+              <Card title={words.byApp}>
+                <BreakdownList rows={props.apps} label={words.timeByApp} dark={props.dark} empty={words.noAppTime} />
               </Card>
             </div>
 
-            <Card title="Top window titles">
+            <Card title={words.topTitles}>
               <BreakdownList
                 rows={props.titles}
-                label="Time by window title"
+                label={words.timeByTitle}
                 dark={props.dark}
-                empty="No window titles in this period. Titles are only saved while the Privacy setting allows it."
+                empty={words.noTitles}
               />
             </Card>
           </>

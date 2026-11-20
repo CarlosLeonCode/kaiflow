@@ -174,7 +174,8 @@ describe("period math in a DST time zone (America/New_York)", () => {
     const now = local(2026, 10, 20, 12);
     expect(periodLabel("day", periodRange("day", now))).toContain("2026");
     expect(periodLabel("week", periodRange("week", now))).toContain("2026");
-    expect(periodLabel("month", periodRange("month", now))).toContain("October");
+    expect(periodLabel("month", periodRange("month", now), "en")).toContain("October");
+    expect(periodLabel("month", periodRange("month", now), "es")).toContain("octubre");
     expect(periodLabel("last90", periodRange("last90", now))).toContain("2026");
   });
 });

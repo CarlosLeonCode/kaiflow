@@ -17,6 +17,11 @@ export function useT(): Messages {
   return MESSAGES[useContext(LanguageContext)];
 }
 
+/** The active language (`en` or `es`), for what is not UI copy, such as the AI review's language. */
+export function useLanguage(): Language {
+  return useContext(LanguageContext);
+}
+
 /** BCP 47 tag for `Intl` and `toLocaleDateString`, such as `en-GB` or `es`. */
 export function useLocale(): string {
   return useContext(LocaleContext);

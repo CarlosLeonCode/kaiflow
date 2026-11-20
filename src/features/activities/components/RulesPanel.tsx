@@ -1,5 +1,6 @@
 import { ArrowRight, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 
+import { useT, type Messages } from "@/shared/i18n";
 import type { ActivityDto, RuleDto, RuleInputDto, RuleSpecDto } from "@/shared/ipc";
 import { appName, type AppOption } from "@/shared/lib/apps";
 import { activityLabel } from "@/shared/lib/labels";
@@ -30,17 +31,15 @@ interface Props {
  * What a rule matches, as text: the app name, `Title contains "text"` for a plain-text rule or
  * `/pattern/` for a regular expression, optionally limited to one app.
  */
-export function describeSpec(spec: RuleSpecDto, apps: readonly AppOption[]): string {
+export function describeSpec(spec: RuleSpecDto, apps: readonly AppOption[], t: Messages): string {
   if (spec.kind === "app") return appName(apps, spec.app_id);
   const text = containsText(spec.pattern);
-  const what = text === null ? `/${spec.pattern}/` : `Title contains \u201c${text}\u201d`;
-  return `${what}${spec.app_id ? ` in ${appName(apps, spec.app_id)}` : ""}`;
+  const what = text === null ? `/${spec.pattern}/` : t.activities.rules.titleContains(text);
+  return spec.app_id ? t.activities.rules.inApp(what, appName(apps, spec.app_id)) : what;
 }
 
-const GROUPS: readonly { kind: RuleKind; title: string; hint: string }[] = [
-  { kind: "title_pattern", title: "Window titles", hint: "Checked first" },
-  { kind: "app", title: "Apps", hint: "Used when no title pattern matches" },
-];
+/** Title patterns are checked first, so they are listed first. */
+const GROUPS: readonly RuleKind[] = ["title_pattern", "app"];
 
 /** Rules form plus the ordered rule lists. Within a group the rule higher up wins. */
 export function RulesPanel({
@@ -54,6 +53,8 @@ export function RulesPanel({
   preview,
   previewDays,
 }: Props) {
+  const t = useT();
+  const words = t.activities.rules;
   async function save(changed: readonly RuleInputDto[]) {
     const result = await onSave(changed);
     if (result) onFailure(result.message);
@@ -70,13 +71,10 @@ export function RulesPanel({
   }
 
   return (
-    <section aria-label="Sorting rules" className="space-y-2">
+    <section aria-label={words.title} className="space-y-2">
       <div className="px-1">
-        <h2 className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">Sorting rules</h2>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          A sorting rule says which time belongs to an activity. Sorting rules also apply to time you already tracked,
-          and you can change them any time.
-        </p>
+        <h2 className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">{words.title}</h2>
+        <p className="mt-0.5 text-xs text-muted-foreground">{words.intro}</p>
       </div>
 
       <div className="divide-y divide-border rounded-lg border border-border bg-background">
@@ -92,22 +90,21 @@ export function RulesPanel({
         />
 
         {rules.length === 0 ? (
-          <p className="px-3 py-6 text-center text-xs text-muted-foreground">
-            No sorting rules yet. Add one above: matching time, past and new, moves out of Unassigned.
-          </p>
+          <p className="px-3 py-6 text-center text-xs text-muted-foreground">{words.none}</p>
         ) : (
-          GROUPS.map((group) => {
-            const items = tierOf(rules, group.kind);
+          GROUPS.map((kind) => {
+            const items = tierOf(rules, kind);
             if (items.length === 0) return null;
+            const group = words.groups[kind];
             return (
-              <div key={group.kind}>
+              <div key={kind}>
                 <h3 className="flex items-baseline justify-between px-3 pt-2.5 text-xs font-medium">
                   {group.title}
                   <span className="font-normal text-muted-foreground">{group.hint}</span>
                 </h3>
-                <ul aria-label={`${group.title} rules`} className="px-1.5 py-1.5">
+                <ul aria-label={words.groupLabel(group.title)} className="px-1.5 py-1.5">
                   {items.map((rule) => {
-                    const label = describeSpec(rule.spec, apps);
+                    const label = describeSpec(rule.spec, apps, t);
                     return (
                       <li key={rule.id} className="flex items-center gap-1 rounded-md px-1.5 py-1 hover:bg-accent/50">
                         <span className="flex">
@@ -115,7 +112,7 @@ export function RulesPanel({
                             variant="ghost"
                             size="icon"
                             className="size-6"
-                            aria-label={`Move ${label} up`}
+                            aria-label={words.moveUp(label)}
                             disabled={!canMove(rules, rule.id, "up")}
                             onClick={() => void reorder(rule.id, "up")}
                           >
@@ -125,7 +122,7 @@ export function RulesPanel({
                             variant="ghost"
                             size="icon"
                             className="size-6"
-                            aria-label={`Move ${label} down`}
+                            aria-label={words.moveDown(label)}
                             disabled={!canMove(rules, rule.id, "down")}
                             onClick={() => void reorder(rule.id, "down")}
                           >
@@ -141,7 +138,7 @@ export function RulesPanel({
                         </span>
                         <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
                         <Select
-                          aria-label={`Activity for ${label}`}
+                          aria-label={words.activityFor(label)}
                           value={rule.activity_id}
                           className="max-w-36"
                           onChange={(event) =>
@@ -152,14 +149,14 @@ export function RulesPanel({
                         >
                           {activities.map((activity) => (
                             <option key={activity.id} value={activity.id}>
-                              {activityLabel(activity.id, activity.name)}
+                              {activityLabel(activity.id, activity.name, t)}
                             </option>
                           ))}
                         </Select>
                         <Button
                           variant="ghost"
                           size="icon"
-                          aria-label={`Delete rule ${label}`}
+                          aria-label={words.delete(label)}
                           onClick={() => void remove(rule.id)}
                         >
                           <Trash2 />

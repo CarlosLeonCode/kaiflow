@@ -1,3 +1,4 @@
+import { useT } from "@/shared/i18n";
 import type { DiagnosticsDto } from "@/shared/ipc";
 import { Button } from "@/shared/ui/button";
 import { Panel, Row } from "@/shared/ui/field";
@@ -15,10 +16,6 @@ interface Props {
 
 const MAX_APPS_SHOWN = 6;
 
-function trustedLabel(trusted: boolean): string {
-  return trusted ? "Yes" : "No";
-}
-
 /**
  * Settings panel (presentational): whether window titles can be read and why not. Shows
  * bundle ids and status codes only, never window titles.
@@ -30,28 +27,29 @@ export function DiagnosticsPanel({
   onCopy,
   onRefresh,
 }: Props) {
+  const words = useT().settings.diagnostics;
   const reads = diagnostics?.title_reads.slice(0, MAX_APPS_SHOWN) ?? [];
   return (
     <Panel
-      title="Diagnostics"
-      description="Local only. Shows app ids and status codes, never window titles."
+      title={words.title}
+      description={words.description}
     >
       <dl className="divide-y divide-border">
         {diagnostics?.accessibility_trusted != null && (
           <div className="flex items-baseline justify-between gap-4 px-3 py-2.5">
-            <dt className="font-medium">Accessibility trusted</dt>
+            <dt className="font-medium">{words.trusted}</dt>
             <dd className="text-right text-xs text-muted-foreground">
-              {trustedLabel(diagnostics.accessibility_trusted)}
+              {diagnostics.accessibility_trusted ? words.yes : words.no}
             </dd>
           </div>
         )}
         <div className="px-3 py-2.5">
-          <dt className="font-medium">Last title read</dt>
+          <dt className="font-medium">{words.lastRead}</dt>
           <dd className="mt-1 text-xs text-muted-foreground">
             {reads.length === 0 ? (
-              <span>No reads yet.</span>
+              <span>{words.noReads}</span>
             ) : (
-              <ul className="space-y-1" aria-label="Last title read per app">
+              <ul className="space-y-1" aria-label={words.perApp}>
                 {reads.map((read) => (
                   <li
                     key={read.app_id}
@@ -78,32 +76,26 @@ export function DiagnosticsPanel({
         </div>
       </dl>
       <Row
-        label="Copy diagnostics"
+        label={words.copy}
         description={
-          error
-            ? error
-            : copyState === "copied"
-              ? "Copied to the clipboard."
-              : copyState === "failed"
-                ? "Could not copy to the clipboard."
-                : "Status plus the local diagnostics log, to paste into a bug report."
+          error ? error : copyState === "copied" ? words.copied : copyState === "failed" ? words.copyFailed : words.copyHint
         }
         controlId="setting-diagnostics-copy"
       >
         <div className="flex gap-2">
           <Button
             variant="ghost"
-            aria-label="Refresh diagnostics"
+            aria-label={words.refreshLabel}
             onClick={onRefresh}
           >
-            Refresh
+            {words.refresh}
           </Button>
           <Button
             id="setting-diagnostics-copy"
             disabled={!diagnostics}
             onClick={onCopy}
           >
-            Copy diagnostics
+            {words.copy}
           </Button>
         </div>
       </Row>

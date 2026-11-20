@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 
 import { useSectionIntro } from "@/features/shell/hooks/useSectionIntro";
 import { useNow } from "@/features/tracking/hooks/useNow";
+import { useT, type Messages } from "@/shared/i18n";
 import {
   errorMessage,
   IpcError,
@@ -34,17 +35,18 @@ import { GUIDE_ID, PREVIEW_DAYS } from "../lib/guide";
 import { applySummary, PRESET_CHOICE_ID } from "../lib/presets";
 import { toSubmitResult, type SubmitResult } from "../lib/submit";
 
-async function attempt(action: () => Promise<unknown>): Promise<SubmitResult> {
+async function attempt(action: () => Promise<unknown>, t: Messages): Promise<SubmitResult> {
   try {
     await action();
     return null;
   } catch (error) {
-    return toSubmitResult(error);
+    return toSubmitResult(error, t);
   }
 }
 
 /** Wires Activities to the backend: activities, rules, the guided setup and the rule preview. */
 export function ActivitiesContainer() {
+  const t = useT();
   const intro = useSectionIntro("activities");
   const now = useNow(60_000);
   const today = addLocalDays(now, 0);
@@ -124,7 +126,7 @@ export function ActivitiesContainer() {
     <ActivitiesView
       intro={intro}
       loading={activities.isPending || rules.isPending}
-      error={failure ? errorMessage(failure) : actionError}
+      error={failure ? errorMessage(failure, t) : actionError}
       activities={activities.data ?? []}
       rules={ruleList}
       apps={apps}
@@ -145,17 +147,17 @@ export function ActivitiesContainer() {
       }}
       onRuleDraftChange={setDraft}
       onApplyPreset={async (key) => {
-        const name = presets.data?.find((pack) => pack.key === key)?.name ?? "Pack";
-        return attempt(async () => setNotice(applySummary(name, await applyPreset.mutateAsync(key))));
+        const name = presets.data?.find((pack) => pack.key === key)?.name ?? t.activities.presets.pack;
+        return attempt(async () => setNotice(applySummary(name, await applyPreset.mutateAsync(key), t)), t);
       }}
-      onAcceptSuggestion={(appId) => attempt(() => accept.mutateAsync(appId))}
-      onDismissSuggestion={(appId) => attempt(() => dismissSuggestion.mutateAsync(appId))}
+      onAcceptSuggestion={(appId) => attempt(() => accept.mutateAsync(appId), t)}
+      onDismissSuggestion={(appId) => attempt(() => dismissSuggestion.mutateAsync(appId), t)}
       onDismissNotice={() => setNotice(null)}
-      onCreate={(value) => attempt(() => create.mutateAsync(value))}
-      onUpdate={(activity) => attempt(() => update.mutateAsync(activity))}
-      onDeleteActivity={(id) => attempt(() => remove.mutateAsync(id))}
-      onSaveRules={(changed) => attempt(() => upsert.mutateAsync(changed))}
-      onDeleteRule={(id) => attempt(() => removeRule.mutateAsync(id))}
+      onCreate={(value) => attempt(() => create.mutateAsync(value), t)}
+      onUpdate={(activity) => attempt(() => update.mutateAsync(activity), t)}
+      onDeleteActivity={(id) => attempt(() => remove.mutateAsync(id), t)}
+      onSaveRules={(changed) => attempt(() => upsert.mutateAsync(changed), t)}
+      onDeleteRule={(id) => attempt(() => removeRule.mutateAsync(id), t)}
       onFailure={setActionError}
       onDismissError={() => setActionError(null)}
     />

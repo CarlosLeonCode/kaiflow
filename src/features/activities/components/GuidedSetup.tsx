@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 
+import { useT } from "@/shared/i18n";
 import type { ActivityDto, PresetDto } from "@/shared/ipc";
 import { UNASSIGNED_ID } from "@/shared/lib/labels";
 import { cn } from "@/shared/lib/utils";
@@ -8,17 +9,10 @@ import { Button } from "@/shared/ui/button";
 import { Segmented } from "@/shared/ui/segmented";
 
 import { suggestColor } from "../lib/palette";
-import {
-  PRODUCTIVITY_MEANING,
-  PRODUCTIVITY_OPTIONS,
-  PRODUCTIVITY_USE,
-  type ActivityFormValue,
-} from "../lib/productivity";
+import { productivityOptions, type ActivityFormValue } from "../lib/productivity";
 import type { Submit } from "../lib/submit";
 import { ActivityForm } from "./ActivityForm";
 import { PresetChooser } from "./PresetChooser";
-
-export const GUIDE_STEPS = ["Create or pick activities", "Add sorting rules", "Mark how each activity counts"] as const;
 
 type Step = 0 | 1 | 2;
 
@@ -61,6 +55,10 @@ export function GuidedSetup({
   onShowSuggestions,
   onClose,
 }: Props) {
+  const t = useT();
+  const words = t.activities.guide;
+  const steps = words.steps;
+  const options = productivityOptions(t);
   const id = useId();
   const [step, setStep] = useState<Step>(0);
   const [focusStep, setFocusStep] = useState(false);
@@ -94,19 +92,17 @@ export function GuidedSetup({
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 id={`${id}-title`} ref={titleRef} tabIndex={-1} className="text-sm font-semibold">
-            Set up activities in three steps
+            {words.title}
           </h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            A couple of minutes. You can close it any time and open it again from How this works.
-          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">{words.intro}</p>
         </div>
-        <Button variant="ghost" size="icon" aria-label="Close the setup guide" onClick={onClose}>
+        <Button variant="ghost" size="icon" aria-label={words.close} onClick={onClose}>
           <X />
         </Button>
       </div>
 
-      <ol aria-label="Setup steps" className="mt-3 flex flex-wrap gap-1.5">
-        {GUIDE_STEPS.map((title, index) => (
+      <ol aria-label={words.stepsLabel} className="mt-3 flex flex-wrap gap-1.5">
+        {steps.map((title, index) => (
           <li key={title}>
             <button
               type="button"
@@ -127,15 +123,14 @@ export function GuidedSetup({
 
       <div className="mt-4">
         <h3 ref={stepRef} tabIndex={-1} className="text-sm font-medium">
-          Step {step + 1} of 3: {GUIDE_STEPS[step]}
+          {words.stepHeading(step + 1, steps.length, steps[step] ?? "")}
         </h3>
 
         {step === 0 && (
           <div className="mt-1 space-y-3">
             <p className="text-xs text-muted-foreground">
-              An activity is a label for a kind of work, like Deep work, Client A, Admin or Distraction. Two or three
-              are enough to start, and you can change them any time.
-              {own.length > 0 && ` You already have: ${own.map((activity) => activity.name).join(", ")}.`}
+              {words.activitiesIntro}
+              {own.length > 0 && words.youHave(own.map((activity) => activity.name).join(", "))}
             </p>
             {creating ? (
               <div className="rounded-lg border border-border">
@@ -168,33 +163,27 @@ export function GuidedSetup({
 
         {step === 1 && (
           <div className="mt-1 space-y-3 text-xs">
-            <p className="text-muted-foreground">A sorting rule tells the app which time belongs to an activity. There are two kinds:</p>
+            <p className="text-muted-foreground">{words.rulesIntro}</p>
             <ul className="space-y-1.5">
               <li>
-                <span className="font-medium">By app:</span> everything in one app. For example, all of Excel goes to
-                Deep work.
+                <span className="font-medium">{words.byApp}</span> {words.byAppText}
               </li>
               <li>
-                <span className="font-medium">By window title:</span> only when the title contains some text, in any
-                app. For example, titles containing &ldquo;YouTube&rdquo; go to Distraction, while the rest of the
-                browser stays where it is.
+                <span className="font-medium">{words.byTitle}</span> {words.byTitleText}
               </li>
             </ul>
-            <p className="text-muted-foreground">
-              While you write a rule, the form shows how much of your last {previewDays} days it would cover. Sorting
-              rules apply to time you already tracked too.
-            </p>
+            <p className="text-muted-foreground">{words.previewNote(previewDays)}</p>
             <div className="flex flex-wrap items-center gap-2">
               {own.length === 0 ? (
-                <p className="text-muted-foreground">Create an activity first, in step 1, so a rule has somewhere to go.</p>
+                <p className="text-muted-foreground">{words.createFirst}</p>
               ) : (
                 <Button variant="primary" size="sm" onClick={onAddRule}>
-                  Add a rule
+                  {words.addRule}
                 </Button>
               )}
               {hasSuggestions && (
                 <Button size="sm" onClick={onShowSuggestions}>
-                  Review suggestions
+                  {words.reviewSuggestions}
                 </Button>
               )}
             </div>
@@ -204,30 +193,30 @@ export function GuidedSetup({
         {step === 2 && (
           <div className="mt-1 space-y-3 text-xs">
             <dl className="space-y-1">
-              {PRODUCTIVITY_OPTIONS.map((option) => (
+              {options.map((option) => (
                 <div key={option.value}>
                   <dt className="inline font-medium">{option.label}: </dt>
-                  <dd className="inline text-muted-foreground">{PRODUCTIVITY_MEANING[option.value]}</dd>
+                  <dd className="inline text-muted-foreground">{t.activities.productivity.meaning[option.value]}</dd>
                 </div>
               ))}
             </dl>
-            <p className="text-muted-foreground">{PRODUCTIVITY_USE}</p>
+            <p className="text-muted-foreground">{t.activities.productivity.use}</p>
             {own.length > 0 ? (
-              <ul aria-label="How each activity counts" className="divide-y divide-border rounded-md border border-border">
+              <ul aria-label={words.howEachCounts} className="divide-y divide-border rounded-md border border-border">
                 {own.map((activity) => (
                   <li key={activity.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5">
                     <span className="min-w-0 truncate text-sm font-medium">{activity.name}</span>
                     <Segmented
-                      aria-label={`How ${activity.name} counts`}
+                      aria-label={words.howCounts(activity.name)}
                       value={activity.productivity}
-                      options={PRODUCTIVITY_OPTIONS}
+                      options={options}
                       onChange={(next) => void setProductivity(activity, next)}
                     />
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="text-muted-foreground">Your activities will be listed here once you create them.</p>
+              <p className="text-muted-foreground">{words.listedLater}</p>
             )}
             {updateError && (
               <p role="alert" className="text-destructive">
@@ -240,15 +229,15 @@ export function GuidedSetup({
 
       <div className="mt-4 flex justify-between gap-2 border-t border-border pt-3">
         <Button size="sm" disabled={step === 0} onClick={() => goTo((step - 1) as Step)}>
-          Previous step
+          {words.previous}
         </Button>
         {step < 2 ? (
           <Button size="sm" variant="primary" onClick={() => goTo((step + 1) as Step)}>
-            Next: {GUIDE_STEPS[step + 1]}
+            {words.next(steps[step + 1] ?? "")}
           </Button>
         ) : (
           <Button size="sm" variant="primary" onClick={onClose}>
-            Finish
+            {words.finish}
           </Button>
         )}
       </div>

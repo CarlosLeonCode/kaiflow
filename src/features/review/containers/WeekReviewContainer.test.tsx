@@ -300,3 +300,27 @@ describe("WeekReviewContainer with AI switched on", () => {
     expect(screen.getByText(/did not follow the requested format/)).toBeInTheDocument();
   });
 });
+
+describe("WeekReviewContainer in Spanish", () => {
+  it("asks for the analysis in Spanish and shows the review in Spanish", async () => {
+    const user = userEvent.setup();
+    const { calls } = backend(
+      { ai: aiSettings({}, { enabled: true, consented_at: 1, has_key: true }), stored: [aiReview()] },
+      { settings_get: () => settings({ language: "es" }) },
+    );
+    renderReview();
+
+    expect(await screen.findByRole("region", { name: "Tu nota" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Tu nota sobre esta semana")).toBeInTheDocument();
+    expect(await screen.findByRole("list", { name: "Análisis guardados" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Eliminar el análisis de 2026-10-12 a 2026-10-18" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /Ver qué se enviará/ }));
+    const preview = await screen.findByTestId("request-preview");
+    expect(sent(calls, "review_preview")[0]?.args).toEqual({ weeksAgo: 0, includeTitles: false, language: "Español" });
+    expect(within(preview).getByTestId("preview-destination")).toHaveTextContent(
+      "Se envía por internet a Anthropic (Claude) (modelo claude-haiku-5-5). No se incluyen títulos de ventana. 120 bytes en total.",
+    );
+    expect(within(preview).getByRole("button", { name: "Enviar para analizar" })).toBeInTheDocument();
+  });
+});

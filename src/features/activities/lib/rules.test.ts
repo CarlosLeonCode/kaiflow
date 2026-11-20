@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import type { RuleDto } from "@/shared/ipc";
 
+import { en } from "@/shared/i18n";
+
 import { canMove, moveRule, nameProblem, nameProblemMessage, nextPriority, tierOf } from "./rules";
 
 let nextId = 1;
@@ -89,7 +91,7 @@ describe("nameProblem", () => {
 
   it("has a message for each problem", () => {
     for (const problem of ["empty", "too_long", "duplicate"] as const) {
-      expect(nameProblemMessage(problem).length).toBeGreaterThan(5);
+      expect(nameProblemMessage(problem, en).length).toBeGreaterThan(5);
     }
   });
 });

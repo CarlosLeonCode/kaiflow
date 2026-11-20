@@ -403,4 +403,29 @@ describe("InsightsContainer", () => {
     await waitFor(() => expect(calls.filter((c) => c.cmd === "review_get").at(-1)?.args.weeksAgo).toBe(1));
     expect(calls.filter((c) => c.cmd === "review_get").every((c) => (c.args.weeksAgo as number) <= 1)).toBe(true);
   });
+
+  it("renders in Spanish when the language setting is Español", async () => {
+    const user = userEvent.setup();
+    backend({ settings_get: () => settings({ language: "es" }) });
+    renderWithProviders(<InsightsContainer />);
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Estadísticas" })).toBeInTheDocument();
+    expect(await screen.findByTestId("insights-comparison")).toHaveTextContent("1h 00m más que la semana anterior (+50 %)");
+    expect(screen.getByRole("heading", { level: 2, name: /oct/ })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Semana" })).toBeChecked();
+    expect(screen.getByRole("button", { name: "Semana anterior" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Resumen" })).toHaveTextContent("Día de más actividad");
+    expect(screen.getByRole("group", { name: "Tiempo registrado por día, apilado por actividad" })).toBeInTheDocument();
+    expect(screen.getByRole("grid", { name: "Tiempo registrado por día de la semana y hora" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Horas de más actividad" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Tendencia" })).toBeInTheDocument();
+    const activities = screen.getByRole("list", { name: "Tiempo por actividad" });
+    expect(within(activities).getByText("Sin asignar")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Exportar JSON/ })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "Tu nota" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("radio", { name: "Día" }));
+    expect(await screen.findByRole("button", { name: "Día anterior" })).toBeInTheDocument();
+    expect(await screen.findByText("Nada registrado este día")).toBeInTheDocument();
+  });
 });

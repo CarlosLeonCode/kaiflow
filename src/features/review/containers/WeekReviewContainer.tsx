@@ -1,3 +1,4 @@
+import { useT } from "@/shared/i18n";
 import { errorMessage, useSetReviewNoteMutation, useWeeklyReviewQuery } from "@/shared/ipc";
 
 import { NoteField } from "../components/NoteField";
@@ -15,6 +16,7 @@ interface Props {
 }
 
 function LoadedWeekReview({ weeksAgo, onOpenSettings }: Props) {
+  const t = useT();
   const review = useWeeklyReviewQuery(weeksAgo);
   const saveNote = useSetReviewNoteMutation();
   const data = review.data;
@@ -22,16 +24,16 @@ function LoadedWeekReview({ weeksAgo, onOpenSettings }: Props) {
   return (
     <WeekReviewView
       loading={review.isPending}
-      error={review.isError ? errorMessage(review.error) : null}
+      error={review.isError ? errorMessage(review.error, t) : null}
       goals={data?.goals}
-      focusLine={data ? focusWeekLine(focusWeek(data.focus)) : undefined}
+      focusLine={data ? focusWeekLine(focusWeek(data.focus), t) : undefined}
       note={
         data && (
           <NoteField
             key={data.first_day}
             note={data.note}
             saving={saveNote.isPending}
-            error={saveNote.isError ? errorMessage(saveNote.error) : null}
+            error={saveNote.isError ? errorMessage(saveNote.error, t) : null}
             onSave={(note) => saveNote.mutate({ firstDay: data.first_day, note })}
           />
         )

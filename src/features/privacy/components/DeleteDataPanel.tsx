@@ -1,5 +1,6 @@
 import { useId, useState } from "react";
 
+import { useT } from "@/shared/i18n";
 import type { DeleteOpDto } from "@/shared/ipc";
 import { Button } from "@/shared/ui/button";
 import { Input } from "@/shared/ui/input";
@@ -37,6 +38,7 @@ function Block({
  * dialog and the backend's single-use token do the actual guarding.
  */
 export function DeleteDataPanel({ today, onRequest, busy }: Props) {
+  const words = useT().privacy.delete;
   const id = useId();
   const [from, setFrom] = useState(() => toDateInput(today));
   const [to, setTo] = useState(() => toDateInput(today));
@@ -45,23 +47,21 @@ export function DeleteDataPanel({ today, onRequest, busy }: Props) {
 
   const range = rangeFromDays(from, to);
   const parsed = parseDays(days);
-  const rangeError = touched === "range" && !range ? "Choose a start date that is not after the end date." : null;
-  const daysError = touched === "days" && "problem" in parsed ? "Enter a whole number of days, 1 or more." : null;
+  const rangeError = touched === "range" && !range ? words.rangeError : null;
+  const daysError = touched === "days" && "problem" in parsed ? words.daysError : null;
 
   return (
-    <section aria-label="Delete data" className="space-y-2">
+    <section aria-label={words.title} className="space-y-2">
       <div className="px-1">
-        <h2 className="text-2xs font-medium uppercase tracking-wide text-destructive">Delete data</h2>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          Deleting is permanent. You will be asked to confirm before anything is removed.
-        </p>
+        <h2 className="text-2xs font-medium uppercase tracking-wide text-destructive">{words.title}</h2>
+        <p className="mt-0.5 text-xs text-muted-foreground">{words.intro}</p>
       </div>
       <div className="divide-y divide-border rounded-lg border border-border bg-background">
-        <Block title="Delete a date range" description="Removes everything recorded between two days, both included.">
+        <Block title={words.range} description={words.rangeHint}>
           <div className="flex flex-wrap items-end gap-2">
             <div>
               <label htmlFor={`${id}-from`} className="mb-1 block text-xs font-medium text-muted-foreground">
-                From
+                {words.from}
               </label>
               <Input
                 id={`${id}-from`}
@@ -73,7 +73,7 @@ export function DeleteDataPanel({ today, onRequest, busy }: Props) {
             </div>
             <div>
               <label htmlFor={`${id}-to`} className="mb-1 block text-xs font-medium text-muted-foreground">
-                To
+                {words.to}
               </label>
               <Input
                 id={`${id}-to`}
@@ -90,7 +90,7 @@ export function DeleteDataPanel({ today, onRequest, busy }: Props) {
                 if (range) onRequest({ kind: "range", range });
               }}
             >
-              Delete range…
+              {words.rangeButton}
             </Button>
           </div>
           {rangeError && (
@@ -101,13 +101,13 @@ export function DeleteDataPanel({ today, onRequest, busy }: Props) {
         </Block>
 
         <Block
-          title="Delete older data"
-          description="Removes everything recorded more than a number of days ago and keeps the rest."
+          title={words.older}
+          description={words.olderHint}
         >
           <div className="flex flex-wrap items-end gap-2">
             <div>
               <label htmlFor={`${id}-days`} className="mb-1 block text-xs font-medium text-muted-foreground">
-                Older than (days)
+                {words.olderThan}
               </label>
               <Input
                 id={`${id}-days`}
@@ -129,7 +129,7 @@ export function DeleteDataPanel({ today, onRequest, busy }: Props) {
                 if ("days" in parsed) onRequest({ kind: "older_than_days", days: parsed.days });
               }}
             >
-              Delete older data…
+              {words.olderButton}
             </Button>
           </div>
           {daysError && (
@@ -139,13 +139,13 @@ export function DeleteDataPanel({ today, onRequest, busy }: Props) {
           )}
         </Block>
 
-        <Block title="Delete everything" description="Removes all tracked time and history. Your settings, activities, sorting rules and excluded apps stay.">
+        <Block title={words.all} description={words.allHint}>
           <Button
             disabled={busy}
             onClick={() => onRequest({ kind: "all" })}
             className="border-destructive/40 text-destructive hover:bg-destructive/10"
           >
-            Delete all data…
+            {words.allButton}
           </Button>
         </Block>
       </div>

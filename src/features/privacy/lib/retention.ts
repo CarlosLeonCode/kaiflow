@@ -1,3 +1,4 @@
+import type { Messages } from "@/shared/i18n";
 import type { RetentionPatchDto } from "@/shared/ipc";
 
 /** Automatic cleanup choices (R10.4 keeps data forever by default). */
@@ -9,13 +10,14 @@ export interface RetentionOption {
   label: string;
 }
 
-export function retentionOptions(current: number | null): RetentionOption[] {
+export function retentionOptions(current: number | null, t: Messages): RetentionOption[] {
+  const words = t.privacy.cleanup;
   const days = [...PRESETS] as number[];
   if (current !== null && !days.includes(current)) days.push(current);
   days.sort((a, b) => a - b);
   return [
-    { value: "forever", label: "Keep forever" },
-    ...days.map((d) => ({ value: String(d), label: d === 365 ? "1 year" : `${d} days` })),
+    { value: "forever", label: words.forever },
+    ...days.map((d) => ({ value: String(d), label: d === 365 ? words.year : words.days(d) })),
   ];
 }
 

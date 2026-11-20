@@ -1,3 +1,4 @@
+import type { Messages } from "@/shared/i18n";
 import type { PrivacyRulesDto } from "@/shared/ipc";
 import { appName, type AppOption } from "@/shared/lib/apps";
 
@@ -21,15 +22,10 @@ export function privacyRows(rules: PrivacyRulesDto, apps: readonly AppOption[]):
   );
 }
 
-export const MODE_LABEL: Record<PrivacyMode, string> = {
-  exclude: "Never record",
-  redact_title: "Hide titles",
-};
-
 /** A bundle id looks like `com.company.App`: no spaces, at least one dot. Typos are caught early, odd ids still pass. */
-export function bundleIdProblem(value: string): string | null {
+export function bundleIdProblem(value: string, t: Messages): string | null {
   const id = value.trim();
-  if (id === "") return "Pick an app or type its bundle id.";
-  if (/\s/.test(id) || !id.includes(".")) return "A bundle id looks like com.example.App.";
+  if (id === "") return t.privacy.apps.problems.empty;
+  if (/\s/.test(id) || !id.includes(".")) return t.privacy.apps.problems.invalid;
   return null;
 }

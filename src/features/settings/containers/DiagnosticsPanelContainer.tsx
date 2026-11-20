@@ -1,11 +1,13 @@
 import { useState } from "react";
 
+import { useT } from "@/shared/i18n";
 import { errorMessage, useDiagnosticsQuery } from "@/shared/ipc";
 
 import { DiagnosticsPanel } from "../components/DiagnosticsPanel";
 
 /** Settings > Diagnostics: fetches the snapshot and copies the report to the clipboard. */
 export function DiagnosticsPanelContainer() {
+  const t = useT();
   const diagnostics = useDiagnosticsQuery();
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">(
     "idle",
@@ -30,7 +32,7 @@ export function DiagnosticsPanelContainer() {
       copyState={copyState}
       error={
         diagnostics.isError
-          ? `Could not load diagnostics: ${errorMessage(diagnostics.error)}`
+          ? t.settings.diagnostics.loadError(errorMessage(diagnostics.error, t))
           : null
       }
       onCopy={() => void copy()}
