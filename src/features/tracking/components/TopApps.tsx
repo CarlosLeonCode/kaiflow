@@ -1,3 +1,4 @@
+import { useT } from "@/shared/i18n";
 import { formatDuration } from "@/shared/lib/time";
 import { Skeleton } from "@/shared/ui/skeleton";
 
@@ -9,19 +10,20 @@ interface Props {
 }
 
 export function TopApps({ rows, loading }: Props) {
+  const t = useT();
   return (
-    <section aria-label="Top apps today" className="px-4">
+    <section aria-label={t.tracking.topAppsToday} className="px-4">
       <h2 className="mb-1 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
-        Top apps
+        {t.tracking.topApps}
       </h2>
       {loading ? (
-        <div className="space-y-2 py-1" aria-label="Loading top apps">
+        <div className="space-y-2 py-1" aria-label={t.tracking.loadingTopApps}>
           <Skeleton className="h-6" />
           <Skeleton className="h-6" />
           <Skeleton className="h-6" />
         </div>
       ) : rows.length === 0 ? (
-        <p className="py-2 text-muted-foreground">No activity recorded yet today.</p>
+        <p className="py-2 text-muted-foreground">{t.tracking.noActivityToday}</p>
       ) : (
         <ul className="divide-y divide-border">
           {rows.map((row) => (

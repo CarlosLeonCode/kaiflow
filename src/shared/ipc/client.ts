@@ -1,3 +1,5 @@
+import { en, type Messages } from "@/shared/i18n/en";
+
 import type { AppError } from "./bindings";
 
 /** Result shape produced by the generated `typedError` wrapper. */
@@ -21,38 +23,43 @@ export async function unwrap<T>(result: Promise<IpcResult<T>>): Promise<T> {
   return settled.data;
 }
 
-/** Human readable message for an `AppError` (UI copy, English). */
-export function describeError(error: AppError): string {
+/**
+ * Human readable message for an `AppError` in the active language (`useT()`). English is the
+ * default, which is also what `IpcError.message` carries.
+ */
+export function describeError(error: AppError, t: Messages = en): string {
+  const m = t.errors;
   switch (error.kind) {
     case "invalid_pattern":
-      return `The pattern "${error.pattern}" is not valid: ${error.reason}`;
+      return m.invalidPattern(error.pattern, error.reason);
     case "shortcut_unavailable":
-      return `The shortcut ${error.shortcut} is unavailable: ${error.reason}`;
+      return m.shortcutUnavailable(error.shortcut, error.reason);
     case "permission_denied":
-      return "Accessibility access is not granted.";
+      return m.permissionDenied;
     case "focus_unavailable":
-      return "Focus sessions need window tracking, which is unavailable right now.";
+      return m.focusUnavailable;
     case "ai_not_enabled":
-      return "AI analysis is off for this provider. Switch it on in Settings > AI first.";
+      return m.aiNotEnabled;
     case "ai_key_missing":
-      return "No API key is saved for this provider. Add one in Settings > AI.";
+      return m.aiKeyMissing;
     case "secret_store_unavailable":
-      return `There is no secure place to keep API keys on this computer (${error.reason}). Keys are never stored in plain text, so this provider stays off.`;
+      return m.secretStoreUnavailable(error.reason);
     case "not_found":
-      return "That item no longer exists.";
+      return m.notFound;
     case "confirmation_required":
-      return "This action needs confirmation.";
+      return m.confirmationRequired;
     case "storage":
     case "invalid":
     case "internal":
     case "ai":
+      // Free-form text from the backend: shown as it comes.
       return error.message;
   }
 }
 
 /** Message for any thrown value coming out of a query or mutation. */
-export function errorMessage(error: unknown): string {
-  if (error instanceof IpcError) return error.message;
+export function errorMessage(error: unknown, t: Messages = en): string {
+  if (error instanceof IpcError) return describeError(error.error, t);
   if (error instanceof Error) return error.message;
-  return "Something went wrong.";
+  return t.common.somethingWentWrong;
 }

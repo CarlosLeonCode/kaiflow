@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseLanguage, resolveLanguage, systemLanguage } from "./language";
+import { localeTag, parseLanguage, resolveLanguage, systemLanguage } from "./language";
 
 describe("language resolution", () => {
   it("treats any Spanish OS language as Spanish and everything else as English", () => {
@@ -20,5 +20,13 @@ describe("language resolution", () => {
     expect(resolveLanguage("system", "en")).toBe("en");
     expect(resolveLanguage("en", "es")).toBe("en");
     expect(resolveLanguage("es", "en")).toBe("es");
+  });
+
+  it("keeps the OS region for Intl only when it is in the active language", () => {
+    expect(localeTag("en", "en-GB")).toBe("en-GB");
+    expect(localeTag("es", "es-MX")).toBe("es-MX");
+    expect(localeTag("es", "en-GB")).toBe("es");
+    expect(localeTag("en", "fr-FR")).toBe("en");
+    expect(localeTag("en", "")).toBe("en");
   });
 });

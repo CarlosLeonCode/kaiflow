@@ -39,6 +39,8 @@ function mockPlatform(params: URLSearchParams): PlatformInfoDto {
  * - `?keychain=missing`: the OS has no secure key store (keys are refused, like Linux without
  *   a Secret Service).
  * - `?activities=empty`: only the system activity and no rules (first-run preset choice).
+ * - `?language=es` (or `en`): the stored language setting, like a window opened after the user
+ *   picked one in Settings (each mocked window has its own in-memory backend).
  */
 export function installMockIpc(search: string = window.location.search): void {
   const params = new URLSearchParams(search);
@@ -53,6 +55,7 @@ export function installMockIpc(search: string = window.location.search): void {
     aiOn: params.get("ai") === "on" || params.get("ai") === "offline",
     aiOffline: params.get("ai") === "offline",
     keychainMissing: params.get("keychain") === "missing",
+    language: params.get("language") ?? undefined,
     announceUpdate: params.get("update") === "1",
     update: ["1", "manual"].includes(params.get("update") ?? "")
         ? { version: "0.2.0", current_version: "0.1.0", notes: "Faster history.\nFixes the idle prompt.", date: null }

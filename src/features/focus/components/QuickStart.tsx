@@ -1,5 +1,6 @@
 import { useId, useState } from "react";
 
+import { useT } from "@/shared/i18n";
 import { Input } from "@/shared/ui/input";
 
 import { DURATION_PRESETS, MAX_INTENT_LENGTH } from "../lib/focus";
@@ -13,16 +14,17 @@ interface Props {
 
 /** The popover's one-click timer: an optional task name and a chip per preset length. */
 export function QuickStart({ busy = false, error, onStart }: Props) {
+  const t = useT();
   const id = useId();
   const [intent, setIntent] = useState("");
   return (
     <section aria-labelledby={`${id}-title`} className="rounded-xl border border-border bg-surface p-3">
       <h2 id={`${id}-title`} className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-        Start a timer
+        {t.focus.quick.title}
       </h2>
       <Input
-        aria-label="Task (optional)"
-        placeholder="What are you working on? (optional)"
+        aria-label={t.focus.quick.task}
+        placeholder={t.focus.start.placeholder}
         className="mt-2 h-8 w-full"
         maxLength={MAX_INTENT_LENGTH}
         value={intent}
@@ -37,7 +39,7 @@ export function QuickStart({ busy = false, error, onStart }: Props) {
             key={minutes}
             type="button"
             disabled={busy}
-            aria-label={`${minutes} min`}
+            aria-label={t.focus.minutes(minutes)}
             onClick={() => onStart(minutes, intent)}
             className="flex h-12 flex-col items-center justify-center rounded-lg border border-border bg-background transition-colors hover:border-primary/50 hover:bg-accent disabled:opacity-50"
           >

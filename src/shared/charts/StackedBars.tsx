@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
+import { useT, type Messages } from "@/shared/i18n";
 import { tuneActivityColor } from "@/shared/lib/color";
 import { formatAxisDuration, formatDuration } from "@/shared/lib/time";
 
@@ -24,8 +25,8 @@ function labelStep(count: number): number {
   return 5;
 }
 
-function barLabel(bar: Bar): string {
-  if (bar.totalMs === 0) return `${bar.fullLabel}: nothing tracked`;
+function barLabel(bar: Bar, t: Messages): string {
+  if (bar.totalMs === 0) return `${bar.fullLabel}: ${t.charts.nothingTracked}`;
   const parts = bar.segments
     .slice(0, 4)
     .map((segment) => `${segment.name} ${formatDuration(segment.ms)}`)
@@ -39,6 +40,7 @@ function barLabel(bar: Bar): string {
  * bars (roving tab stop) and the readout under the chart follows hover and focus.
  */
 export function StackedBars({ bars, dark, label }: Props) {
+  const t = useT();
   const [active, setActive] = useState<number | null>(null);
   const [focused, setFocused] = useState<number | null>(null);
   const refs = useRef<(SVGGElement | null)[]>([]);
@@ -118,7 +120,7 @@ export function StackedBars({ bars, dark, label }: Props) {
                   refs.current[index] = node;
                 }}
                 role="img"
-                aria-label={barLabel(bar)}
+                aria-label={barLabel(bar, t)}
                 tabIndex={index === tabStop ? 0 : -1}
                 onPointerEnter={() => setActive(index)}
                 onPointerLeave={() => setActive((current) => (current === index ? null : current))}
@@ -187,10 +189,10 @@ export function StackedBars({ bars, dark, label }: Props) {
         {readout ? (
           <>
             <span className="font-medium text-foreground">{readout.fullLabel}</span>
-            <span> · {readout.totalMs > 0 ? formatDuration(readout.totalMs) : "nothing tracked"}</span>
+            <span> · {readout.totalMs > 0 ? formatDuration(readout.totalMs) : t.charts.nothingTracked}</span>
           </>
         ) : (
-          "Hover or focus a bar for details."
+          t.charts.bars.hint
         )}
       </p>
 
@@ -198,16 +200,16 @@ export function StackedBars({ bars, dark, label }: Props) {
         <caption>{label}</caption>
         <thead>
           <tr>
-            <th scope="col">Period</th>
-            <th scope="col">Total</th>
-            <th scope="col">Breakdown</th>
+            <th scope="col">{t.charts.period}</th>
+            <th scope="col">{t.charts.bars.total}</th>
+            <th scope="col">{t.charts.bars.breakdown}</th>
           </tr>
         </thead>
         <tbody>
           {bars.map((bar) => (
             <tr key={bar.range.from}>
               <th scope="row">{bar.fullLabel}</th>
-              <td>{bar.totalMs > 0 ? formatDuration(bar.totalMs) : "Nothing tracked"}</td>
+              <td>{bar.totalMs > 0 ? formatDuration(bar.totalMs) : t.charts.nothingTrackedCell}</td>
               <td>{bar.segments.map((segment) => `${segment.name} ${formatDuration(segment.ms)}`).join(", ")}</td>
             </tr>
           ))}

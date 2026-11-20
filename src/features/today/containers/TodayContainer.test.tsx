@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { TimelineItemDto } from "@/shared/ipc";
 import { HOUR, MINUTE } from "@/shared/lib/time";
-import { focusActive, focusSession, goalStatus, idleFocus, mockBackend, renderWithProviders, report, status } from "@/test/ipc";
+import { focusActive, focusSession, goalStatus, idleFocus, mockBackend, renderWithProviders, report, settings, status } from "@/test/ipc";
 
 import { TodayContainer } from "./TodayContainer";
 
@@ -376,5 +376,32 @@ describe("TodayContainer", () => {
       await screen.findByText("Active time");
       expect(screen.queryByRole("region", { name: "Active timer" })).not.toBeInTheDocument();
     });
+  });
+
+  it("renders in Spanish when the language setting is Español", async () => {
+    mockBackend({
+      settings_get: () => settings({ language: "es" }),
+      get_status: () => status({ state: "paused", current: null, since: null }),
+      get_report: () =>
+        report({
+          total_ms: 3 * HOUR,
+          by_app: [{ app_id: "com.apple.dt.Xcode", app_name: "Xcode", total_ms: 3 * HOUR }],
+          by_activity: [{ activity_id: 1, name: "Unassigned", color: "#9ca3af", total_ms: 3 * HOUR }],
+          auto_discarded_gaps: 2,
+        }),
+      get_timeline: () => [item(at(9), at(12), { activity_id: 1, activity_name: "Unassigned" })],
+    });
+    renderWithProviders(<TodayContainer onOpenGoals={() => {}} />);
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Hoy" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId("today-total")).toHaveTextContent("3:00:00"));
+    expect(screen.getByText("martes, 20 de octubre")).toBeInTheDocument();
+    expect(screen.getByText("En pausa")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Tiempo activo y ausente" })).toBeInTheDocument();
+    expect(screen.getByText("2 pausas cortas descartadas hoy. Cámbialo en Ajustes, Inactividad.")).toBeInTheDocument();
+    const activities = screen.getByRole("list", { name: "Tiempo por actividad" });
+    expect(within(activities).getByText("Sin asignar")).toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "Tiempo por app" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: /^Línea de tiempo de hoy: 1 bloque,/ })).toBeInTheDocument();
   });
 });

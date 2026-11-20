@@ -22,3 +22,11 @@ export function systemLanguage(tag: string | undefined = globalThis.navigator?.l
 export function resolveLanguage(setting: LanguageSetting, system: Language): Language {
   return setting === "system" ? system : setting;
 }
+
+/**
+ * BCP 47 tag for `Intl`: the OS tag (`en-GB`, `es-MX`...) when it is in the active language, so
+ * the clock and date order still follow the OS region; the bare language otherwise.
+ */
+export function localeTag(language: Language, tag: string | undefined = globalThis.navigator?.language): string {
+  return tag?.split("-")[0]?.toLowerCase() === language ? tag : language;
+}

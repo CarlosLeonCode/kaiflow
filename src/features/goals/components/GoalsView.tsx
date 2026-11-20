@@ -1,6 +1,7 @@
 import { Archive, ArchiveRestore, CircleAlert, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 
+import { useT } from "@/shared/i18n";
 import type { ActivityDto, GoalDto, GoalStatusDto } from "@/shared/ipc";
 import type { AppOption } from "@/shared/lib/apps";
 import { Alert, AlertDescription } from "@/shared/ui/alert";
@@ -50,6 +51,8 @@ export function GoalsView({
   onDelete,
   onMarkSeen,
 }: Props) {
+  const t = useT();
+  const m = t.goals;
   const [mode, setMode] = useState<Mode>({ kind: "idle" });
   const [pendingDelete, setPendingDelete] = useState<GoalDto | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -78,12 +81,12 @@ export function GoalsView({
 
   return (
     <Page
-      title="Goals"
-      subtitle="Targets for your time, and how you are doing."
+      title={t.shell.sections.goals}
+      subtitle={m.subtitle}
       intro={intro}
       actions={
         <Button size="sm" variant="primary" onClick={() => setMode({ kind: "create" })}>
-          <Plus aria-hidden="true" /> New goal
+          <Plus aria-hidden="true" /> {m.newGoal}
         </Button>
       }
     >
@@ -91,7 +94,7 @@ export function GoalsView({
         {error && (
           <Alert variant="warning" role="alert">
             <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-            <AlertDescription>Could not load goals: {error}</AlertDescription>
+            <AlertDescription>{m.loadError(error)}</AlertDescription>
           </Alert>
         )}
         {rowError && (
@@ -101,24 +104,23 @@ export function GoalsView({
         )}
 
         {loading ? (
-          <div className="space-y-3" aria-label="Loading goals">
+          <div className="space-y-3" aria-label={m.loading}>
             <Skeleton className="h-20" />
             <Skeleton className="h-20" />
           </div>
         ) : empty ? (
           <EmptyState
-            title="No goals yet"
-            action={{ label: "Create a goal", onClick: () => setMode({ kind: "create" }) }}
+            title={m.noGoals}
+            action={{ label: m.createGoal, onClick: () => setMode({ kind: "create" }) }}
           >
-            Set a target for an activity, an app or all your tracked time, like at least 4 hours of focused work every
-            weekday or at most 30 minutes in email a day. Goals never block anything: they only keep you informed.
+            {m.emptyPage}
           </EmptyState>
         ) : (
           <>
             {statuses.length > 0 && (
-              <section aria-label="Active goals" className="space-y-2">
-                <h2 className="px-1 text-2xs font-medium uppercase tracking-wide text-muted-foreground">Active</h2>
-                <ul aria-label="Goal list" className="divide-y divide-border rounded-lg border border-border bg-background">
+              <section aria-label={m.activeGoals} className="space-y-2">
+                <h2 className="px-1 text-2xs font-medium uppercase tracking-wide text-muted-foreground">{m.active}</h2>
+                <ul aria-label={m.goalList} className="divide-y divide-border rounded-lg border border-border bg-background">
                   {statuses.map((status) => {
                     const { goal, unseen } = status;
                     return (
@@ -134,15 +136,15 @@ export function GoalsView({
                                   type="button"
                                   data-testid="goal-badge"
                                   onClick={() => onMarkSeen(goal.id)}
-                                  aria-label={`${unseenLabel(unseen)}: ${goal.label}. Dismiss`}
-                                  title="Dismiss"
+                                  aria-label={m.badge(unseenLabel(unseen, t), goal.label)}
+                                  title={t.common.dismiss}
                                   className="shrink-0 rounded-full bg-warning px-2 py-0.5 text-2xs font-medium text-warning-foreground hover:opacity-80"
                                 >
-                                  {unseenLabel(unseen)}
+                                  {unseenLabel(unseen, t)}
                                 </button>
                               )}
                             </p>
-                            <p className="text-xs text-muted-foreground">{goalSentence(goal, names)}</p>
+                            <p className="text-xs text-muted-foreground">{goalSentence(goal, names, t)}</p>
                           </div>
                           <span className="flex shrink-0 items-center gap-1">
                             <StateBadge status={status} />
@@ -150,7 +152,7 @@ export function GoalsView({
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                aria-label={`Edit ${goal.label}`}
+                                aria-label={m.edit(goal.label)}
                                 onClick={() => setMode({ kind: "edit", goal })}
                               >
                                 <Pencil />
@@ -158,7 +160,7 @@ export function GoalsView({
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                aria-label={`Archive ${goal.label}`}
+                                aria-label={m.archive(goal.label)}
                                 onClick={() => void setArchived(goal, true)}
                               >
                                 <Archive />
@@ -166,7 +168,7 @@ export function GoalsView({
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                aria-label={`Delete ${goal.label}`}
+                                aria-label={m.delete(goal.label)}
                                 onClick={() => {
                                   setDeleteError(null);
                                   setPendingDelete(goal);
@@ -187,22 +189,22 @@ export function GoalsView({
             )}
 
             {archived.length > 0 && (
-              <section aria-label="Archived goals" className="space-y-2">
-                <h2 className="px-1 text-2xs font-medium uppercase tracking-wide text-muted-foreground">Archived</h2>
-                <ul aria-label="Archived list" className="divide-y divide-border rounded-lg border border-border bg-background">
+              <section aria-label={m.archivedGoals} className="space-y-2">
+                <h2 className="px-1 text-2xs font-medium uppercase tracking-wide text-muted-foreground">{m.archived}</h2>
+                <ul aria-label={m.archivedList} className="divide-y divide-border rounded-lg border border-border bg-background">
                   {archived.map((goal) => (
                     <li key={goal.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
                       <div className="min-w-0">
                         <p className="truncate font-medium" title={goal.label}>
                           {goal.label}
                         </p>
-                        <p className="text-xs text-muted-foreground">{goalSentence(goal, names)}</p>
+                        <p className="text-xs text-muted-foreground">{goalSentence(goal, names, t)}</p>
                       </div>
                       <span className="flex shrink-0 gap-0.5">
                         <Button
                           variant="ghost"
                           size="icon"
-                          aria-label={`Restore ${goal.label}`}
+                          aria-label={m.restore(goal.label)}
                           onClick={() => void setArchived(goal, false)}
                         >
                           <ArchiveRestore />
@@ -210,7 +212,7 @@ export function GoalsView({
                         <Button
                           variant="ghost"
                           size="icon"
-                          aria-label={`Delete ${goal.label}`}
+                          aria-label={m.delete(goal.label)}
                           onClick={() => {
                             setDeleteError(null);
                             setPendingDelete(goal);
@@ -233,8 +235,8 @@ export function GoalsView({
         onOpenChange={(open) => {
           if (!open) close();
         }}
-        title={mode.kind === "edit" ? "Edit goal" : "New goal"}
-        description="Goals only keep you informed: nothing is ever blocked."
+        title={mode.kind === "edit" ? m.editGoal : m.newGoal}
+        description={m.dialogHint}
       >
         {mode.kind !== "idle" && (
           <GoalForm
@@ -257,14 +259,14 @@ export function GoalsView({
         onOpenChange={(open) => {
           if (!open && !deleting) setPendingDelete(null);
         }}
-        title={`Delete "${pendingDelete?.label ?? ""}"?`}
+        title={m.deleteTitle(pendingDelete?.label ?? "")}
         description={
           <>
-            <p>The goal and its streak history are removed. Your tracked time is not touched.</p>
-            <p>This cannot be undone. You can archive a goal instead to keep it.</p>
+            <p>{m.deleteRemoves}</p>
+            <p>{m.deleteUndo}</p>
           </>
         }
-        confirmLabel="Delete goal"
+        confirmLabel={m.deleteConfirm}
         destructive
         busy={deleting}
         error={deleteError}

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { en } from "@/shared/i18n";
+
 import type { TimelineItemDto } from "@/shared/ipc";
 import { HOUR, MINUTE } from "@/shared/lib/time";
 
@@ -70,7 +72,7 @@ describe("timelineWindow", () => {
 describe("layoutTimeline", () => {
   it("positions blocks as percentages of the window", () => {
     const win = { from: at(8), to: at(12) };
-    const [block] = layoutTimeline([item(at(9), at(10))], win, at(12));
+    const [block] = layoutTimeline([item(at(9), at(10))], win, at(12), en);
     expect(block?.leftPct).toBeCloseTo(25);
     expect(block?.widthPct).toBeCloseTo(25);
     expect(block?.label).toBe("Xcode, Work");
@@ -79,7 +81,7 @@ describe("layoutTimeline", () => {
 
   it("clips blocks that cross the window edge and drops outside ones", () => {
     const win = { from: at(9), to: at(11) };
-    const blocks = layoutTimeline([item(at(8), at(9, 30)), item(at(12), at(13))], win, at(13));
+    const blocks = layoutTimeline([item(at(8), at(9, 30)), item(at(12), at(13))], win, at(13), en);
     expect(blocks).toHaveLength(1);
     expect(blocks[0]?.leftPct).toBe(0);
     expect(blocks[0]?.widthPct).toBeCloseTo(25);
@@ -87,7 +89,7 @@ describe("layoutTimeline", () => {
 
   it("extends the open segment to now", () => {
     const win = { from: at(9), to: at(13) };
-    const [block] = layoutTimeline([item(at(9), at(9, 1), { open: true })], win, at(11));
+    const [block] = layoutTimeline([item(at(9), at(9, 1), { open: true })], win, at(11), en);
     expect(block?.widthPct).toBeCloseTo(50);
   });
 
@@ -95,7 +97,7 @@ describe("layoutTimeline", () => {
     const [block] = layoutTimeline(
       [item(at(9), at(10), { app_id: null, app_name: null, activity_id: 1, activity_name: "Unassigned" })],
       { from: at(9), to: at(13) },
-      at(13),
+      at(13), en,
     );
     expect(block?.label).toBe("Assigned manually, Unassigned");
   });
@@ -175,14 +177,14 @@ describe("buildAppRows", () => {
 
   it("adds the live delta to the open app and keeps rows sorted", () => {
     const open = item(at(9), at(9, 1), { app_id: "com.a", app_name: "A", open: true });
-    const rows = buildAppRows(byApp, open, 20 * MINUTE, new Map());
+    const rows = buildAppRows(byApp, open, 20 * MINUTE, new Map(), en);
     expect(rows[0]).toMatchObject({ key: "com.a", totalMs: 30 * MINUTE, share: 1 });
     expect(rows[1]?.name).toBe("Assigned manually");
   });
 
   it("adds a row for an app that is not in the report yet", () => {
     const open = item(at(9), at(9, 1), { app_id: "com.new", app_name: "New", open: true });
-    const rows = buildAppRows(byApp, open, 3 * MINUTE, new Map());
+    const rows = buildAppRows(byApp, open, 3 * MINUTE, new Map(), en);
     expect(rows.map((r) => r.name)).toContain("New");
   });
 });
@@ -196,7 +198,7 @@ describe("buildActivityRows", () => {
       ],
       undefined,
       0,
-      40 * MINUTE,
+      40 * MINUTE, en,
     );
     expect(rows.map((r) => [r.name, r.fraction])).toEqual([
       ["Work", 0.75],

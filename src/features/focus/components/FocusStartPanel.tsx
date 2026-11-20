@@ -3,6 +3,7 @@ import { RadioGroup } from "radix-ui";
 import { useId, useState, type FormEvent } from "react";
 
 import type { Submit } from "@/features/activities/lib/submit";
+import { useT } from "@/shared/i18n";
 import type { ActivityDto, FocusStartDto } from "@/shared/ipc";
 import type { AppOption } from "@/shared/lib/apps";
 import { activityLabel } from "@/shared/lib/labels";
@@ -15,7 +16,6 @@ import {
   MAX_INTENT_LENGTH,
   MAX_MINUTES,
   MIN_MINUTES,
-  PRESET_HINTS,
   draftKind,
   draftProblem,
   emptyDraft,
@@ -52,6 +52,8 @@ const tile =
  * with gentle drift nudges; otherwise it is a plain timer.
  */
 export function FocusStartPanel({ activities, apps, driftUnavailable, onSubmit }: Props) {
+  const t = useT();
+  const m = t.focus.start;
   const id = useId();
   const [draft, setDraft] = useState<FocusDraft>(emptyDraft);
   const [failure, setFailure] = useState<string | null>(null);
@@ -64,7 +66,7 @@ export function FocusStartPanel({ activities, apps, driftUnavailable, onSubmit }
     setFailure(null);
   };
 
-  const problem = draftProblem(draft);
+  const problem = draftProblem(draft, t);
   const shown = failure ?? (touched ? problem : null);
   const kind = draftKind(draft);
   const pickedCount = draft.activityIds.length + draft.appIds.length;
@@ -81,21 +83,21 @@ export function FocusStartPanel({ activities, apps, driftUnavailable, onSubmit }
   }
 
   return (
-    <form onSubmit={submit} noValidate aria-label="Start a block" className="rounded-xl border border-border bg-surface p-5">
+    <form onSubmit={submit} noValidate aria-label={m.label} className="rounded-xl border border-border bg-surface p-5">
       <label htmlFor={`${id}-intent`} className="block text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-        Task
+        {m.task}
       </label>
       <Input
         id={`${id}-intent`}
         className="mt-1.5 h-9 w-full text-base"
         maxLength={MAX_INTENT_LENGTH + 20}
-        placeholder="What are you working on? (optional)"
+        placeholder={m.placeholder}
         value={draft.intent}
         onChange={(event) => change({ intent: event.target.value })}
       />
 
       <p id={`${id}-length`} className="mt-5 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-        Length
+        {m.length}
       </p>
       <RadioGroup.Root
         aria-labelledby={`${id}-length`}
@@ -105,14 +107,14 @@ export function FocusStartPanel({ activities, apps, driftUnavailable, onSubmit }
         className="mt-1.5 grid grid-cols-4 gap-2"
       >
         {DURATION_PRESETS.map((minutes) => (
-          <RadioGroup.Item key={minutes} value={`${minutes}`} aria-label={`${minutes} min`} className={cn(tile, "h-20")}>
+          <RadioGroup.Item key={minutes} value={`${minutes}`} aria-label={t.focus.minutes(minutes)} className={cn(tile, "h-20")}>
             <span className="tabular text-2xl font-semibold leading-none">{minutes}</span>{" "}
-            <span className="mt-1.5 text-2xs text-muted-foreground">min · {PRESET_HINTS[minutes]}</span>
+            <span className="mt-1.5 text-2xs text-muted-foreground">min · {m.presetHints[minutes]}</span>
           </RadioGroup.Item>
         ))}
-        <RadioGroup.Item value="custom" aria-label="Custom" className={cn(tile, "h-20")}>
-          <span className="text-base font-semibold leading-none">Custom</span>
-          <span className="mt-1.5 text-2xs text-muted-foreground">your length</span>
+        <RadioGroup.Item value="custom" aria-label={m.custom} className={cn(tile, "h-20")}>
+          <span className="text-base font-semibold leading-none">{m.custom}</span>
+          <span className="mt-1.5 text-2xs text-muted-foreground">{m.customHint}</span>
         </RadioGroup.Item>
       </RadioGroup.Root>
       {draft.duration === "custom" && (
@@ -122,12 +124,12 @@ export function FocusStartPanel({ activities, apps, driftUnavailable, onSubmit }
             inputMode="numeric"
             min={MIN_MINUTES}
             max={MAX_MINUTES}
-            aria-label="Minutes"
+            aria-label={m.minutesLabel}
             className="w-20"
             value={Number.isNaN(draft.customMinutes) ? "" : draft.customMinutes}
             onChange={(event) => change({ customMinutes: event.target.valueAsNumber })}
           />
-          <span className="text-xs text-muted-foreground">minutes</span>
+          <span className="text-xs text-muted-foreground">{m.minutesUnit}</span>
         </div>
       )}
 
@@ -143,38 +145,36 @@ export function FocusStartPanel({ activities, apps, driftUnavailable, onSubmit }
             aria-hidden="true"
             className={cn("size-4 text-muted-foreground motion-safe:transition-transform", advanced && "rotate-90")}
           />
-          Advanced: drift nudges
+          {m.advanced}
           <span className="ml-auto text-xs font-normal text-muted-foreground">
-            {pickedCount === 0 ? "Off" : `${pickedCount} allowed`}
+            {pickedCount === 0 ? m.off : m.picked(pickedCount)}
           </span>
         </button>
         {advanced && (
           <fieldset id={`${id}-advanced`} className="border-t border-border px-3 pt-2 pb-3">
-            <legend className="sr-only">What counts as on track</legend>
+            <legend className="sr-only">{m.legend}</legend>
             <p className="mb-2 text-xs text-muted-foreground">
-              {driftUnavailable
-                ? "Drift nudges need window tracking, which is unavailable right now. Timers still work."
-                : "Pick what counts as on track. Time elsewhere for a while gets a gentle nudge; nothing is ever blocked. Leave it empty for a plain timer."}
+              {driftUnavailable ? m.driftUnavailable : m.pickHelp}
             </p>
             {!driftUnavailable && (
             <div className="max-h-48 space-y-2 overflow-y-auto">
-              <div role="group" aria-label="Allowed activities">
-                <p className="px-1 text-2xs font-medium uppercase tracking-wide text-muted-foreground">Activities</p>
+              <div role="group" aria-label={m.allowedActivities}>
+                <p className="px-1 text-2xs font-medium uppercase tracking-wide text-muted-foreground">{m.activities}</p>
                 {activities.map((activity) => (
                   <Choice
                     key={activity.id}
-                    label={activityLabel(activity.id, activity.name)}
+                    label={activityLabel(activity.id, activity.name, t)}
                     disabled={driftUnavailable}
                     checked={draft.activityIds.includes(activity.id)}
                     onChange={() => change({ activityIds: toggled(draft.activityIds, activity.id) })}
                   />
                 ))}
               </div>
-              <div role="group" aria-label="Allowed apps">
-                <p className="px-1 text-2xs font-medium uppercase tracking-wide text-muted-foreground">Apps you used recently</p>
+              <div role="group" aria-label={m.allowedApps}>
+                <p className="px-1 text-2xs font-medium uppercase tracking-wide text-muted-foreground">{m.recentApps}</p>
                 {apps.length === 0 ? (
                   <p className="px-1 py-1 text-xs text-muted-foreground">
-                    No apps have been tracked yet. Let tracking run for a while, then pick apps here.
+                    {m.noApps}
                   </p>
                 ) : (
                   apps.map((app) => (
@@ -202,10 +202,10 @@ export function FocusStartPanel({ activities, apps, driftUnavailable, onSubmit }
 
       <div className="mt-5 flex items-center justify-between gap-3">
         <p className="text-xs text-muted-foreground">
-          {kind === "focus" ? "Focus block with drift nudges" : "Plain timer: countdown and an alert"}
+          {kind === "focus" ? m.kindFocus : m.kindTimer}
         </p>
         <Button type="submit" variant="primary" disabled={busy} className="h-9 px-5">
-          {kind === "focus" ? "Start focus" : "Start timer"}
+          {kind === "focus" ? t.focus.endCard.startFocus : t.focus.endCard.startTimer}
         </Button>
       </div>
     </form>

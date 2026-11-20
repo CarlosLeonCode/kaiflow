@@ -1,5 +1,6 @@
 import { CircleAlert } from "lucide-react";
 
+import { useT } from "@/shared/i18n";
 import type { ActivityDto, PresetDto, RuleDto, RuleInputDto, RuleSpecDto, SuggestionDto } from "@/shared/ipc";
 import type { AppOption } from "@/shared/lib/apps";
 import { Alert, AlertDescription } from "@/shared/ui/alert";
@@ -57,12 +58,13 @@ interface Props {
 
 /** Activities section (presentational): the guide, activities on the left, ordered rules on the right. */
 export function ActivitiesView(props: Props) {
+  const t = useT();
   const { loading, error, activities, suggestions, notice, guide } = props;
   const showSuggestions = suggestions.length > 0 ? () => focusFirstControl(SUGGESTIONS_ID) : undefined;
 
   return (
     <Page
-      title="Activities"
+      title={t.shell.sections.activities}
       subtitle="Sort your time into the kinds of work you do."
       intro={props.intro}
       actions={

@@ -12,6 +12,7 @@ import { DEFAULT_SECTION, type SectionId } from "@/features/shell/lib/sections";
 import { SettingsContainer } from "@/features/settings/containers/SettingsContainer";
 import { TodayContainer } from "@/features/today/containers/TodayContainer";
 import { degradedLabel, stateLabel } from "@/features/tracking/lib/derive";
+import { useT } from "@/shared/i18n";
 import { usePlatformQuery, useStatusQuery } from "@/shared/ipc";
 import { osOf } from "@/shared/lib/platform";
 
@@ -51,6 +52,7 @@ export function MainApp() {
   const os = osOf(usePlatformQuery().data);
   useSectionShortcuts(select, os);
   const status = useStatusQuery();
+  const t = useT();
 
   return (
     <div className="flex h-full">
@@ -61,14 +63,14 @@ export function MainApp() {
         status={
           status.data
             ? {
-                label: status.data.degraded ? degradedLabel(status.data.degraded_reason) : stateLabel(status.data.state),
+                label: status.data.degraded ? degradedLabel(status.data.degraded_reason, t) : stateLabel(status.data.state, t),
                 running: status.data.state === "running",
                 degraded: status.data.degraded,
               }
             : null
         }
       />
-      <main aria-label="Dashboard" className="flex min-w-0 flex-1 flex-col bg-background">
+      <main aria-label={t.shell.dashboard} className="flex min-w-0 flex-1 flex-col bg-background">
         <BackupNoticeContainer />
         <div className="min-h-0 flex-1">
           <SectionView section={section} onNavigate={select} />

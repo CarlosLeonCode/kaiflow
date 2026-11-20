@@ -1,5 +1,6 @@
 import { type CSSProperties, useState } from "react";
 
+import { useLocale, useT } from "@/shared/i18n";
 import type { RangeDto } from "@/shared/ipc";
 import { tuneActivityColor } from "@/shared/lib/color";
 import { formatDuration, formatHour } from "@/shared/lib/time";
@@ -36,15 +37,14 @@ function tickPosition(pct: number): CSSProperties {
  * data as text); pointer users get a native tooltip and a readout line.
  */
 export function DayTimeline({ window, blocks, now, dark }: Props) {
+  const t = useT();
+  const locale = useLocale();
   const [active, setActive] = useState<TimelineBlock | null>(null);
   const ticks = axisTicks(window);
   const span = window.to - window.from;
   const nowX = now >= window.from && now <= window.to ? ((now - window.from) / span) * WIDTH : null;
   const first = blocks[0];
-  const summary =
-    blocks.length === 0
-      ? "Timeline of today: no activity"
-      : `Timeline of today: ${blocks.length} ${blocks.length === 1 ? "block" : "blocks"}, colored by activity. The same data is listed below by app and activity.`;
+  const summary = blocks.length === 0 ? t.today.timelineEmpty : t.today.timelineSummary(blocks.length);
 
   return (
     <div>
@@ -105,7 +105,7 @@ export function DayTimeline({ window, blocks, now, dark }: Props) {
             className="tabular absolute top-0 whitespace-nowrap text-2xs text-muted-foreground"
             style={tickPosition(tick.pct)}
           >
-            {formatHour(tick.at)}
+            {formatHour(tick.at, locale)}
           </span>
         ))}
       </div>
@@ -117,7 +117,7 @@ export function DayTimeline({ window, blocks, now, dark }: Props) {
             <span className="tabular"> · {formatDuration(active.durationMs)}</span>
           </>
         ) : first ? (
-          "Hover a block for details."
+          t.today.timelineHint
         ) : (
           ""
         )}

@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { useT, type Messages } from "@/shared/i18n";
 import { formatAxisDuration, formatDuration } from "@/shared/lib/time";
 
 import { niceCeiling } from "./scale";
@@ -28,15 +29,15 @@ function axisStep(count: number): number {
   return 5;
 }
 
-function summarize(points: readonly TrendPoint[]): string {
+function summarize(points: readonly TrendPoint[], t: Messages): string {
   const peak = points.reduce<TrendPoint | null>(
     (best, point) => (point.totalMs > 0 && (!best || point.totalMs > best.totalMs) ? point : best),
     null,
   );
-  if (!peak) return "Nothing tracked.";
-  const first = points[0];
-  const last = points[points.length - 1];
-  return `${points.length} points from ${first?.label} to ${last?.label}. Peak ${formatDuration(peak.totalMs)} on ${peak.label}.`;
+  if (!peak) return t.charts.nothingTrackedSentence;
+  const first = points[0]?.label ?? "";
+  const last = points[points.length - 1]?.label ?? "";
+  return t.charts.trend.summary(points.length, first, last, formatDuration(peak.totalMs), peak.label);
 }
 
 /**
@@ -45,6 +46,7 @@ function summarize(points: readonly TrendPoint[]): string {
  * table, and the readout under the chart follows the pointer.
  */
 export function TrendLine({ points, label }: Props) {
+  const t = useT();
   const [active, setActive] = useState<number | null>(null);
   const ceiling = niceCeiling(Math.max(0, ...points.map((point) => point.totalMs)));
   const slot = WIDTH / Math.max(points.length, 1);
@@ -69,7 +71,7 @@ export function TrendLine({ points, label }: Props) {
         </div>
         <svg
           role="img"
-          aria-label={`${label}. ${summarize(points)}`}
+          aria-label={`${label}. ${summarize(points, t)}`}
           viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
           preserveAspectRatio="none"
           className="block h-40 min-w-0 flex-1 overflow-visible"
@@ -128,10 +130,10 @@ export function TrendLine({ points, label }: Props) {
         {readout ? (
           <>
             <span className="font-medium text-foreground">{readout.label}</span>
-            <span> · {readout.totalMs > 0 ? formatDuration(readout.totalMs) : "nothing tracked"}</span>
+            <span> · {readout.totalMs > 0 ? formatDuration(readout.totalMs) : t.charts.nothingTracked}</span>
           </>
         ) : (
-          "Hover the chart for details."
+          t.charts.trend.hint
         )}
       </p>
 
@@ -139,15 +141,15 @@ export function TrendLine({ points, label }: Props) {
         <caption>{label}</caption>
         <thead>
           <tr>
-            <th scope="col">Period</th>
-            <th scope="col">Tracked time</th>
+            <th scope="col">{t.charts.period}</th>
+            <th scope="col">{t.charts.trackedTime}</th>
           </tr>
         </thead>
         <tbody>
           {points.map((point) => (
             <tr key={point.key}>
               <th scope="row">{point.label}</th>
-              <td>{point.totalMs > 0 ? formatDuration(point.totalMs) : "Nothing tracked"}</td>
+              <td>{point.totalMs > 0 ? formatDuration(point.totalMs) : t.charts.nothingTrackedCell}</td>
             </tr>
           ))}
         </tbody>

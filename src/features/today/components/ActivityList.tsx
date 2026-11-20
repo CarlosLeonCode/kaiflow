@@ -1,3 +1,4 @@
+import { useT } from "@/shared/i18n";
 import { tuneActivityColor } from "@/shared/lib/color";
 import { formatDuration } from "@/shared/lib/time";
 
@@ -5,8 +6,9 @@ import { formatPercent, type ActivityRow } from "../lib/today";
 
 /** Totals by activity with a share bar in the activity color (tuned for the theme). */
 export function ActivityList({ rows, dark }: { rows: readonly ActivityRow[]; dark: boolean }) {
+  const t = useT();
   return (
-    <ul className="divide-y divide-border" aria-label="Time by activity">
+    <ul className="divide-y divide-border" aria-label={t.today.timeByActivity}>
       {rows.map((row) => {
         const color = tuneActivityColor(row.color, dark);
         return (

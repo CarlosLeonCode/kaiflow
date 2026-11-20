@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { CircleAlert, Download, X } from "lucide-react";
 
+import { useT } from "@/shared/i18n";
 import { Heatmap } from "@/shared/charts/Heatmap";
 import { RatioBar } from "@/shared/charts/RatioBar";
 import { StackedBars } from "@/shared/charts/StackedBars";
@@ -76,6 +77,7 @@ interface Props {
  * AI analysis of that same week), drawn below the cards.
  */
 export function InsightsView(props: Props) {
+  const t = useT();
   const { period, loading, error, data } = props;
   const noun = periodNoun(period);
   const totalMs = data?.total_ms ?? 0;
@@ -89,7 +91,7 @@ export function InsightsView(props: Props) {
 
   return (
     <Page
-      title="Insights"
+      title={t.shell.sections.insights}
       subtitle="Where your time went, and how it compares."
       intro={props.intro}
       actions={

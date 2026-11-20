@@ -5,6 +5,7 @@ export { I18nProvider } from "./I18nProvider";
 export {
   LANGUAGE_NAMES,
   LANGUAGES,
+  localeTag,
   parseLanguage,
   resolveLanguage,
   systemLanguage,

@@ -5,6 +5,8 @@ import {
   useResolveIdleGapMutation,
 } from "@/shared/ipc";
 
+import { useT } from "@/shared/i18n";
+
 import { IdlePromptCard } from "../components/IdlePromptCard";
 
 /** Shows the oldest pending idle gap and resolves it through `resolve_idle_gap`. */
@@ -12,6 +14,7 @@ export function IdlePromptContainer() {
   const gaps = usePendingIdleGapsQuery();
   const activities = useActivitiesQuery();
   const resolve = useResolveIdleGapMutation();
+  const t = useT();
 
   const [gap, ...rest] = [...(gaps.data ?? [])].sort((a, b) => a.started_at - b.started_at);
   if (!gap) return null;
@@ -24,7 +27,7 @@ export function IdlePromptContainer() {
       moreCount={rest.length}
       activities={activities.data ?? []}
       busy={resolve.isPending}
-      error={resolve.isError ? errorMessage(resolve.error) : null}
+      error={resolve.isError ? errorMessage(resolve.error, t) : null}
       onResolve={(resolution) => resolve.mutate({ id: gap.id, resolution })}
     />
   );

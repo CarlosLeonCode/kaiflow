@@ -108,6 +108,8 @@ export interface MockOptions {
   aiOn?: boolean;
   /** The automatic backup has failed (Settings > Data shows the error, "Back up now" fails). */
   backupFails?: boolean;
+  /** The stored `language` setting (`system` by default), for windows opened in another language. */
+  language?: string;
   now?: () => number;
 }
 
@@ -175,7 +177,7 @@ export function installMockBackend(options: MockOptions = {}): void {
     idle_auto_discard_below_secs: 120,
     retention_days: null,
     theme: "system",
-    language: "system",
+    language: options.language ?? "system",
     autostart: false,
     shortcut: defaultShortcut(platform.os),
     onboarding_completed: true,

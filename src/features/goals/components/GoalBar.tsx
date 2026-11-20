@@ -1,3 +1,4 @@
+import { useT } from "@/shared/i18n";
 import type { GoalStatusDto } from "@/shared/ipc";
 import { cn } from "@/shared/lib/utils";
 
@@ -17,7 +18,7 @@ const DOT: Record<Tone, string> = {
 
 /** Colored dot plus the state in words: color is never the only signal. */
 export function StateBadge({ status }: { status: GoalStatusDto }) {
-  const state = stateLabel(status);
+  const state = stateLabel(status, useT());
   return (
     <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
       <span aria-hidden="true" className={cn("size-1.5 rounded-full", DOT[state.tone])} />
@@ -31,8 +32,11 @@ export function StateBadge({ status }: { status: GoalStatusDto }) {
  * what is left. A bar that passed 100 % stays full; the text says by how much.
  */
 export function GoalBar({ status, className }: { status: GoalStatusDto; className?: string }) {
-  const state = stateLabel(status);
-  const label = `${status.goal.label}: ${formatAmount(status.actual_ms)} of ${formatAmount(status.target_ms)}, ${state.label.toLowerCase()}`;
+  const t = useT();
+  const state = stateLabel(status, t);
+  const actual = formatAmount(status.actual_ms);
+  const target = formatAmount(status.target_ms);
+  const label = t.goals.barLabel(status.goal.label, actual, target, state.label);
   return (
     <div className={className}>
       <div
@@ -50,10 +54,8 @@ export function GoalBar({ status, className }: { status: GoalStatusDto; classNam
         />
       </div>
       <p className="tabular mt-1 flex justify-between gap-2 text-xs text-muted-foreground">
-        <span>
-          {formatAmount(status.actual_ms)} of {formatAmount(status.target_ms)}
-        </span>
-        <span>{status.active ? remainingText(status) : "Not counted today"}</span>
+        <span>{t.goals.amountOf(actual, target)}</span>
+        <span>{status.active ? remainingText(status, t) : t.goals.notCountedToday}</span>
       </p>
     </div>
   );

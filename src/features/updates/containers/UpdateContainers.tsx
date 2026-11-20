@@ -5,6 +5,8 @@ import {
   useInstallUpdateMutation,
 } from "@/shared/ipc";
 
+import { useT } from "@/shared/i18n";
+
 import { UpdateBanner } from "../components/UpdateBanner";
 import { UpdatesPanel } from "../components/UpdatesPanel";
 
@@ -12,12 +14,13 @@ import { UpdatesPanel } from "../components/UpdatesPanel";
 export function UpdateBannerContainer() {
   const update = useAvailableUpdate();
   const install = useInstallUpdateMutation();
+  const t = useT();
   if (!update) return null;
   return (
     <UpdateBanner
       update={update}
       installing={install.isPending}
-      error={install.isError ? `Could not install: ${errorMessage(install.error)}` : null}
+      error={install.isError ? t.updates.installError(errorMessage(install.error, t)) : null}
       onInstall={() => install.mutate()}
     />
   );
@@ -28,10 +31,11 @@ export function UpdatesPanelContainer() {
   const update = useAvailableUpdate();
   const check = useCheckUpdateMutation();
   const install = useInstallUpdateMutation();
+  const t = useT();
   const error = install.isError
-    ? `Could not install: ${errorMessage(install.error)}`
+    ? t.updates.installError(errorMessage(install.error, t))
     : check.isError
-      ? `Could not check for updates: ${errorMessage(check.error)}`
+      ? t.updates.checkError(errorMessage(check.error, t))
       : null;
   return (
     <UpdatesPanel

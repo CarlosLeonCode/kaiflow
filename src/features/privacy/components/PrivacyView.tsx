@@ -1,5 +1,6 @@
 import { CircleAlert, X } from "lucide-react";
 
+import { useT } from "@/shared/i18n";
 import type { DeleteOpDto, OsDto, PrivacyRulesDto, RetentionImpactDto } from "@/shared/ipc";
 import type { AppOption } from "@/shared/lib/apps";
 import { platformWords } from "@/shared/lib/platform";
@@ -49,11 +50,12 @@ interface Props {
 
 /** Privacy section (presentational): what is recorded, what is kept, and how to delete it. */
 export function PrivacyView(props: Props) {
+  const t = useT();
   const { privacy, pending } = props;
   const copy = pending ? deleteCopy(pending, props.trackingWillRestart && pending.kind === "all", props.impact) : null;
   return (
     <Page
-      title="Privacy"
+      title={t.shell.sections.privacy}
       subtitle={`Everything stays on ${platformWords(props.os ?? "macos").device}. Nothing is sent anywhere.`}
       intro={props.intro}
     >

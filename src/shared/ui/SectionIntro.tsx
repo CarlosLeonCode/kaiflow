@@ -1,6 +1,8 @@
 import { ArrowRight, Info, X } from "lucide-react";
 import { useEffect, useRef } from "react";
 
+import { useT } from "@/shared/i18n";
+
 import { Button } from "./button";
 
 /** One "this goes in, that comes out" pair of the optional mini diagram. */
@@ -31,17 +33,15 @@ interface Props {
   onDismiss: () => void;
 }
 
-const LINES: readonly { key: "what" | "can" | "example"; label: string }[] = [
-  { key: "what", label: "What this is" },
-  { key: "can", label: "What you can do here" },
-  { key: "example", label: "Example" },
-];
+const LINES = ["what", "can", "example"] as const;
 
 /**
  * A short explanation at the top of a section with the same three lines everywhere: what this
  * is, what you can do here and an example. Dismissible; the header's help button reopens it.
  */
 export function SectionIntro({ id, content, focusRequest, onDismiss }: Props) {
+  const t = useT();
+  const labels = t.ui.sectionIntro;
   const ref = useRef<HTMLElement>(null);
   useEffect(() => {
     if (focusRequest > 0) ref.current?.focus();
@@ -52,7 +52,7 @@ export function SectionIntro({ id, content, focusRequest, onDismiss }: Props) {
       id={id}
       ref={ref}
       tabIndex={-1}
-      aria-label={`About ${content.title}`}
+      aria-label={t.ui.about(content.title)}
       className="mb-4 flex items-start gap-3 rounded-lg border border-border bg-surface px-3 py-2.5 focus-visible:outline-offset-0"
     >
       <Info className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -60,14 +60,14 @@ export function SectionIntro({ id, content, focusRequest, onDismiss }: Props) {
         <h2 className="text-sm font-medium">{content.title}</h2>
         <dl className="mt-1 grid gap-x-3 gap-y-0.5 text-xs sm:grid-cols-[max-content_minmax(0,1fr)]">
           {LINES.map((line) => (
-            <div key={line.key} className="contents">
-              <dt className="font-medium text-muted-foreground">{line.label}</dt>
-              <dd className="m-0">{content[line.key]}</dd>
+            <div key={line} className="contents">
+              <dt className="font-medium text-muted-foreground">{labels[line]}</dt>
+              <dd className="m-0">{content[line]}</dd>
             </div>
           ))}
         </dl>
         {content.diagram && content.diagram.length > 0 && (
-          <ul aria-label="Example of how time is sorted" className="mt-2 flex flex-wrap gap-2">
+          <ul aria-label={labels.diagram} className="mt-2 flex flex-wrap gap-2">
             {content.diagram.map((row) => (
               <li
                 key={`${row.from}-${row.to}`}
@@ -75,14 +75,14 @@ export function SectionIntro({ id, content, focusRequest, onDismiss }: Props) {
               >
                 <span className="text-muted-foreground">{row.from}</span>
                 <ArrowRight className="size-3 shrink-0 text-muted-foreground" aria-hidden="true" />
-                <span className="sr-only">becomes</span>
+                <span className="sr-only">{labels.becomes}</span>
                 <span className="font-medium">{row.to}</span>
               </li>
             ))}
           </ul>
         )}
       </div>
-      <Button variant="ghost" size="icon" aria-label={`Dismiss introduction to ${content.title}`} onClick={onDismiss}>
+      <Button variant="ghost" size="icon" aria-label={labels.dismiss(content.title)} onClick={onDismiss}>
         <X />
       </Button>
     </aside>

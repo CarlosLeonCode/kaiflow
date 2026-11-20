@@ -1,8 +1,8 @@
 import { ChevronRight } from "lucide-react";
 import { useState } from "react";
 
+import { useT } from "@/shared/i18n";
 import { formatDuration } from "@/shared/lib/time";
-import { NO_TITLE_LABEL } from "@/shared/lib/labels";
 import { cn } from "@/shared/lib/utils";
 
 import type { AppRow } from "../lib/today";
@@ -11,6 +11,7 @@ const MAX_TITLES = 12;
 
 /** Totals by app; each row expands to the window titles seen in that app (React escapes them). */
 export function AppList({ rows }: { rows: readonly AppRow[] }) {
+  const t = useT();
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
   const toggle = (key: string) =>
     setOpen((current) => {
@@ -20,7 +21,7 @@ export function AppList({ rows }: { rows: readonly AppRow[] }) {
     });
 
   return (
-    <ul className="divide-y divide-border" aria-label="Time by app">
+    <ul className="divide-y divide-border" aria-label={t.today.timeByApp}>
       {rows.map((row) => {
         const expanded = open.has(row.key);
         const panelId = `titles-${row.key}`;
@@ -58,20 +59,20 @@ export function AppList({ rows }: { rows: readonly AppRow[] }) {
               </span>
             </button>
             {expanded && (
-              <ul id={panelId} data-selectable aria-label={`Window titles in ${row.name}`} className="mb-2 ml-6 space-y-0.5 border-l border-border pl-3">
+              <ul id={panelId} data-selectable aria-label={t.today.titlesIn(row.name)} className="mb-2 ml-6 space-y-0.5 border-l border-border pl-3">
                 {shown.length === 0 && (
-                  <li className="py-0.5 text-xs text-muted-foreground">No window titles recorded.</li>
+                  <li className="py-0.5 text-xs text-muted-foreground">{t.today.noTitles}</li>
                 )}
                 {shown.map((entry) => (
                   <li key={entry.title ?? "∅"} className="flex items-baseline justify-between gap-3 py-0.5 text-xs">
                     <span className={cn("min-w-0 truncate", entry.title === null && "text-muted-foreground")} title={entry.title ?? undefined}>
-                      {entry.title ?? NO_TITLE_LABEL}
+                      {entry.title ?? t.common.labels.noTitle}
                     </span>
                     <span className="tabular shrink-0 text-muted-foreground">{formatDuration(entry.totalMs)}</span>
                   </li>
                 ))}
                 {hidden > 0 && (
-                  <li className="py-0.5 text-xs text-muted-foreground">and {hidden} more</li>
+                  <li className="py-0.5 text-xs text-muted-foreground">{t.today.moreTitles(hidden)}</li>
                 )}
               </ul>
             )}

@@ -18,6 +18,8 @@ import {
   type FocusCycleDto,
 } from "@/shared/ipc";
 
+import { useT } from "@/shared/i18n";
+
 import { ActiveTimerCard } from "../components/ActiveTimerCard";
 import { EndCard } from "../components/EndCard";
 import { QuickStart } from "../components/QuickStart";
@@ -38,6 +40,7 @@ const END_REFETCH_MS = 1_500;
 /** The running block, the end card waiting for an answer, or (by variant) how to start one. */
 export function FocusSessionContainer({ variant = "page" }: { variant?: FocusVariant }) {
   const client = useQueryClient();
+  const t = useT();
   const status = useFocusStatusQuery();
   const start = useStartFocusMutation();
   const stop = useStopFocusMutation();
@@ -73,7 +76,7 @@ export function FocusSessionContainer({ variant = "page" }: { variant?: FocusVar
         cycle={cycle}
         compact={compact}
         busy={stop.isPending || extend.isPending || pause.isPending || resume.isPending || snooze.isPending || allow.isPending}
-        error={failed ? errorMessage(failed) : null}
+        error={failed ? errorMessage(failed, t) : null}
         onPause={() => pause.mutate()}
         onResume={() => resume.mutate()}
         onEnd={() => stop.mutate()}
@@ -90,7 +93,7 @@ export function FocusSessionContainer({ variant = "page" }: { variant?: FocusVar
         cycle={cycle}
         compact={compact}
         busy={cardAction.isPending}
-        error={cardAction.error ? errorMessage(cardAction.error) : null}
+        error={cardAction.error ? errorMessage(cardAction.error, t) : null}
         onStartNext={() => cardAction.mutate({ kind: "start_next" })}
         onSkip={() => cardAction.mutate({ kind: "skip" })}
         onMoreTime={(minutes) => cardAction.mutate({ kind: "more_time", minutes })}
@@ -103,7 +106,7 @@ export function FocusSessionContainer({ variant = "page" }: { variant?: FocusVar
     return (
       <QuickStart
         busy={start.isPending}
-        error={start.error ? errorMessage(start.error) : null}
+        error={start.error ? errorMessage(start.error, t) : null}
         onStart={(minutes, intent) => start.mutate(quickTimer(minutes, intent))}
       />
     );

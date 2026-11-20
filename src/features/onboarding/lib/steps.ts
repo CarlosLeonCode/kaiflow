@@ -1,3 +1,4 @@
+import type { Messages } from "@/shared/i18n";
 import type { PermissionStateDto, PlatformInfoDto } from "@/shared/ipc";
 import { DEFAULT_PLATFORM, isWayland } from "@/shared/lib/platform";
 
@@ -8,11 +9,12 @@ export type Step = (typeof STEPS)[number];
  * Step names. The middle step is about the Accessibility permission only on macOS; Windows
  * and Linux need no permission, so there it is just the choice of what to record.
  */
-export function stepLabels(platform: PlatformInfoDto = DEFAULT_PLATFORM): Record<Step, string> {
+export function stepLabels(t: Messages, platform: PlatformInfoDto = DEFAULT_PLATFORM): Record<Step, string> {
+  const m = t.onboarding.steps;
   return {
-    welcome: "Welcome",
-    access: platform.needs_accessibility_permission ? "Permissions" : "Recording",
-    ready: "Ready",
+    welcome: m.welcome,
+    access: platform.needs_accessibility_permission ? m.permissions : m.recording,
+    ready: m.ready,
   };
 }
 
@@ -47,29 +49,27 @@ export interface Summary {
 
 /** One-line recap for the last step. */
 export function buildSummary(
+  t: Messages,
   storeTitles: boolean,
   permission: PermissionStateDto | undefined,
   platform: PlatformInfoDto = DEFAULT_PLATFORM,
 ): Summary {
+  const m = t.onboarding.summary;
   if (isWayland(platform)) {
     return {
-      titles: storeTitles ? "Idle time now; apps and titles on X11" : "Idle time now; app names on X11",
-      accessLabel: "Window tracking",
-      access: "Unavailable on Wayland",
+      titles: storeTitles ? m.waylandTitlesOn : m.waylandTitlesOff,
+      accessLabel: m.windowTracking,
+      access: m.unavailableWayland,
     };
   }
-  const titles = storeTitles ? "App names and window titles" : "App names only";
+  const titles = storeTitles ? m.titlesOn : m.titlesOff;
   if (!platform.needs_accessibility_permission) {
-    return { titles, accessLabel: "Permission", access: "None needed" };
+    return { titles, accessLabel: m.permission, access: m.noneNeeded };
   }
   const granted = permission === "granted";
   return {
     titles,
-    accessLabel: "Permission",
-    access: granted
-      ? "Accessibility is on"
-      : storeTitles
-        ? "Accessibility is off, so titles will be skipped until you allow it"
-        : "Accessibility is not needed",
+    accessLabel: m.permission,
+    access: granted ? m.accessOn : storeTitles ? m.accessOffTitles : m.accessNotNeeded,
   };
 }

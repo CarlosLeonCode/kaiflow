@@ -1,6 +1,8 @@
 import { AlertDialog } from "radix-ui";
 import type { ReactNode } from "react";
 
+import { useT } from "@/shared/i18n";
+
 import { Button } from "./button";
 
 interface Props {
@@ -35,6 +37,7 @@ export function ConfirmDialog({
   error,
   onConfirm,
 }: Props) {
+  const t = useT();
   return (
     <AlertDialog.Root open={open} onOpenChange={onOpenChange}>
       <AlertDialog.Portal>
@@ -51,7 +54,7 @@ export function ConfirmDialog({
           )}
           <div className="mt-4 flex justify-end gap-2">
             <AlertDialog.Cancel asChild>
-              <Button disabled={busy}>Cancel</Button>
+              <Button disabled={busy}>{t.common.cancel}</Button>
             </AlertDialog.Cancel>
             <Button
               variant="primary"

@@ -1,12 +1,11 @@
 import type { GoalDto, GoalKindDto, GoalScopeDto, GoalStatusDto, PeriodDto, StreakDto } from "@/shared/ipc";
+import type { Messages } from "@/shared/i18n";
 import { HOUR, MINUTE } from "@/shared/lib/time";
 
 /** Bit 0 = Monday .. bit 6 = Sunday, like the backend. */
 export const ALL_DAYS = 0b1111111;
 export const WEEKDAYS = 0b0011111;
 export const WEEKEND = 0b1100000;
-
-export const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
 
 export const MAX_LABEL_LENGTH = 60;
 
@@ -36,18 +35,24 @@ export function partsFromMs(ms: number): { hours: number; minutes: number } {
 }
 
 /** `every day`, `every weekday`, `on Mon, Wed and Fri`... (daily goals only). */
-export function daysPhrase(mask: number): string {
-  if (mask === ALL_DAYS) return "every day";
-  if (mask === WEEKDAYS) return "every weekday";
-  if (mask === WEEKEND) return "every weekend day";
-  const names = DAY_NAMES.filter((_, index) => (mask & (1 << index)) !== 0);
-  if (names.length === 0) return "on no day";
-  if (names.length === 1) return `every ${names[0]}`;
-  return `on ${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+export function daysPhrase(mask: number, t: Messages): string {
+  const m = t.goals.cadence;
+  if (mask === ALL_DAYS) return m.everyDay;
+  if (mask === WEEKDAYS) return m.everyWeekday;
+  if (mask === WEEKEND) return m.everyWeekendDay;
+  const names = t.goals.daysInSentence.filter((_, index) => (mask & (1 << index)) !== 0);
+  const [only] = names;
+  if (only === undefined) return m.noDay;
+  if (names.length === 1) return m.oneDay(only);
+  return m.someDays(names);
 }
 
-export function cadencePhrase(period: PeriodDto, activeDays: number): string {
-  return period === "daily" ? daysPhrase(activeDays) : period === "weekly" ? "every week" : "every month";
+export function cadencePhrase(period: PeriodDto, activeDays: number, t: Messages): string {
+  return period === "daily"
+    ? daysPhrase(activeDays, t)
+    : period === "weekly"
+      ? t.goals.cadence.everyWeek
+      : t.goals.cadence.everyMonth;
 }
 
 export interface NameLookup {
@@ -55,14 +60,15 @@ export interface NameLookup {
   app: (id: string) => string;
 }
 
-function scopePhrase(scope: GoalScopeDto, names: NameLookup): string {
+function scopePhrase(scope: GoalScopeDto, names: NameLookup, t: Messages): string {
+  const m = t.goals.sentence;
   switch (scope.kind) {
     case "activity":
-      return `of ${names.activity(scope.activity_id)}`;
+      return m.activity(names.activity(scope.activity_id));
     case "app":
-      return `in ${names.app(scope.app_id)}`;
+      return m.app(names.app(scope.app_id));
     case "total":
-      return "of tracked time";
+      return m.total;
   }
 }
 
@@ -70,72 +76,67 @@ function scopePhrase(scope: GoalScopeDto, names: NameLookup): string {
 export function goalSentence(
   goal: Pick<GoalDto, "scope" | "kind" | "target_ms" | "period" | "active_days">,
   names: NameLookup,
+  t: Messages,
 ): string {
-  const lead = goal.kind === "minimum" ? "At least" : "No more than";
-  return `${lead} ${formatAmount(goal.target_ms)} ${scopePhrase(goal.scope, names)} ${cadencePhrase(goal.period, goal.active_days)}.`;
+  const lead = t.goals.sentence[goal.kind];
+  return `${lead} ${formatAmount(goal.target_ms)} ${scopePhrase(goal.scope, names, t)} ${cadencePhrase(goal.period, goal.active_days, t)}.`;
 }
 
 /** A name for a goal the user left unnamed: "Deep work, at least 4h daily". */
 export function suggestedLabel(
   goal: Pick<GoalDto, "scope" | "kind" | "target_ms" | "period">,
   names: NameLookup,
+  t: Messages,
 ): string {
+  const m = t.goals.suggested;
   const subject =
     goal.scope.kind === "activity"
       ? names.activity(goal.scope.activity_id)
       : goal.scope.kind === "app"
         ? names.app(goal.scope.app_id)
-        : "All time";
-  const lead = goal.kind === "minimum" ? "at least" : "at most";
-  const every = goal.period === "daily" ? "daily" : goal.period === "weekly" ? "weekly" : "monthly";
-  return `${subject}, ${lead} ${formatAmount(goal.target_ms)} ${every}`.slice(0, MAX_LABEL_LENGTH);
-}
-
-export function periodWord(period: PeriodDto): "day" | "week" | "month" {
-  return period === "daily" ? "day" : period === "weekly" ? "week" : "month";
+        : m.allTime;
+  return `${subject}, ${m[goal.kind]} ${formatAmount(goal.target_ms)} ${m.periods[goal.period]}`.slice(0, MAX_LABEL_LENGTH);
 }
 
 /** `5 days in a row`, `1 week in a row`; `null` when there is no run to show. */
-export function streakText(streak: StreakDto, period: PeriodDto): string | null {
-  if (streak.current <= 0) return null;
-  const unit = periodWord(period);
-  return `${streak.current} ${unit}${streak.current === 1 ? "" : "s"} in a row`;
+export function streakText(streak: StreakDto, period: PeriodDto, t: Messages): string | null {
+  return streak.current > 0 ? t.goals.streak(streak.current, period) : null;
 }
 
-export function bestStreakText(streak: StreakDto, period: PeriodDto): string | null {
-  if (streak.best <= 0) return null;
-  const unit = periodWord(period);
-  return `Best: ${streak.best} ${unit}${streak.best === 1 ? "" : "s"}`;
+export function bestStreakText(streak: StreakDto, period: PeriodDto, t: Messages): string | null {
+  return streak.best > 0 ? t.goals.best(streak.best, period) : null;
 }
 
 export type Tone = "neutral" | "good" | "warning";
 
 /** Short state label for a goal in its current period. */
-export function stateLabel(status: GoalStatusDto): { label: string; tone: Tone } {
-  if (!status.active) return { label: "Rest day", tone: "neutral" };
+export function stateLabel(status: GoalStatusDto, t: Messages): { label: string; tone: Tone } {
+  const m = t.goals.states;
+  if (!status.active) return { label: m.restDay, tone: "neutral" };
   const minimum = status.goal.kind === "minimum";
   switch (status.state) {
     case "reached":
-      return { label: "Goal reached", tone: "good" };
+      return { label: m.reached, tone: "good" };
     case "exceeded":
-      return { label: "Over the limit", tone: "warning" };
+      return { label: m.overLimit, tone: "warning" };
     case "pending":
-      return minimum ? { label: "In progress", tone: "neutral" } : { label: "Within the limit", tone: "good" };
+      return minimum ? { label: m.inProgress, tone: "neutral" } : { label: m.withinLimit, tone: "good" };
   }
 }
 
 /** The text of the badge for a crossing the user has not acknowledged. */
-export function unseenLabel(kind: "reached" | "exceeded"): string {
-  return kind === "reached" ? "Goal reached" : "Limit passed";
+export function unseenLabel(kind: "reached" | "exceeded", t: Messages): string {
+  return t.goals.unseen[kind];
 }
 
 /** What is left, or how far over: "1h 30m to go", "20m over". */
-export function remainingText(status: GoalStatusDto): string {
+export function remainingText(status: GoalStatusDto, t: Messages): string {
+  const m = t.goals.remaining;
   const delta = status.target_ms - status.actual_ms;
   if (status.goal.kind === "minimum") {
-    return delta > 0 ? `${formatAmount(delta)} to go` : "Target met";
+    return delta > 0 ? m.toGo(formatAmount(delta)) : m.targetMet;
   }
-  return delta >= 0 ? `${formatAmount(delta)} left` : `${formatAmount(-delta)} over`;
+  return delta >= 0 ? m.left(formatAmount(delta)) : m.over(formatAmount(-delta));
 }
 
 /** Fill of the progress bar, capped at 100. */
@@ -181,26 +182,29 @@ export function draftOf(goal: GoalDto): GoalDraft {
 }
 
 /** Why the draft cannot be saved, or `null` when it can. */
-export function draftProblem(draft: GoalDraft): string | null {
-  if (draft.label.trim().length > MAX_LABEL_LENGTH) return `The name can have at most ${MAX_LABEL_LENGTH} characters.`;
+export function draftProblem(draft: GoalDraft, t: Messages): string | null {
+  const m = t.goals.problems;
+  if (draft.label.trim().length > MAX_LABEL_LENGTH) return m.nameTooLong(MAX_LABEL_LENGTH);
   const hours = Number.isFinite(draft.hours) ? draft.hours : 0;
   const minutes = Number.isFinite(draft.minutes) ? draft.minutes : 0;
-  if (hours < 0 || minutes < 0 || minutes > 59) return "Enter hours and minutes (minutes from 0 to 59).";
+  if (hours < 0 || minutes < 0 || minutes > 59) return m.badParts;
   const target = msFromParts(hours, minutes);
-  if (target <= 0) return "The target must be longer than zero.";
-  if (target > maxTargetMs(draft.period)) {
-    return `The target cannot be longer than one ${periodWord(draft.period)}.`;
-  }
-  if (draft.period === "daily" && (draft.days & ALL_DAYS) === 0) return "Choose at least one active day.";
-  if (draft.scope.kind === "app" && draft.scope.app_id.trim() === "") return "Choose an app.";
+  if (target <= 0) return m.zero;
+  if (target > maxTargetMs(draft.period)) return m.tooLong[draft.period];
+  if (draft.period === "daily" && (draft.days & ALL_DAYS) === 0) return m.noDays;
+  if (draft.scope.kind === "app" && draft.scope.app_id.trim() === "") return m.noApp;
   return null;
 }
 
-export function goalOf(draft: GoalDraft, names: NameLookup, id = 0, archived = false): GoalDto {
+/**
+ * The goal to save. An unnamed goal gets `suggestedLabel` in the active language: the name is
+ * stored, so it stays in that language if the UI language changes later.
+ */
+export function goalOf(draft: GoalDraft, names: NameLookup, t: Messages, id = 0, archived = false): GoalDto {
   const target_ms = msFromParts(draft.hours, draft.minutes);
   const active_days = draft.period === "daily" ? draft.days & ALL_DAYS : ALL_DAYS;
   const base = { scope: draft.scope, kind: draft.kind, target_ms, period: draft.period, active_days };
-  const label = draft.label.trim() || suggestedLabel(base, names);
+  const label = draft.label.trim() || suggestedLabel(base, names, t);
   return { id, label, archived, ...base };
 }
 

@@ -1,3 +1,4 @@
+import type { Messages } from "@/shared/i18n";
 import type { AppTotalDto, ActivityTotalDto, RangeDto, TimelineItemDto } from "@/shared/ipc";
 import { appLabel, activityLabel } from "@/shared/lib/labels";
 import { HOUR } from "@/shared/lib/time";
@@ -78,6 +79,7 @@ export function layoutTimeline(
   items: readonly TimelineItemDto[],
   window: RangeDto,
   now: number,
+  t: Messages,
 ): TimelineBlock[] {
   const span = window.to - window.from;
   if (span <= 0) return [];
@@ -91,16 +93,16 @@ export function layoutTimeline(
       widthPct: ((clamped.end - clamped.start) / span) * 100,
       activityId: item.activity_id,
       color: item.activity_color,
-      label: blockLabel(item),
+      label: blockLabel(item, t),
       durationMs: clamped.end - clamped.start,
     });
   }
   return blocks;
 }
 
-function blockLabel(item: TimelineItemDto): string {
-  const app = appLabel(item.app_id, item.app_name);
-  return `${app}, ${activityLabel(item.activity_id, item.activity_name)}`;
+function blockLabel(item: TimelineItemDto, t: Messages): string {
+  const app = appLabel(item.app_id, item.app_name, t);
+  return `${app}, ${activityLabel(item.activity_id, item.activity_name, t)}`;
 }
 
 export interface AxisTick {
@@ -186,17 +188,18 @@ export function buildAppRows(
   open: TimelineItemDto | undefined,
   elapsedMs: number,
   titles: ReadonlyMap<string, TitleRow[]>,
+  t: Messages,
 ): AppRow[] {
   const rows = byApp.map((app) => ({
     key: appKey(app.app_id),
-    name: appLabel(app.app_id, app.app_name),
+    name: appLabel(app.app_id, app.app_name, t),
     totalMs: app.total_ms,
   }));
   if (open && elapsedMs > 0) {
     const key = appKey(open.app_id);
     const live = rows.find((row) => row.key === key);
     if (live) live.totalMs += elapsedMs;
-    else rows.push({ key, name: appLabel(open.app_id, open.app_name), totalMs: elapsedMs });
+    else rows.push({ key, name: appLabel(open.app_id, open.app_name, t), totalMs: elapsedMs });
   }
   rows.sort((a, b) => b.totalMs - a.totalMs);
   const max = rows[0]?.totalMs ?? 0;
@@ -221,10 +224,11 @@ export function buildActivityRows(
   open: TimelineItemDto | undefined,
   elapsedMs: number,
   totalMs: number,
+  t: Messages,
 ): ActivityRow[] {
   const rows = byActivity.map((c) => ({
     id: c.activity_id,
-    name: activityLabel(c.activity_id, c.name),
+    name: activityLabel(c.activity_id, c.name, t),
     color: c.color,
     totalMs: c.total_ms,
   }));
@@ -234,7 +238,7 @@ export function buildActivityRows(
     else
       rows.push({
         id: open.activity_id,
-        name: activityLabel(open.activity_id, open.activity_name),
+        name: activityLabel(open.activity_id, open.activity_name, t),
         color: open.activity_color,
         totalMs: elapsedMs,
       });

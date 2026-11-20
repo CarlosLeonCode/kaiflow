@@ -13,6 +13,7 @@ import {
   useStartFocusMutation,
   type FocusStartDto,
 } from "@/shared/ipc";
+import { useT } from "@/shared/i18n";
 import { appOptions, RECENT_APP_DAYS } from "@/shared/lib/apps";
 import { addLocalDays } from "@/shared/lib/time";
 
@@ -25,6 +26,7 @@ import { FocusSessionContainer } from "./FocusSessionContainer";
 /** Wires the Focus section: today's numbers, the timer or the start view, the last summary, history. */
 export function FocusContainer() {
   const intro = useSectionIntro("focus");
+  const t = useT();
   const now = useNow(60_000);
   const today = addLocalDays(now, 0);
   const tomorrow = addLocalDays(now, 1);
@@ -46,7 +48,7 @@ export function FocusContainer() {
       await start.mutateAsync(request);
       return null;
     } catch (error) {
-      return toSubmitResult(error);
+      return toSubmitResult(error, t);
     }
   }
 
@@ -55,7 +57,7 @@ export function FocusContainer() {
     <FocusView
       intro={intro}
       loading={status.isPending || history.isPending}
-      error={failure ? errorMessage(failure) : null}
+      error={failure ? errorMessage(failure, t) : null}
       unavailable={status.data?.unavailable ?? null}
       today={stats}
       main={

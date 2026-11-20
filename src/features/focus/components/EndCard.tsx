@@ -1,5 +1,6 @@
 import { CircleCheck, Coffee } from "lucide-react";
 
+import { useT } from "@/shared/i18n";
 import type { FocusCardDto, FocusCycleDto } from "@/shared/ipc";
 import { cn } from "@/shared/lib/utils";
 import { Button } from "@/shared/ui/button";
@@ -23,13 +24,14 @@ interface Props {
  * skip it, or a few more minutes of the same block.
  */
 export function EndCard({ card, cycle, compact = false, busy = false, error, onStartNext, onSkip, onMoreTime }: Props) {
-  const copy = endCardCopy(card);
+  const t = useT();
+  const copy = endCardCopy(card, t);
   const nextIsBreak = card.next?.kind === "break";
   const Icon = nextIsBreak ? Coffee : CircleCheck;
   const size = compact ? "sm" : "md";
   return (
     <section
-      aria-label="Block finished"
+      aria-label={t.focus.endCard.label}
       className={cn("rounded-xl border border-border bg-surface", compact ? "p-3" : "px-6 py-6 text-center")}
     >
       <div className={cn("flex gap-3", compact ? "items-start" : "flex-col items-center")}>
@@ -46,7 +48,7 @@ export function EndCard({ card, cycle, compact = false, busy = false, error, onS
         <div className="min-w-0">
           <h2 className={cn("font-semibold", compact ? "text-sm" : "text-lg")}>{copy.title}</h2>
           <p className="truncate text-xs text-muted-foreground" title={card.finished.intent || undefined}>
-            {blockTitle(card.finished)}
+            {blockTitle(card.finished, t)}
           </p>
           <p className={cn("mt-1", compact ? "text-sm" : "text-base")}>{copy.prompt}</p>
         </div>
@@ -59,10 +61,10 @@ export function EndCard({ card, cycle, compact = false, busy = false, error, onS
           </Button>
         )}
         <Button size={size} disabled={busy} onClick={onSkip} className={cn(compact && "flex-1")}>
-          {copy.startLabel ? "Skip" : "Done"}
+          {copy.startLabel ? t.focus.endCard.skip : t.common.done}
         </Button>
         <Button size={size} variant="ghost" disabled={busy} onClick={() => onMoreTime(EXTEND_MINUTES)} className={cn(compact && "flex-1")}>
-          +{EXTEND_MINUTES} min
+          {t.focus.extend(EXTEND_MINUTES)}
         </Button>
       </div>
       {error && (

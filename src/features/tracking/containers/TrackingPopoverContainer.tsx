@@ -11,6 +11,7 @@ import {
   useTrackingCommandMutation,
 } from "@/shared/ipc";
 import { FocusSessionContainer } from "@/features/focus/containers/FocusSessionContainer";
+import { useT } from "@/shared/i18n";
 import { osOf } from "@/shared/lib/platform";
 import { localDayRange } from "@/shared/lib/time";
 import { withLiveTime } from "@/features/goals/lib/goals";
@@ -34,12 +35,13 @@ export function TrackingPopoverContainer({ notice }: { notice?: ReactNode }) {
   const openMain = useOpenMainWindowMutation();
   const openSettings = useOpenAccessibilitySettingsMutation();
   const platform = usePlatformQuery();
+  const t = useT();
 
   if (status.isError) {
     return (
       <Alert variant="warning" className="m-4">
         <AlertDescription>
-          Could not read the tracking status: {errorMessage(status.error)}
+          {t.tracking.statusError(errorMessage(status.error, t))}
         </AlertDescription>
       </Alert>
     );

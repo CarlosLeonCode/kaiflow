@@ -1,3 +1,4 @@
+import { useT } from "@/shared/i18n";
 import { formatDuration } from "@/shared/lib/time";
 
 import type { FocusRatioDto } from "@/shared/ipc";
@@ -9,10 +10,10 @@ interface Props {
   ratio: FocusRatioDto;
 }
 
-/** The bar compares only these two, exactly like the headline percentage. */
+/** The bar compares only these two, exactly like the headline percentage. Labels live in `charts.ratio`. */
 const SEGMENTS = [
-  { key: "productive", label: "Productive", color: "var(--success)" },
-  { key: "distracting", label: "Distracting", color: "var(--destructive)" },
+  { key: "productive", color: "var(--success)" },
+  { key: "distracting", color: "var(--destructive)" },
 ] as const;
 
 /** Whole percent of the productive share, e.g. `75%`. */
@@ -29,6 +30,7 @@ export function ratioText(ratio: FocusRatioDto): string | null {
  * instead of showing a number.
  */
 export function RatioBar({ productiveMs, neutralMs, distractingMs, ratio }: Props) {
+  const m = useT().charts.ratio;
   const values = { productive: productiveMs, distracting: distractingMs };
   const total = productiveMs + distractingMs;
   const percent = ratioText(ratio);
@@ -40,23 +42,21 @@ export function RatioBar({ productiveMs, neutralMs, distractingMs, ratio }: Prop
       {percent ? (
         <p className="tabular text-display font-semibold tracking-tight" data-testid="focus-ratio">
           {percent}
-          <span className="ml-2 text-xs font-normal tracking-normal text-muted-foreground">productive</span>
+          <span className="ml-2 text-xs font-normal tracking-normal text-muted-foreground">{m.productiveSuffix}</span>
         </p>
       ) : (
         <p className="text-sm font-medium" data-testid="focus-ratio">
-          No productive or distracting data
+          {m.noData}
         </p>
       )}
       <p className="mt-0.5 text-xs text-muted-foreground">
-        {percent
-          ? "Productive time as a share of productive plus distracting time. Neutral time is left out."
-          : "Mark activities as productive or distracting in Activities to see this ratio."}
+        {percent ? m.explainer : m.hint}
       </p>
 
       <div className="mt-3 overflow-hidden rounded-full bg-muted">
         <svg
           role="img"
-          aria-label={`Productive against distracting time: ${SEGMENTS.map((s) => `${s.label} ${formatDuration(values[s.key])}`).join(", ")}`}
+          aria-label={m.label(SEGMENTS.map((s) => `${m[s.key]} ${formatDuration(values[s.key])}`).join(", "))}
           viewBox="0 0 100 6"
           preserveAspectRatio="none"
           className="block h-2 w-full"
@@ -75,14 +75,14 @@ export function RatioBar({ productiveMs, neutralMs, distractingMs, ratio }: Prop
           <div key={segment.key}>
             <dt className="flex items-center gap-1.5 text-muted-foreground">
               <span aria-hidden="true" className="size-2 rounded-full" style={{ backgroundColor: segment.color }} />
-              {segment.label}
+              {m[segment.key]}
             </dt>
             <dd className="tabular font-medium">{formatDuration(values[segment.key])}</dd>
           </div>
         ))}
       </dl>
       <p className="mt-2 text-xs text-muted-foreground" data-testid="neutral-time">
-        Neutral: <span className="tabular font-medium text-foreground">{formatDuration(neutralMs)}</span> (not part of the ratio)
+        {m.neutral} <span className="tabular font-medium text-foreground">{formatDuration(neutralMs)}</span> {m.neutralNote}
       </p>
     </div>
   );

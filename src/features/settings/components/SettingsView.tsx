@@ -95,7 +95,7 @@ export function SettingsView({
   const t = useT();
   const appearance = t.settings.appearance;
   return (
-    <Page title="Settings" subtitle="Changes apply immediately." intro={intro}>
+    <Page title={t.shell.sections.settings} subtitle="Changes apply immediately." intro={intro}>
       {!settings ? (
         <div className="max-w-xl space-y-3" aria-label="Loading settings">
           <Skeleton className="h-24" />

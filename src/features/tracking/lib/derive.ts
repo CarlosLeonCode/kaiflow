@@ -1,4 +1,5 @@
 import type { AppTotalDto, DegradedReasonDto, FocusDto, OsDto, TrackingStateDto } from "@/shared/ipc";
+import type { Messages } from "@/shared/i18n";
 import { platformWords } from "@/shared/lib/platform";
 
 /** Pure view-model helpers for the popover (no IPC, no clock). */
@@ -54,14 +55,14 @@ export interface ToggleAction {
 }
 
 /** What the main button does in each state; `null` while idle or asleep (design section 4). */
-export function toggleAction(state: TrackingStateDto): ToggleAction | null {
+export function toggleAction(state: TrackingStateDto, t: Messages): ToggleAction | null {
   switch (state) {
     case "running":
-      return { command: "pause", label: "Pause tracking" };
+      return { command: "pause", label: t.tracking.toggle.pause };
     case "paused":
-      return { command: "resume", label: "Resume tracking" };
+      return { command: "resume", label: t.tracking.toggle.resume };
     case "stopped":
-      return { command: "start", label: "Start tracking" };
+      return { command: "start", label: t.tracking.toggle.start };
     case "idle":
     case "asleep":
       return null;
@@ -69,39 +70,17 @@ export function toggleAction(state: TrackingStateDto): ToggleAction | null {
 }
 
 /** Status line while tracking is degraded; a missing reason means macOS Accessibility. */
-export function degradedLabel(reason: DegradedReasonDto | null | undefined): string {
+export function degradedLabel(reason: DegradedReasonDto | null | undefined, t: Messages): string {
   return (reason ?? "accessibility_denied") === "accessibility_denied"
-    ? "Tracking, titles off"
-    : "Tracking, windows unavailable";
+    ? t.tracking.degradedStatus.titlesOff
+    : t.tracking.degradedStatus.windowsUnavailable;
 }
 
-export function stateLabel(state: TrackingStateDto): string {
-  switch (state) {
-    case "running":
-      return "Tracking";
-    case "paused":
-      return "Paused";
-    case "stopped":
-      return "Not tracking";
-    case "idle":
-      return "Idle";
-    case "asleep":
-      return "Asleep";
-  }
+export function stateLabel(state: TrackingStateDto, t: Messages): string {
+  return t.tracking.states[state];
 }
 
 /** Short explanation shown when there is no app in the foreground to report. */
-export function emptyActivityText(state: TrackingStateDto, os: OsDto = "macos"): string {
-  switch (state) {
-    case "running":
-      return "Waiting for the first window.";
-    case "paused":
-      return "Paused. Resume to keep counting.";
-    case "stopped":
-      return "Tracking is off.";
-    case "idle":
-      return "You seem to be away.";
-    case "asleep":
-      return `${platformWords(os).Device} is asleep.`;
-  }
+export function emptyActivityText(state: TrackingStateDto, t: Messages, os: OsDto = "macos"): string {
+  return state === "asleep" ? t.tracking.empty.asleep(platformWords(os, t).Device) : t.tracking.empty[state];
 }
