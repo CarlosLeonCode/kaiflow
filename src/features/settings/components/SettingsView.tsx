@@ -1,6 +1,7 @@
 import { Monitor, Moon, Sun } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { LANGUAGE_NAMES, LANGUAGES, parseLanguage, useT, type LanguageSetting, type Messages } from "@/shared/i18n";
 import type { DegradedReasonDto, PlatformInfoDto, SettingsDto, SettingsPatchDto } from "@/shared/ipc";
 import { APP_INFO } from "@/shared/lib/appInfo";
 import { DEFAULT_PLATFORM, isWayland, platformWords } from "@/shared/lib/platform";
@@ -31,11 +32,22 @@ import {
 import { AboutPanel } from "./AboutPanel";
 import { ShortcutField } from "./ShortcutField";
 
-const THEMES: readonly SegmentedOption<ThemeSetting>[] = [
-  { value: "light", label: "Light", icon: <Sun className="size-3.5" aria-hidden="true" /> },
-  { value: "dark", label: "Dark", icon: <Moon className="size-3.5" aria-hidden="true" /> },
-  { value: "system", label: "System", icon: <Monitor className="size-3.5" aria-hidden="true" /> },
-];
+function themeOptions(t: Messages): readonly SegmentedOption<ThemeSetting>[] {
+  const { themes } = t.settings.appearance;
+  return [
+    { value: "light", label: themes.light, icon: <Sun className="size-3.5" aria-hidden="true" /> },
+    { value: "dark", label: themes.dark, icon: <Moon className="size-3.5" aria-hidden="true" /> },
+    { value: "system", label: themes.system, icon: <Monitor className="size-3.5" aria-hidden="true" /> },
+  ];
+}
+
+/** "System" is translated; each language is named in its own language. */
+function languageOptions(t: Messages): readonly { value: LanguageSetting; label: string }[] {
+  return [
+    { value: "system", label: t.settings.appearance.systemLanguage },
+    ...LANGUAGES.map((language) => ({ value: language, label: LANGUAGE_NAMES[language] })),
+  ];
+}
 
 interface Props {
   /** Section intro and its header help button, rendered by `Page`. */
@@ -80,6 +92,8 @@ export function SettingsView({
 }: Props) {
   const { os } = platform;
   const words = platformWords(os);
+  const t = useT();
+  const appearance = t.settings.appearance;
   return (
     <Page title="Settings" subtitle="Changes apply immediately." intro={intro}>
       {!settings ? (
@@ -98,14 +112,27 @@ export function SettingsView({
             </Alert>
           )}
 
-          <Panel title="Appearance">
-            <Row label="Theme" controlId="setting-theme">
+          <Panel title={appearance.title}>
+            <Row label={appearance.theme} controlId="setting-theme">
               <Segmented
-                aria-label="Theme"
+                aria-label={appearance.theme}
                 value={parseTheme(settings.theme)}
-                options={THEMES}
+                options={themeOptions(t)}
                 onChange={(theme) => onChange({ theme })}
               />
+            </Row>
+            <Row label={appearance.language} controlId="setting-language">
+              <Select
+                id="setting-language"
+                value={parseLanguage(settings.language)}
+                onChange={(event) => onChange({ language: parseLanguage(event.target.value) })}
+              >
+                {languageOptions(t).map((option) => (
+                  <option key={option.value} value={option.value} lang={option.value === "system" ? undefined : option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
             </Row>
           </Panel>
 

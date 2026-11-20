@@ -184,6 +184,7 @@ export function settingsPatch(changes: Partial<SettingsPatchDto>): SettingsPatch
     idle_auto_discard_below_secs: null,
     retention: null,
     theme: null,
+    language: null,
     autostart: null,
     shortcut: null,
     onboarding_completed: null,

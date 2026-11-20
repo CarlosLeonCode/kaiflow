@@ -211,6 +211,8 @@ pub struct Settings {
     pub retention_days: Option<u32>,
     /// `light`, `dark` or `system`.
     pub theme: String,
+    /// Interface language: `en`, `es` or `system` (follow the OS).
+    pub language: String,
     pub autostart: bool,
     pub shortcut: String,
     pub onboarding_completed: bool,
@@ -234,6 +236,7 @@ impl Default for Settings {
             idle_auto_discard_below_secs: DEFAULT_AUTO_DISCARD_BELOW_SECS,
             retention_days: None,
             theme: "system".into(),
+            language: "system".into(),
             autostart: false,
             // The build target, not a runtime OS call: each binary ships for one OS.
             shortcut: default_shortcut(cfg!(target_os = "macos")).into(),
@@ -257,6 +260,7 @@ pub struct SettingsPatch {
     /// `Some(None)` switches retention off.
     pub retention_days: Option<Option<u32>>,
     pub theme: Option<String>,
+    pub language: Option<String>,
     pub autostart: Option<bool>,
     pub shortcut: Option<String>,
     pub onboarding_completed: Option<bool>,
@@ -393,6 +397,7 @@ impl Commands {
             )?,
             retention_days: self.read(KEY_RETENTION, parse_opt_u32, d.retention_days)?,
             theme: self.read(KEY_THEME, parse_string, d.theme)?,
+            language: self.read(KEY_LANGUAGE, parse_string, d.language)?,
             autostart: self.read(KEY_AUTOSTART, parse_bool, d.autostart)?,
             shortcut: self.read(KEY_SHORTCUT, parse_string, d.shortcut)?,
             onboarding_completed: self.read(KEY_ONBOARDING, parse_bool, d.onboarding_completed)?,
@@ -428,6 +433,9 @@ impl Commands {
         }
         if let Some(v) = &patch.theme {
             set(KEY_THEME, json_string(v))?;
+        }
+        if let Some(v) = &patch.language {
+            set(KEY_LANGUAGE, json_string(v))?;
         }
         if let Some(v) = patch.autostart {
             set(KEY_AUTOSTART, v.to_string())?;
@@ -614,6 +622,12 @@ fn validate_patch(p: &SettingsPatch) -> Result<(), CommandError> {
     {
         return bad("theme must be light, dark or system");
     }
+    if p.language
+        .as_deref()
+        .is_some_and(|l| !["en", "es", "system"].contains(&l))
+    {
+        return bad("language must be en, es or system");
+    }
     if p.shortcut.as_deref().is_some_and(|s| s.trim().is_empty()) {
         return bad("shortcut must not be empty");
     }
@@ -642,6 +656,7 @@ const KEY_IDLE_TIMEOUT: &str = "idle_prompt_timeout_secs";
 const KEY_IDLE_AUTO_DISCARD: &str = "idle_auto_discard_below_secs";
 const KEY_RETENTION: &str = "retention_days";
 const KEY_THEME: &str = "theme";
+const KEY_LANGUAGE: &str = "language";
 const KEY_AUTOSTART: &str = "autostart";
 const KEY_SHORTCUT: &str = "shortcut";
 const KEY_ONBOARDING: &str = "onboarding_completed";
@@ -919,6 +934,40 @@ mod tests {
             }),
             Err(CommandError::Invalid(_))
         ));
+    }
+
+    #[test]
+    fn language_defaults_to_system_persists_and_rejects_unknown_values() {
+        let f = fixture();
+        assert_eq!(f.cmd.get_settings().unwrap().language, "system");
+        for language in ["es", "en", "system"] {
+            let out = f
+                .cmd
+                .update_settings(&SettingsPatch {
+                    language: Some(language.into()),
+                    ..SettingsPatch::default()
+                })
+                .unwrap();
+            assert_eq!(out.language, language);
+            assert_eq!(
+                f.settings.get("language").unwrap(),
+                Some(format!("\"{language}\""))
+            );
+        }
+        for language in ["fr", "ES", "es-ES", ""] {
+            let err = f
+                .cmd
+                .update_settings(&SettingsPatch {
+                    language: Some(language.into()),
+                    ..SettingsPatch::default()
+                })
+                .unwrap_err();
+            assert!(
+                matches!(&err, CommandError::Invalid(m) if m == "language must be en, es or system"),
+                "{language:?}: {err:?}"
+            );
+        }
+        assert_eq!(f.cmd.get_settings().unwrap().language, "system");
     }
 
     #[test]

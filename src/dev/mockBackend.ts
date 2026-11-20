@@ -175,6 +175,7 @@ export function installMockBackend(options: MockOptions = {}): void {
     idle_auto_discard_below_secs: 120,
     retention_days: null,
     theme: "system",
+    language: "system",
     autostart: false,
     shortcut: defaultShortcut(platform.os),
     onboarding_completed: true,

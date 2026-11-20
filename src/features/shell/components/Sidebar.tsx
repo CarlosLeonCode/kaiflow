@@ -1,5 +1,6 @@
 import { CalendarDays, ChartNoAxesColumn, Settings, ShieldCheck, Tags, Target, Timer, type LucideIcon } from "lucide-react";
 
+import { useT } from "@/shared/i18n";
 import type { OsDto } from "@/shared/ipc";
 import { cn } from "@/shared/lib/utils";
 import { Kbd } from "@/shared/ui/kbd";
@@ -30,18 +31,19 @@ interface Props {
  * it (overlay title bar), so it is 44 px tall and carries no controls.
  */
 export function Sidebar({ active, onSelect, status, os = "macos" }: Props) {
+  const t = useT();
   return (
     <aside className="flex h-full w-52 shrink-0 flex-col border-r border-border bg-surface">
       <div data-tauri-drag-region className="h-11 shrink-0" />
-      <nav aria-label="Sections" className="flex-1 space-y-3 px-2">
+      <nav aria-label={t.shell.nav} className="flex-1 space-y-3 px-2">
         {SECTION_GROUPS.map((group) => {
-          const headingId = `sidebar-group-${group.id}`;
+          const headingId = `sidebar-group-${group}`;
           return (
-            <div key={group.id} role="group" aria-labelledby={headingId} className="space-y-0.5">
+            <div key={group} role="group" aria-labelledby={headingId} className="space-y-0.5">
               <p id={headingId} className="px-2 pb-1 text-2xs font-medium text-muted-foreground">
-                {group.label}
+                {t.shell.groups[group]}
               </p>
-              {SECTIONS.filter((section) => section.group === group.id).map((section) => {
+              {SECTIONS.filter((section) => section.group === group).map((section) => {
                 const Icon = ICONS[section.id];
                 const current = section.id === active;
                 return (
@@ -63,7 +65,7 @@ export function Sidebar({ active, onSelect, status, os = "macos" }: Props) {
                     )}
                   >
                     <Icon className="size-4 shrink-0" aria-hidden="true" />
-                    <span className="flex-1">{section.label}</span>
+                    <span className="flex-1">{t.shell.sections[section.id]}</span>
                     <Kbd aria-hidden="true" className="border-transparent bg-transparent">
                       {sectionShortcutLabel(section.digit, os)}
                     </Kbd>

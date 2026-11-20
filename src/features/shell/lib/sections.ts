@@ -1,24 +1,23 @@
 import type { OsDto } from "@/shared/ipc";
 
-/** Sidebar groups, in order: daily work first, looking back next, setup last. */
-export const SECTION_GROUPS = [
-  { id: "daily", label: "Daily" },
-  { id: "look-back", label: "Look back" },
-  { id: "setup", label: "Setup" },
-] as const;
+/** Sidebar groups, in order: daily work first, looking back next, setup last. Labels live in `shell.groups`. */
+export const SECTION_GROUPS = ["daily", "look-back", "setup"] as const;
 
-export type SectionGroupId = (typeof SECTION_GROUPS)[number]["id"];
+export type SectionGroupId = (typeof SECTION_GROUPS)[number];
 
-/** Dashboard sections in sidebar order; the digit is the ⌘ (Ctrl off macOS) shortcut. */
+/**
+ * Dashboard sections in sidebar order; the digit is the ⌘ (Ctrl off macOS) shortcut. Labels
+ * live in `shell.sections` of the UI messages.
+ */
 export const SECTIONS = [
-  { id: "today", label: "Today", digit: "1", group: "daily" },
-  { id: "focus", label: "Focus", digit: "2", group: "daily" },
-  { id: "goals", label: "Goals", digit: "3", group: "daily" },
-  { id: "insights", label: "Insights", digit: "4", group: "look-back" },
-  { id: "activities", label: "Activities", digit: "5", group: "setup" },
-  { id: "privacy", label: "Privacy", digit: "6", group: "setup" },
-  { id: "settings", label: "Settings", digit: "7", group: "setup" },
-] as const satisfies readonly { id: string; label: string; digit: string; group: SectionGroupId }[];
+  { id: "today", digit: "1", group: "daily" },
+  { id: "focus", digit: "2", group: "daily" },
+  { id: "goals", digit: "3", group: "daily" },
+  { id: "insights", digit: "4", group: "look-back" },
+  { id: "activities", digit: "5", group: "setup" },
+  { id: "privacy", digit: "6", group: "setup" },
+  { id: "settings", digit: "7", group: "setup" },
+] as const satisfies readonly { id: string; digit: string; group: SectionGroupId }[];
 
 export type SectionId = (typeof SECTIONS)[number]["id"];
 

@@ -893,6 +893,8 @@ export type SettingsDto = {
 	/**  `None` keeps data indefinitely. */
 	retention_days: number | null,
 	theme: string,
+	/**  `en`, `es` or `system` (follow the OS language). */
+	language: string,
 	autostart: boolean,
 	shortcut: string,
 	onboarding_completed: boolean,
@@ -913,6 +915,7 @@ export type SettingsPatchDto = {
 	idle_auto_discard_below_secs: number | null,
 	retention: RetentionPatchDto | null,
 	theme: string | null,
+	language: string | null,
 	autostart: boolean | null,
 	shortcut: string | null,
 	onboarding_completed: boolean | null,

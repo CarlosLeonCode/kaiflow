@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { type ReactNode, useState } from "react";
 
+import { I18nProvider, type Language } from "@/shared/i18n";
 import { useBackendEventSync, useSettingsQuery } from "@/shared/ipc";
 import { parseTheme, useTheme } from "@/shared/lib/theme";
 
@@ -21,13 +22,20 @@ function BackendSync() {
   return null;
 }
 
-/** Providers every window shares (query cache, event sync, theme). */
-export function AppProviders({ children, client }: { children: ReactNode; client?: QueryClient }) {
+interface Props {
+  children: ReactNode;
+  client?: QueryClient;
+  /** Pins the OS language (tests); the real windows read `navigator.language`. */
+  systemLanguage?: Language;
+}
+
+/** Providers every window shares (query cache, event sync, theme, language). */
+export function AppProviders({ children, client, systemLanguage }: Props) {
   const [fallback] = useState(createQueryClient);
   return (
     <QueryClientProvider client={client ?? fallback}>
       <BackendSync />
-      {children}
+      <I18nProvider system={systemLanguage}>{children}</I18nProvider>
     </QueryClientProvider>
   );
 }

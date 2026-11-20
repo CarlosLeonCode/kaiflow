@@ -131,6 +131,25 @@ describe("SettingsContainer", () => {
     await waitFor(() => expect(document.documentElement.classList.contains("dark")).toBe(true));
   });
 
+  it("saves the language and switches the interface right away", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockBackend({
+      get_status: () => status(),
+      settings_update: (args) => mergePatch(args.patch),
+    });
+    renderWithProviders(<SettingsContainer />);
+
+    const language = await screen.findByRole("combobox", { name: "Language" });
+    expect(language).toHaveValue("system");
+    expect(within(language).getAllByRole("option").map((o) => o.textContent)).toEqual(["System", "English", "Español"]);
+
+    await user.selectOptions(language, "Español");
+
+    await waitFor(() => expect(lastUpdate(calls)).toMatchObject({ language: "es", theme: null }));
+    expect(await screen.findByRole("combobox", { name: "Idioma" })).toHaveValue("es");
+    expect(screen.getByRole("radio", { name: "Oscuro" })).toBeInTheDocument();
+  });
+
   it("saves the idle threshold in seconds (R3.1)", async () => {
     const user = userEvent.setup();
     const { calls } = mockBackend({

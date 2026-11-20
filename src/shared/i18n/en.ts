@@ -1,0 +1,100 @@
+/**
+ * English UI copy: the source of truth for every user-facing string. Spanish (`es.ts`) must
+ * have exactly the same keys and function signatures (see `Messages`). Values are strings, or
+ * functions for interpolation and plurals.
+ */
+export const en = {
+  platform: {
+    /** Where the app icon lives, as a noun after "from the". */
+    tray: { macos: "menu bar", other: "system tray" },
+  },
+  shell: {
+    nav: "Sections",
+    groups: { daily: "Daily", "look-back": "Look back", setup: "Setup" },
+    sections: {
+      today: "Today",
+      focus: "Focus",
+      goals: "Goals",
+      insights: "Insights",
+      activities: "Activities",
+      privacy: "Privacy",
+      settings: "Settings",
+    },
+    help: (section: string) => `Help for ${section}`,
+    about: (section: string) => `About ${section}`,
+    /**
+     * Role-agnostic section intros, all with the same three short lines: what this is, what you
+     * can do here and a concrete example.
+     */
+    intros: {
+      today: {
+        title: "Your day so far",
+        what: "A timeline of the apps and windows you used today, and for how long.",
+        can: (tray: string) =>
+          `Check today's total, see time per activity and per app, and pause tracking from the ${tray}.`,
+        example: "See that the morning went to email and the afternoon to the quarterly report.",
+      },
+      focus: {
+        title: "Focused blocks of time",
+        what: "A timed block for one task, with a quiet nudge if you drift somewhere else.",
+        can: "Start a session, choose which activities or apps count as on target, and see how it went.",
+        example: "45 minutes to finish the budget review, with only the spreadsheet and the docs on target.",
+      },
+      goals: {
+        title: "Targets for your time",
+        what: "Targets that are checked for you as you work. Nothing is ever blocked.",
+        can: "Set a minimum for an activity or a limit for an app, per day or week, and build a streak.",
+        example: "At least 3 hours of Deep work on weekdays, or at most 30 minutes of social media a day.",
+      },
+      insights: {
+        title: "Look back on your time",
+        what: "Your tracked time over a day, a week, a month or the last 90 days.",
+        can: "Compare periods and see your busiest hours. In the Week view, keep a note and run the optional AI analysis.",
+        example: "Compare this week's client work with last week's, then note what to change.",
+      },
+      activities: {
+        title: "What activities are for",
+        what: "Apps tell you where you were. Activities tell you what you were doing, like Deep work or Client A.",
+        can: "Add sorting rules that file your time by app or by words in the window title. Past time is sorted too.",
+        example: "The same browser can be research in one tab and a distraction in another:",
+        diagram: [
+          { from: "Chrome + “YouTube” in the title", to: "Distraction" },
+          { from: "VS Code, Excel or Figma", to: "Deep work" },
+        ],
+      },
+      privacy: {
+        title: "You decide what is stored",
+        what: "Control over what gets recorded. Everything stays on this computer.",
+        can: "Stop saving window titles, keep specific apps out of your records, and delete tracked data.",
+        example: "Keep your banking app out of your records, or hide the titles of your messaging app.",
+      },
+      settings: {
+        title: "How the app behaves",
+        what: "Preferences for tracking, appearance, backups and the optional AI analysis.",
+        can: "Adjust idle detection, the theme, the language, the first day of your week, startup, the shortcut and backups.",
+        example: "Count 10 minutes away from the keyboard as a break instead of 5.",
+      },
+    },
+  },
+  settings: {
+    appearance: {
+      title: "Appearance",
+      theme: "Theme",
+      themes: { light: "Light", dark: "Dark", system: "System" },
+      language: "Language",
+      /** The other options are language names, written in their own language (not translated). */
+      systemLanguage: "System",
+    },
+  },
+} as const;
+
+/** Literal strings widened to `string`, so translations type-check against English. */
+type Widen<T> = T extends string
+  ? string
+  : T extends (...args: infer A) => infer R
+    ? (...args: A) => Widen<R>
+    : T extends readonly (infer U)[]
+      ? readonly Widen<U>[]
+      : { readonly [K in keyof T]: Widen<T[K]> };
+
+export type Messages = Widen<typeof en>;

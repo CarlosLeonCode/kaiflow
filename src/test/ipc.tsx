@@ -112,6 +112,7 @@ export function settings(overrides: Partial<SettingsDto> = {}): SettingsDto {
     idle_auto_discard_below_secs: 120,
     retention_days: null,
     theme: "system",
+    language: "system",
     autostart: false,
     shortcut: "⌃⌥⌘T",
     onboarding_completed: true,
@@ -205,11 +206,21 @@ export function mockBackend(handlers: Handlers): { calls: Call[] } {
   return { calls };
 }
 
-/** Renders inside the real providers with a retry-free query client. */
+/**
+ * Renders inside the real providers with a retry-free query client. The OS language is pinned
+ * to English, so the default `language: "system"` setting renders English on any machine.
+ */
 export function renderWithProviders(ui: ReactElement) {
   const client = createQueryClient();
   client.setDefaultOptions({ queries: { retry: false, staleTime: 0 } });
-  return { client, ...render(<AppProviders client={client}>{ui}</AppProviders>) };
+  return {
+    client,
+    ...render(
+      <AppProviders client={client} systemLanguage="en">
+        {ui}
+      </AppProviders>,
+    ),
+  };
 }
 
 const MIN = 60_000;

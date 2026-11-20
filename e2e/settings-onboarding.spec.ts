@@ -9,6 +9,20 @@ test.describe("Settings", () => {
     await expect(page.locator("html")).toHaveClass(/dark/);
   });
 
+  test("switching the language to Español shows the interface in Spanish", async ({ page }) => {
+    await openSection(page, "Settings");
+    await expect(page.locator("html")).toHaveAttribute("lang", "en");
+
+    await page.getByRole("combobox", { name: "Language" }).selectOption({ label: "Español" });
+
+    const nav = page.getByRole("navigation", { name: "Secciones" });
+    await expect(nav.getByRole("group", { name: "Día a día" }).getByRole("button").first()).toHaveText(/^Hoy/);
+    await expect(nav.getByRole("group", { name: "Configuración" }).getByRole("button").last()).toHaveText(/^Ajustes/);
+    await expect(page.getByRole("combobox", { name: "Idioma" })).toHaveValue("es");
+    await expect(page.locator("html")).toHaveAttribute("lang", "es");
+    await expectNoA11yViolations(page);
+  });
+
   test("lets you change the idle behavior", async ({ page }) => {
     await openSection(page, "Settings");
 

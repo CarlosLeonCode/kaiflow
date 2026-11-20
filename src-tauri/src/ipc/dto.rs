@@ -1126,6 +1126,8 @@ pub struct SettingsDto {
     /// `None` keeps data indefinitely.
     pub retention_days: Option<u32>,
     pub theme: String,
+    /// `en`, `es` or `system` (follow the OS language).
+    pub language: String,
     pub autostart: bool,
     pub shortcut: String,
     pub onboarding_completed: bool,
@@ -1215,6 +1217,7 @@ impl From<Settings> for SettingsDto {
             idle_auto_discard_below_secs: s.idle_auto_discard_below_secs,
             retention_days: s.retention_days,
             theme: s.theme,
+            language: s.language,
             autostart: s.autostart,
             shortcut: s.shortcut,
             onboarding_completed: s.onboarding_completed,
@@ -1244,6 +1247,7 @@ pub struct SettingsPatchDto {
     pub idle_auto_discard_below_secs: Option<u32>,
     pub retention: Option<RetentionPatchDto>,
     pub theme: Option<String>,
+    pub language: Option<String>,
     pub autostart: Option<bool>,
     pub shortcut: Option<String>,
     pub onboarding_completed: Option<bool>,
@@ -1266,6 +1270,7 @@ impl From<SettingsPatchDto> for SettingsPatch {
                 RetentionPatchDto::Days { days } => Some(days),
             }),
             theme: p.theme,
+            language: p.language,
             autostart: p.autostart,
             shortcut: p.shortcut,
             onboarding_completed: p.onboarding_completed,

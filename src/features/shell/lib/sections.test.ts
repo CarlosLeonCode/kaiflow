@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { en, es, type Messages } from "@/shared/i18n";
+
 import {
   isReservedShortcut,
   SECTION_GROUPS,
@@ -37,13 +39,25 @@ describe("sectionForShortcut", () => {
 });
 
 describe("sidebar groups", () => {
+  const grouped = (t: Messages) =>
+    SECTION_GROUPS.map((group) => [
+      t.shell.groups[group],
+      SECTIONS.filter((s) => s.group === group).map((s) => t.shell.sections[s.id]),
+    ]);
+
   it("groups the sections as Daily, Look back and Setup", () => {
-    expect(
-      SECTION_GROUPS.map((group) => [group.label, SECTIONS.filter((s) => s.group === group.id).map((s) => s.label)]),
-    ).toEqual([
+    expect(grouped(en)).toEqual([
       ["Daily", ["Today", "Focus", "Goals"]],
       ["Look back", ["Insights"]],
       ["Setup", ["Activities", "Privacy", "Settings"]],
+    ]);
+  });
+
+  it("has Spanish labels for every group and section", () => {
+    expect(grouped(es)).toEqual([
+      ["Día a día", ["Hoy", "Enfoque", "Objetivos"]],
+      ["Retrospectiva", ["Estadísticas"]],
+      ["Configuración", ["Actividades", "Privacidad", "Ajustes"]],
     ]);
   });
 });
