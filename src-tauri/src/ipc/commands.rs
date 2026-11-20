@@ -526,10 +526,11 @@ pub async fn restore_prepare(
     app: AppHandle,
     state: Shared<'_>,
 ) -> Result<Option<RestorePreviewDto>, AppError> {
-    let chosen = blocking_dialog(&app, |app| {
+    let filter = crate::i18n::messages(state.language.current()).restore_file_filter;
+    let chosen = blocking_dialog(&app, move |app| {
         app.dialog()
             .file()
-            .add_filter("Kaiflow backup or export", &["gz", "json"])
+            .add_filter(filter, &["gz", "json"])
             .blocking_pick_file()
     })
     .await?;

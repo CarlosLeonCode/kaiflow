@@ -5,6 +5,7 @@
 //! OS, or macOS when not called on the main thread).
 
 use adapters_common::diagnostics::Diagnostics;
+use application::language::UiLanguage;
 use application::ports::Notifier;
 use tauri::{AppHandle, Wry};
 
@@ -14,15 +15,24 @@ use crate::notifications::{SystemNotifier, TauriToaster};
 /// Providers for the running platform. Must be called on the main thread: the AppKit
 /// observers are created and kept alive here (the other platforms start their own threads).
 /// `diagnostics` receives the privacy-safe adapter log (macOS: AX trust, title read status,
-/// lock/sleep events).
-pub fn providers(app: &AppHandle<Wry>, diagnostics: &Diagnostics) -> Providers {
-    let notifier: Box<dyn Notifier> = Box::new(SystemNotifier::new(TauriToaster::new(app.clone())));
-    native(notifier, diagnostics).unwrap_or_else(|| {
+/// lock/sleep events). The notifier words its messages in `language`.
+pub fn providers(
+    app: &AppHandle<Wry>,
+    diagnostics: &Diagnostics,
+    language: &UiLanguage,
+) -> Providers {
+    let notifier = |language: &UiLanguage| -> Box<dyn Notifier> {
+        Box::new(SystemNotifier::new(
+            TauriToaster::new(app.clone()),
+            language.clone(),
+        ))
+    };
+    native(notifier(language), diagnostics).unwrap_or_else(|| {
         eprintln!(
             "no native adapters (unsupported OS or not on the main thread): tracking is idle"
         );
         Providers {
-            notifier: Box::new(SystemNotifier::new(TauriToaster::new(app.clone()))),
+            notifier: notifier(language),
             ..Providers::placeholders()
         }
     })

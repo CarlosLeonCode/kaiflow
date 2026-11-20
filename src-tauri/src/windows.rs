@@ -9,16 +9,36 @@ use tauri::{
     WindowEvent, Wry,
 };
 
+use crate::i18n::Messages;
+
 pub const POPOVER: &str = "popover";
 pub const MAIN: &str = "main";
 pub const ONBOARDING: &str = "onboarding";
+
+/// What a window's OS title says.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WindowTitle {
+    /// The app name, the same in every language.
+    Brand,
+    /// The first-run welcome, in the interface language.
+    Onboarding,
+}
+
+impl WindowTitle {
+    pub fn text(self, m: &Messages) -> &'static str {
+        match self {
+            Self::Brand => "Kaiflow",
+            Self::Onboarding => m.onboarding_window_title,
+        }
+    }
+}
 
 /// Static description of one window.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct WindowSpec {
     pub label: &'static str,
     pub page: &'static str,
-    pub title: &'static str,
+    pub title: WindowTitle,
     pub width: f64,
     pub height: f64,
     pub decorations: bool,
@@ -29,7 +49,7 @@ pub struct WindowSpec {
 pub const POPOVER_SPEC: WindowSpec = WindowSpec {
     label: POPOVER,
     page: "popover.html",
-    title: "Kaiflow",
+    title: WindowTitle::Brand,
     width: 360.0,
     height: 480.0,
     decorations: false,
@@ -40,7 +60,7 @@ pub const POPOVER_SPEC: WindowSpec = WindowSpec {
 pub const MAIN_SPEC: WindowSpec = WindowSpec {
     label: MAIN,
     page: "main.html",
-    title: "Kaiflow",
+    title: WindowTitle::Brand,
     width: 1040.0,
     height: 720.0,
     decorations: true,
@@ -54,7 +74,7 @@ pub const MAIN_MIN_SIZE: (f64, f64) = (760.0, 520.0);
 pub const ONBOARDING_SPEC: WindowSpec = WindowSpec {
     label: ONBOARDING,
     page: "onboarding.html",
-    title: "Welcome to Kaiflow",
+    title: WindowTitle::Onboarding,
     width: 560.0,
     height: 640.0,
     decorations: true,
@@ -62,23 +82,28 @@ pub const ONBOARDING_SPEC: WindowSpec = WindowSpec {
     resizable: false,
 };
 
-/// Creates the windows hidden; `onboarding` is only created (and shown) on first run.
-pub fn create_all(app: &AppHandle<Wry>, show_onboarding: bool) -> tauri::Result<()> {
-    let popover = build(app, &POPOVER_SPEC)?;
+/// Creates the windows hidden; `onboarding` is only created (and shown) on first run. Titles
+/// use the catalog `m` of the interface language.
+pub fn create_all(app: &AppHandle<Wry>, show_onboarding: bool, m: &Messages) -> tauri::Result<()> {
+    let popover = build(app, &POPOVER_SPEC, m)?;
     hide_when_unfocused(&popover);
     #[cfg(target_os = "macos")]
     follow_the_active_space(&popover);
-    let main = build(app, &MAIN_SPEC)?;
+    let main = build(app, &MAIN_SPEC, m)?;
     hide_instead_of_closing(&main);
     if show_onboarding {
-        let onboarding = build(app, &ONBOARDING_SPEC)?;
+        let onboarding = build(app, &ONBOARDING_SPEC, m)?;
         onboarding.show()?;
         onboarding.set_focus()?;
     }
     Ok(())
 }
 
-fn build(app: &AppHandle<Wry>, spec: &WindowSpec) -> tauri::Result<WebviewWindow<Wry>> {
+fn build(
+    app: &AppHandle<Wry>,
+    spec: &WindowSpec,
+    m: &Messages,
+) -> tauri::Result<WebviewWindow<Wry>> {
     let builder = WebviewWindowBuilder::new(app, spec.label, WebviewUrl::App(spec.page.into()));
     // The dashboard draws its own title area: traffic lights float over the sidebar.
     #[cfg(target_os = "macos")]
@@ -95,7 +120,7 @@ fn build(app: &AppHandle<Wry>, spec: &WindowSpec) -> tauri::Result<WebviewWindow
         builder
     };
     builder
-        .title(spec.title)
+        .title(spec.title.text(m))
         .inner_size(spec.width, spec.height)
         .decorations(spec.decorations)
         .always_on_top(spec.always_on_top)
@@ -231,6 +256,19 @@ pub fn close_onboarding(app: &AppHandle<Wry>) {
     }
 }
 
+/// Retitles the open windows in the language of `m` (the language setting changed). Safe
+/// from any thread: the work is queued for the main thread and never waited for.
+pub fn apply_language(app: &AppHandle<Wry>, m: &'static Messages) {
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        for spec in [POPOVER_SPEC, MAIN_SPEC, ONBOARDING_SPEC] {
+            if let Some(window) = handle.get_webview_window(spec.label) {
+                let _ = window.set_title(spec.title.text(m));
+            }
+        }
+    });
+}
+
 /// Opens (and focuses) the main window, e.g. from the popover or the tray menu.
 pub fn show_main(app: &AppHandle<Wry>) {
     if let Some(window) = app.get_webview_window(MAIN) {
@@ -274,6 +312,19 @@ mod tests {
         for spec in [POPOVER_SPEC, MAIN_SPEC, ONBOARDING_SPEC] {
             assert_eq!(spec.page, format!("{}.html", spec.label));
         }
+    }
+
+    #[test]
+    fn only_the_welcome_title_is_translated() {
+        use crate::i18n::{EN, ES};
+        assert_eq!(MAIN_SPEC.title.text(&EN), "Kaiflow");
+        assert_eq!(MAIN_SPEC.title.text(&ES), "Kaiflow");
+        assert_eq!(POPOVER_SPEC.title.text(&ES), "Kaiflow");
+        assert_eq!(ONBOARDING_SPEC.title.text(&EN), "Welcome to Kaiflow");
+        assert_eq!(
+            ONBOARDING_SPEC.title.text(&ES),
+            "Te damos la bienvenida a Kaiflow"
+        );
     }
 
     #[test]

@@ -12,6 +12,7 @@ use adapters_ai::HttpAiProvider;
 use adapters_common::diagnostics::Diagnostics;
 use adapters_common::files::FsFileSink;
 use adapters_common::idle::IdleThreshold;
+use adapters_common::locale::OsLocale;
 use adapters_common::secrets::KeyringSecretStore;
 use adapters_sqlite::{
     DbError, SqliteActivityRepository, SqliteAiReviewRepository, SqliteBackupStore,
@@ -25,6 +26,7 @@ use application::export::DataService;
 use application::focus::FocusService;
 use application::goals::GoalService;
 use application::idle_policy::IdlePolicy;
+use application::language::UiLanguage;
 use application::ports::{
     ActiveWindowProvider, ActivityRepository, Clock, EventSink, Notifier, PermissionProvider,
     PortResult, PowerEventsProvider, PrivacyMode, PrivacyRepository,
@@ -107,6 +109,9 @@ pub trait SettingsApplier: Send + Sync {
     fn refresh_tray_text(&self);
     /// Goals or the week start changed: the goal watcher re-evaluates. Never blocks.
     fn refresh_goals(&self) {}
+    /// The language setting changed: the tray menu and window titles are reworded (the
+    /// notifiers read [`AppState::language`] when they post). Never blocks.
+    fn refresh_language(&self) {}
     /// A focus session changed or its drift setting did: the focus watcher re-evaluates and
     /// the tray text follows. Never blocks.
     fn refresh_focus(&self) {}
@@ -132,6 +137,12 @@ impl AiPorts {
             )),
         }
     }
+}
+
+/// The live interface language, resolving `system` through the OS locale. Built before
+/// [`compose`] because the notifiers in [`Providers`] hold it.
+pub fn native_language() -> UiLanguage {
+    UiLanguage::new(Arc::new(OsLocale))
 }
 
 #[derive(Debug)]
@@ -184,6 +195,9 @@ pub struct AppState {
     pub idle_threshold: IdleThreshold,
     /// Live idle-prompt policy (also read by the engine's effects executor).
     pub idle_policy: IdlePolicy,
+    /// Live interface language for the text written in Rust (tray, notifications, window
+    /// titles, the Monday AI review). Shared with the notifiers.
+    pub language: UiLanguage,
     /// Installed by the shell after composition (it needs the `AppHandle`).
     applier: OnceLock<Arc<dyn SettingsApplier>>,
     /// Privacy-safe adapter log; installed by the shell (in memory until then).
@@ -198,12 +212,15 @@ struct Background {
 }
 
 /// Opens (and migrates) the database at `db_path`, then starts the engine and timers.
+/// `language` is the handle the notifiers in `providers` already hold; it is set from the
+/// stored settings here.
 pub fn compose(
     db_path: &Path,
     sink: Box<dyn EventSink>,
     shortcut: SharedShortcut,
     providers: Providers,
     ai: AiPorts,
+    language: UiLanguage,
 ) -> Result<AppState, ComposeError> {
     let sessions = SqliteSessionRepository::new(adapters_sqlite::open(db_path)?);
     // Opened after the first connection so the schema exists when the read pool starts.
@@ -271,6 +288,7 @@ pub fn compose(
             settings.idle_prompt_timeout_secs,
             settings.idle_auto_discard_below_secs,
         );
+        language.set(&settings.language);
     }
     let (engine, handle) = Engine::new(Ports {
         clock: Box::new(SystemClock),
@@ -307,6 +325,7 @@ pub fn compose(
         clock: SystemClock,
         idle_threshold: providers.idle_threshold,
         idle_policy,
+        language,
         applier: OnceLock::new(),
         diagnostics: OnceLock::new(),
         background: Mutex::new(None),

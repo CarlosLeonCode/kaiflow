@@ -14,6 +14,7 @@ use std::time::Duration;
 
 use application::engine::{Command, Reply};
 use application::goals::GoalService;
+use application::language::UiLanguage;
 use application::ports::{Clock, Notifier, TrackingKind};
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender, unbounded};
 use domain::UtcMs;
@@ -76,12 +77,13 @@ pub struct GoalWatcher {
 impl GoalWatcher {
     /// Starts the worker; it evaluates once right away. A failed spawn only disables the
     /// alerts: the handle stays usable and its calls do nothing.
-    pub fn spawn(app: &AppHandle<Wry>) -> Self {
+    /// Its notifications are worded in `language`, read when each one is posted.
+    pub fn spawn(app: &AppHandle<Wry>, language: UiLanguage) -> Self {
         let (tx, rx) = unbounded();
         let app = app.clone();
         let spawned = std::thread::Builder::new()
             .name("goal-watcher".into())
-            .spawn(move || run(&app, &rx));
+            .spawn(move || run(&app, &rx, language));
         if let Err(error) = spawned {
             eprintln!("could not start the goal watcher thread: {error}");
         }
@@ -100,8 +102,8 @@ impl GoalWatcher {
     }
 }
 
-fn run(app: &AppHandle<Wry>, rx: &Receiver<Msg>) {
-    let notifier = SystemNotifier::new(TauriToaster::new(app.clone()));
+fn run(app: &AppHandle<Wry>, rx: &Receiver<Msg>, language: UiLanguage) {
+    let notifier = SystemNotifier::new(TauriToaster::new(app.clone()), language);
     let mut wait = Some(Duration::ZERO);
     loop {
         let woke = match wait {

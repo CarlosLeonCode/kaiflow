@@ -12,6 +12,7 @@ pub mod fakes;
 pub mod focus;
 pub mod goals;
 pub mod idle_policy;
+pub mod language;
 pub mod ports;
 pub mod presets;
 pub mod queries;

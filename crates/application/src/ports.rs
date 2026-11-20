@@ -419,6 +419,12 @@ pub trait EventSink: Send {
     fn emit(&self, event: DomainEvent);
 }
 
+/// The language the OS user interface is set to, to resolve the `system` language setting.
+pub trait SystemLocale: Send + Sync {
+    /// The preferred BCP 47 tag (`es-MX`, `en-US`...), or `None` when the OS gives none.
+    fn language_tag(&self) -> Option<String>;
+}
+
 /// System notifications, best effort (R5.5 as amended).
 pub trait Notifier: Send {
     fn idle_return(&self, gap: &IdleGap);

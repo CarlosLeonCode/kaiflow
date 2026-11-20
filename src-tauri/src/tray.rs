@@ -1,7 +1,8 @@
 //! Menu-bar icon: left click toggles the popover; the context menu offers Pause/Resume (the
-//! alternative to the global shortcut, R6.3), opens the main window or quits.
+//! alternative to the global shortcut, R6.3), opens the main window or quits. The entries
+//! are worded in the interface language and reworded when the language setting changes.
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, PoisonError};
 
 use application::engine::{Command, Reply};
 use application::ports::TrackingKind;
@@ -11,6 +12,7 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::{AppHandle, Manager, Wry};
 
 use crate::composition::AppState;
+use crate::i18n::{EN, Messages, messages};
 use crate::windows;
 
 /// Id of the single tray icon, used to reach it after it was built.
@@ -23,6 +25,10 @@ const MENU_QUIT: &str = "quit";
 /// Handles the shell keeps to update the menu after the tray was built.
 pub struct TrayControls {
     toggle: MenuItem<Wry>,
+    open: MenuItem<Wry>,
+    quit: MenuItem<Wry>,
+    /// Last tracking state shown, to reword the toggle when only the language changes.
+    kind: Mutex<TrackingKind>,
 }
 
 /// What the Pause/Resume entry does in each state; `None` while idle or asleep, where the
@@ -37,13 +43,19 @@ pub fn toggle_command(kind: TrackingKind) -> Option<Command> {
 }
 
 /// Menu text and enabled flag for each state.
-pub fn toggle_label(kind: TrackingKind) -> (&'static str, bool) {
+pub fn toggle_label(m: &Messages, kind: TrackingKind) -> (&'static str, bool) {
     match kind {
-        TrackingKind::Running => ("Pause tracking", true),
-        TrackingKind::Paused => ("Resume tracking", true),
-        TrackingKind::Stopped => ("Start tracking", true),
-        TrackingKind::Idle | TrackingKind::Asleep => ("Pause tracking", false),
+        TrackingKind::Running => (m.tray_pause, true),
+        TrackingKind::Paused => (m.tray_resume, true),
+        TrackingKind::Stopped => (m.tray_start, true),
+        TrackingKind::Idle | TrackingKind::Asleep => (m.tray_pause, false),
     }
+}
+
+/// The catalog of the current interface language; English before the state exists.
+fn current_messages(app: &AppHandle<Wry>) -> &'static Messages {
+    app.try_state::<Arc<AppState>>()
+        .map_or(&EN, |state| messages(state.language.current()))
 }
 
 /// Pause/Resume from the tray or the shortcut. Runs on its own thread: both callers sit on
@@ -74,10 +86,27 @@ pub fn set_tracking_state(app: &AppHandle<Wry>, kind: TrackingKind) {
     let handle = app.clone();
     let _ = app.run_on_main_thread(move || {
         if let Some(controls) = handle.try_state::<TrayControls>() {
-            let (text, enabled) = toggle_label(kind);
+            *controls.kind.lock().unwrap_or_else(PoisonError::into_inner) = kind;
+            let (text, enabled) = toggle_label(current_messages(&handle), kind);
             let _ = controls.toggle.set_text(text);
             let _ = controls.toggle.set_enabled(enabled);
         }
+    });
+}
+
+/// Rewords every entry in the current interface language (the language setting changed).
+/// Non-blocking, like `set_tracking_state`.
+pub fn apply_language(app: &AppHandle<Wry>) {
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        let Some(controls) = handle.try_state::<TrayControls>() else {
+            return;
+        };
+        let m = current_messages(&handle);
+        let kind = *controls.kind.lock().unwrap_or_else(PoisonError::into_inner);
+        let _ = controls.toggle.set_text(toggle_label(m, kind).0);
+        let _ = controls.open.set_text(m.tray_open);
+        let _ = controls.quit.set_text(m.tray_quit);
     });
 }
 
@@ -108,15 +137,21 @@ const ICON: &[u8] = include_bytes!("../icons/64x64.png");
 const ICON_AS_TEMPLATE: bool = cfg!(target_os = "macos");
 
 pub fn install(app: &AppHandle<Wry>) -> tauri::Result<()> {
-    let (text, enabled) = toggle_label(TrackingKind::Stopped);
+    let m = current_messages(app);
+    let (text, enabled) = toggle_label(m, TrackingKind::Stopped);
     let toggle = MenuItem::with_id(app, MENU_TOGGLE, text, enabled, None::<&str>)?;
-    let open = MenuItem::with_id(app, MENU_OPEN, "Open Kaiflow", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, MENU_QUIT, "Quit", true, None::<&str>)?;
+    let open = MenuItem::with_id(app, MENU_OPEN, m.tray_open, true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, MENU_QUIT, m.tray_quit, true, None::<&str>)?;
     let menu = Menu::with_items(
         app,
         &[&toggle, &open, &PredefinedMenuItem::separator(app)?, &quit],
     )?;
-    app.manage(TrayControls { toggle });
+    app.manage(TrayControls {
+        toggle,
+        open,
+        quit,
+        kind: Mutex::new(TrackingKind::Stopped),
+    });
 
     TrayIconBuilder::with_id(TRAY_ID)
         .icon(Image::from_bytes(ICON)?)
@@ -165,18 +200,39 @@ mod tests {
     #[test]
     fn labels_match_the_action_and_idle_or_asleep_disable_the_entry() {
         assert_eq!(
-            toggle_label(TrackingKind::Running),
+            toggle_label(&EN, TrackingKind::Running),
             ("Pause tracking", true)
         );
         assert_eq!(
-            toggle_label(TrackingKind::Paused),
+            toggle_label(&EN, TrackingKind::Paused),
             ("Resume tracking", true)
         );
         assert_eq!(
-            toggle_label(TrackingKind::Stopped),
+            toggle_label(&EN, TrackingKind::Stopped),
             ("Start tracking", true)
         );
-        assert!(!toggle_label(TrackingKind::Idle).1);
-        assert!(!toggle_label(TrackingKind::Asleep).1);
+        assert!(!toggle_label(&EN, TrackingKind::Idle).1);
+        assert!(!toggle_label(&EN, TrackingKind::Asleep).1);
+    }
+
+    #[test]
+    fn labels_follow_the_language() {
+        use crate::i18n::ES;
+        assert_eq!(
+            toggle_label(&ES, TrackingKind::Running),
+            ("Pausar registro", true)
+        );
+        assert_eq!(
+            toggle_label(&ES, TrackingKind::Paused),
+            ("Reanudar registro", true)
+        );
+        assert_eq!(
+            toggle_label(&ES, TrackingKind::Stopped),
+            ("Iniciar registro", true)
+        );
+        assert_eq!(
+            toggle_label(&ES, TrackingKind::Idle),
+            ("Pausar registro", false)
+        );
     }
 }

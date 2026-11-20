@@ -171,6 +171,7 @@ impl AppState {
             settings.idle_prompt_timeout_secs,
             settings.idle_auto_discard_below_secs,
         );
+        self.language.set(&settings.language);
         // A session left running by the replaced data is gone; the restored ones are closed.
         let _ = self.focus.reload(None, self.now());
         if let Some(applier) = self.applier() {
@@ -178,6 +179,7 @@ impl AppState {
             // Goals and the week start came with the restored data.
             applier.refresh_goals();
             applier.refresh_focus();
+            applier.refresh_language();
         }
     }
 
@@ -484,7 +486,10 @@ impl AppState {
         let tray_changed = patch.tray_display.is_some();
         let week_changed = patch.week_start.is_some();
         let drift_changed = patch.focus_drift_after_secs.is_some() || patch.focus_timer.is_some();
+        let language_changed = patch.language.is_some();
         let settings = self.commands.update_settings(&patch.into())?;
+        // Before the applier runs, so the tray rewords itself in the new language.
+        self.language.set(&settings.language);
         if titles_changed {
             self.engine.request(Command::ReloadPrivacy)?;
         }
@@ -513,6 +518,9 @@ impl AppState {
             }
             if drift_changed {
                 applier.refresh_focus();
+            }
+            if language_changed {
+                applier.refresh_language();
             }
         }
         match first_error {
@@ -651,6 +659,7 @@ mod tests {
                 display_session: None,
             },
             no_ai(),
+            application::language::UiLanguage::default(),
         )
         .unwrap();
         Rig {
@@ -1077,6 +1086,9 @@ mod tests {
         fn refresh_tray_text(&self) {
             self.calls.lock().unwrap().push("tray".into());
         }
+        fn refresh_language(&self) {
+            self.calls.lock().unwrap().push("language".into());
+        }
     }
 
     #[test]
@@ -1139,6 +1151,46 @@ mod tests {
             TrayDisplayDto::CurrentApp
         );
         assert_eq!(*applier.calls.lock().unwrap(), vec!["tray".to_string()]);
+        rig.state.shutdown();
+    }
+
+    #[test]
+    fn a_language_change_reaches_the_live_handle_and_rewords_the_shell() {
+        use application::language::{Language, LanguageSetting};
+        let rig = rig();
+        let applier = Arc::new(RecordingApplier::default());
+        rig.state.set_applier(applier.clone());
+        // No OS locale in tests: `system` resolves to English.
+        assert_eq!(rig.state.language.setting(), LanguageSetting::System);
+        assert_eq!(rig.state.language.current(), Language::En);
+
+        rig.state
+            .settings_update(SettingsPatchDto {
+                language: Some("es".into()),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(rig.state.language.current(), Language::Es);
+        assert_eq!(*applier.calls.lock().unwrap(), vec!["language".to_string()]);
+
+        // Other settings leave the language and the shell text alone.
+        rig.state
+            .settings_update(SettingsPatchDto {
+                theme: Some("dark".into()),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(rig.state.language.current(), Language::Es);
+        assert_eq!(applier.calls.lock().unwrap().len(), 1);
+
+        rig.state
+            .settings_update(SettingsPatchDto {
+                language: Some("system".into()),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(rig.state.language.current(), Language::En);
+        assert_eq!(applier.calls.lock().unwrap().len(), 2);
         rig.state.shutdown();
     }
 
@@ -1222,6 +1274,7 @@ mod tests {
                 ..Providers::placeholders()
             },
             no_ai(),
+            application::language::UiLanguage::default(),
         )
         .unwrap();
         assert_eq!(state.get_status().unwrap().degraded_reason, None);
@@ -1261,6 +1314,7 @@ mod tests {
                 ..Providers::placeholders()
             },
             no_ai(),
+            application::language::UiLanguage::default(),
         )
         .unwrap();
         let info = state.platform_info();
@@ -1701,6 +1755,7 @@ mod tests {
                     ..Providers::placeholders()
                 },
                 no_ai(),
+                application::language::UiLanguage::default(),
             )
             .unwrap();
             state
@@ -1750,6 +1805,7 @@ mod tests {
                 AppState::default_shortcut(),
                 Providers::placeholders(),
                 no_ai(),
+                application::language::UiLanguage::default(),
             )
             .unwrap()
         };

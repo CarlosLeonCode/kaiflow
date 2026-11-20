@@ -12,6 +12,7 @@ pub mod error;
 pub mod event_sink;
 pub mod focus_watcher;
 pub mod goal_watcher;
+pub mod i18n;
 pub mod ipc;
 #[cfg(target_os = "macos")]
 pub mod macos_notifications;
@@ -89,7 +90,8 @@ pub fn run() {
             // Privacy-safe adapter log (never window titles): `diagnostics.log` next to the DB.
             let diagnostics = adapters_common::diagnostics::Diagnostics::in_dir(&data_dir);
             // `setup` runs on the main thread, where the AppKit observers must be created.
-            let providers = platform::providers(&handle, &diagnostics);
+            let language = composition::native_language();
+            let providers = platform::providers(&handle, &diagnostics, &language);
             let degraded_reason = providers.permission.degraded_reason().into();
             let state = Arc::new(compose(
                 &data_dir.join(DB_FILE),
@@ -101,21 +103,26 @@ pub fn run() {
                 shortcut.clone(),
                 providers,
                 AiPorts::native(),
+                language,
             )?);
             state.set_diagnostics(diagnostics);
             let settings = state.commands.get_settings()?;
             app.manage(state.clone());
             app.manage(updater::UpdaterState::default());
 
-            windows::create_all(&handle, !settings.onboarding_completed)?;
+            windows::create_all(
+                &handle,
+                !settings.onboarding_completed,
+                i18n::messages(state.language.current()),
+            )?;
             tray::install(&handle)?;
             let tray_text = tray_text::TrayText::spawn(&handle);
             app.manage(tray_text.clone());
             app.manage(backup_worker::BackupWorker::spawn(&handle, state.clone()));
             app.manage(review_worker::ReviewWorker::spawn(&handle, state.clone()));
-            let goal_watcher = goal_watcher::GoalWatcher::spawn(&handle);
+            let goal_watcher = goal_watcher::GoalWatcher::spawn(&handle, state.language.clone());
             app.manage(goal_watcher.clone());
-            let focus_watcher = focus_watcher::FocusWatcher::spawn(&handle);
+            let focus_watcher = focus_watcher::FocusWatcher::spawn(&handle, state.language.clone());
             app.manage(focus_watcher.clone());
             apply_outside_settings(
                 &handle,
@@ -223,6 +230,7 @@ fn apply_outside_settings(
         eprintln!("autostart could not be aligned with the settings: {error}");
     }
     state.set_applier(Arc::new(ShellApplier::new(
+        handle.clone(),
         Box::new(login),
         shortcuts,
         tray_text,

@@ -1,13 +1,14 @@
 //! Applies the settings that live outside the database: the OS login item (autostart,
-//! `LaunchAgent` on macOS), the global shortcut and the tray text. Called by `settings_update` and once at
+//! `LaunchAgent` on macOS), the global shortcut, the tray text and the language of the tray
+//! menu and window titles. Called by `settings_update` and once at
 //! startup so the OS state follows the stored settings.
 
 use std::sync::Arc;
 
-use tauri::{AppHandle, Wry};
+use tauri::{AppHandle, Manager, Wry};
 use tauri_plugin_autostart::ManagerExt;
 
-use crate::composition::SettingsApplier;
+use crate::composition::{AppState, SettingsApplier};
 use crate::error::AppError;
 use crate::focus_watcher::FocusWatcher;
 use crate::goal_watcher::GoalWatcher;
@@ -59,6 +60,7 @@ impl LoginItem for TauriLoginItem {
 }
 
 pub struct ShellApplier {
+    app: AppHandle<Wry>,
     login: Box<dyn LoginItem>,
     shortcuts: Arc<ShortcutManager>,
     tray_text: TrayText,
@@ -68,6 +70,7 @@ pub struct ShellApplier {
 
 impl ShellApplier {
     pub fn new(
+        app: AppHandle<Wry>,
         login: Box<dyn LoginItem>,
         shortcuts: Arc<ShortcutManager>,
         tray_text: TrayText,
@@ -75,6 +78,7 @@ impl ShellApplier {
         focus: FocusWatcher,
     ) -> Self {
         Self {
+            app,
             login,
             shortcuts,
             tray_text,
@@ -105,6 +109,16 @@ impl SettingsApplier for ShellApplier {
 
     fn refresh_focus(&self) {
         self.focus.refresh();
+        self.tray_text.refresh();
+    }
+
+    fn refresh_language(&self) {
+        let Some(state) = self.app.try_state::<Arc<AppState>>() else {
+            return;
+        };
+        let m = crate::i18n::messages(state.language.current());
+        crate::tray::apply_language(&self.app);
+        crate::windows::apply_language(&self.app, m);
         self.tray_text.refresh();
     }
 }

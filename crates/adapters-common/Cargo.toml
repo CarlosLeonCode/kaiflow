@@ -14,6 +14,9 @@ crossbeam-channel.workspace = true
 # OS keychain for the AI API keys. keyring 4.x is a thin wrapper meant for demos; its own docs
 # tell applications to link keyring-core plus the credential stores they want (see secrets.rs).
 keyring-core = "1"
+# The OS language, for "system" in the language setting (locale.rs). Tiny, no dependencies
+# on macOS, Windows or Linux; pinned like the other crates that read OS state directly.
+sys-locale = "=0.3.2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 apple-native-keyring-store = { version = "1", features = ["keychain"] }
