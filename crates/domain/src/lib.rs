@@ -12,6 +12,7 @@ pub mod insights;
 pub mod machine;
 pub mod presets;
 pub mod privacy;
+pub mod progress;
 pub mod report;
 pub mod segment;
 pub mod time;
@@ -36,6 +37,10 @@ pub use insights::{FocusRatio, Trend, focus_ratio, trend};
 pub use machine::{Effect, Event, PermissionState, TrackingMachine};
 pub use presets::{AppHints, PRESETS, Preset, PresetActivity, SeenApp, Suggestion};
 pub use privacy::{PrivacyPolicy, apply_privacy};
+pub use progress::{
+    Award as StrokeAward, DAILY_CAP, DayStreak, Level, LevelName, LevelProgress, Seal, SealFamily,
+    SealStats, Source as StrokeSource,
+};
 pub use report::{ClippedSpan, clip_to_range, split_at_boundaries};
 pub use segment::{
     ActivityId, EndReason, IdleResolution, Segment, SegmentError, SegmentId, SegmentSource,
