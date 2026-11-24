@@ -1274,6 +1274,122 @@ export const en = {
       "Restoring replaces everything stored now: tracked time, activities, rules and settings. A safety copy of your current data is saved first, next to the database.",
     exportOnly: "This file is an export of a date range, so only that range will remain after restoring.",
   },
+  /**
+   * Progress (gamification): strokes, the daily ensō, levels, the streak, seals and moments.
+   * Small counts arrive as numbers; level totals arrive already formatted for the locale.
+   */
+  progress: {
+    /** Ledger rows: short phrases a person would say, never event names. */
+    sources: {
+      focus_completed: "Focus sessions",
+      focus_on_target: "Stayed on target",
+      break_taken: "Took the break",
+      goal_met: "Goals met",
+      limit_respected: "Stayed within a limit",
+    },
+    levels: {
+      start: "Start",
+      steady: "Steady",
+      rhythm: "Rhythm",
+      flow: "Flow",
+      craft: "Craft",
+      mastery: "Mastery",
+      kaizen: "Kaizen",
+    },
+    enso: {
+      /** Accessible name of the daily ensō. */
+      label: (strokes: number, cap: number) => `${strokes} of ${cap} strokes today`,
+      empty: "No strokes yet today",
+      done: "Today's ensō is done",
+    },
+    chip: {
+      /** "+35", followed by `today`. */
+      earned: (strokes: number) => `+${strokes}`,
+      today: "today",
+      /** Followed by `today`: "Done today". */
+      done: "Done",
+      /** Accessible name when the chip opens Goals. */
+      open: (summary: string) => `${summary}, open Goals`,
+    },
+    streak: {
+      current: (days: number) => `${days}-day streak`,
+      /** Never shaming: a missed day just starts a new one. */
+      none: "A streak starts with one stroke",
+      best: (days: number) => `best ${days}`,
+      /** Accessible name of the seven dots. */
+      summary: (met: number, total: number) => `Strokes on ${met} of the last ${total} days`,
+    },
+    level: {
+      /** Accessible name and the moment title: "Level 4, Flow". */
+      label: (number: number, name: string) => `Level ${number}, ${name}`,
+      toNext: (into: string, span: string, next: string) => `${into} of ${span} strokes to ${next}`,
+      top: (total: string) => `${total} strokes. The top of the path.`,
+    },
+    ledger: {
+      label: "How today's strokes were earned",
+      count: (count: number) => `×${count}`,
+      strokes: (strokes: number) => `+${strokes}`,
+      total: "Today",
+      done: "Done for today",
+      empty: "No strokes yet today",
+    },
+    seals: {
+      label: "Seals",
+      names: {
+        first_focus: "First focus",
+        seven_days: "Seven days",
+        ten_sessions: "Ten sessions",
+        took_the_break: "Took the break",
+        perfect_week: "Perfect week",
+        thirty_days: "Thirty days",
+      },
+      /** Locked hints, by what the seal counts. */
+      hint: {
+        days: (current: number, target: number) => `${current} of ${target} ${target === 1 ? "day" : "days"}`,
+        sessions: (current: number, target: number) =>
+          `${current} of ${target} ${target === 1 ? "session" : "sessions"}`,
+        breaks: (current: number, target: number) => `${current} of ${target} ${target === 1 ? "break" : "breaks"}`,
+      },
+      earned: (name: string) => `${name}, earned`,
+      new: (name: string) => `${name}, new`,
+      locked: (name: string) => `${name}, not earned yet`,
+    },
+    moment: {
+      dayDone: {
+        title: "Today's ensō is done",
+        body: "See you tomorrow.",
+        link: "How you earned them",
+      },
+      seal: {
+        title: (name: string) => `New seal: ${name}`,
+        bodies: {
+          first_focus: "Your first focus session is done.",
+          seven_days: "A full week without breaking the streak.",
+          ten_sessions: "Ten focus sessions finished.",
+          took_the_break: "You took the break instead of skipping it.",
+          perfect_week: "Seven days in a row with a full ensō.",
+          thirty_days: "Thirty days in a row with strokes.",
+        },
+        link: "See your seals",
+      },
+      level: {
+        title: (number: number, name: string) => `Level ${number} · ${name}`,
+        body: (next: string) => `A new stretch of the path. ${next} is next.`,
+        top: "The top of the path. Keep drawing.",
+        /** The small ensō on the level card. */
+        drawing: "A new level begins",
+        link: "See your path",
+      },
+      dismiss: (title: string) => `Dismiss: ${title}`,
+    },
+    /** Kai, the mascot: one label per pose. */
+    kai: {
+      hello: "Kai waving, holding the vermilion dot",
+      focus: "Kai focusing with a vermilion headband",
+      done: "Kai celebrating inside the open ensō",
+      rest: "Kai asleep, hugging the dot",
+    },
+  },
 } as const;
 
 /** Literal strings widened to `string`, so translations type-check against English. */

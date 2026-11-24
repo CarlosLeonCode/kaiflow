@@ -1,4 +1,7 @@
 @import "tailwindcss";
+/* Display face for progress headlines, numbers and labels (SIL OFL), bundled by Vite from the
+   npm package: never loaded from a CDN. */
+@import "@fontsource-variable/bricolage-grotesque/index.css";
 
 /* Dark mode is driven by a `dark` class on <html>, resolved from the theme setting and
    `prefers-color-scheme` (see shared/lib/theme.ts). */
@@ -7,6 +10,8 @@
 @theme {
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+  /* Progress headlines, numbers, chips and seal names (`font-display`). */
+  --font-display: "Bricolage Grotesque Variable", "Bricolage Grotesque", -apple-system, system-ui, sans-serif;
 
   /* Dense utility scale: 13px body, 4px grid spacing. */
   --text-2xs: 11px;
@@ -27,6 +32,8 @@
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 8px;
+  /* Moment cards, the Progress panel and Kai's stage (`rounded-card`). */
+  --radius-card: 22px;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -42,6 +49,51 @@
   --color-warning-foreground: var(--warning-foreground);
   --color-success: var(--success);
   --color-ring: var(--ring);
+
+  /* Progress (gamification). Pop fills always carry `on-pop` text, in both themes. */
+  --color-mark-stroke: var(--mark-stroke);
+  --color-on-ink: var(--on-ink);
+  --color-pop-sun: var(--pop-sun);
+  --color-pop-mint: var(--pop-mint);
+  --color-pop-sky: var(--pop-sky);
+  --color-pop-pink: var(--pop-pink);
+  --color-on-pop: var(--on-pop);
+  --color-on-pop-muted: var(--on-pop-muted);
+  --color-on-pop-track: var(--on-pop-track);
+  --color-now-dot: var(--now-dot);
+  --color-enso-stroke: var(--enso-stroke);
+  --color-enso-track: var(--enso-track);
+  --color-seal-locked: var(--seal-locked);
+  --color-paper-surface: var(--paper-surface);
+  --color-kai-body: var(--kai-body);
+  --color-kai-ink: var(--kai-ink);
+  --color-kai-cheek: var(--kai-cheek);
+
+  /* One-shot springs, used as `motion-safe:animate-kf-draw` / `motion-safe:animate-kf-pop`
+     (only under `prefers-reduced-motion: no-preference`). Never looped. */
+  --animate-kf-draw: kf-draw 500ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+  --animate-kf-pop: kf-pop 420ms cubic-bezier(0.2, 0.9, 0.3, 1.35) both;
+
+  @keyframes kf-draw {
+    from {
+      opacity: 0;
+      transform: scale(0.92) rotate(-8deg);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes kf-pop {
+    from {
+      opacity: 0;
+      transform: scale(0.8) rotate(-6deg);
+    }
+    to {
+      opacity: 1;
+    }
+  }
 }
 
 :root {
@@ -60,6 +112,29 @@
   --warning-foreground: #7a4b00;
   --success: #1f9d55;
   --ring: #0a64d8;
+
+  /* Progress tokens (design system tokens.json). Ink and paper carry the brand, the pops carry
+     the fun, vermilion marks "now". */
+  --mark-stroke: #17140f;
+  --on-ink: #f4efe6;
+  --pop-sun: #ffd23f;
+  --pop-mint: #3ddc97;
+  --pop-sky: #5ab8ff;
+  --pop-pink: #ff8fb1;
+  --on-pop: #17140f;
+  --on-pop-muted: #4a4234;
+  --on-pop-track: #17140f33;
+  --now-dot: #e0452b;
+  --enso-stroke: var(--mark-stroke);
+  --enso-track: var(--border);
+  --seal-locked: var(--muted-foreground);
+  --paper-surface: #f4efe6;
+  /* Kai keeps its colors in both themes: it always stands on a pop sticker. */
+  --kai-body: #fffaf0;
+  --kai-ink: #17140f;
+  --kai-cheek: var(--pop-pink);
+  --shadow-sticker: 0 3px 0 #17140f;
+  --shadow-press: 0 3px 0 #e0452b;
 }
 
 .dark {
@@ -78,6 +153,11 @@
   --warning-foreground: #f2c76b;
   --success: #3ccf82;
   --ring: #4c9aff;
+
+  --mark-stroke: #f4efe6;
+  --on-ink: #17140f;
+  --paper-surface: #2b2721;
+  --shadow-sticker: 0 3px 0 #000000;
 }
 
 @layer base {
