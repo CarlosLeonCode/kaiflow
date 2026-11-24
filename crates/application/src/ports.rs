@@ -8,7 +8,8 @@ use crossbeam_channel::Sender;
 use domain::{
     Activity, ActivityId, ActivityRule, AssignedSpan, EndReason, FocusAllowed, FocusEnd, FocusKind,
     FocusSnapshot, FocusSummary, GapId, GapStatus, Goal, GoalEventKind, HourSlot, IdleGap,
-    PermissionState, PrivacyPolicy, Productivity, SeenApp, Segment, SegmentId, UtcMs,
+    PermissionState, PrivacyPolicy, Productivity, Seal, SeenApp, Segment, SegmentId, StrokeAward,
+    StrokeSource, UtcMs,
 };
 
 /// Failure reported by an adapter (storage, OS call...). Carries a readable message only.
@@ -201,6 +202,8 @@ pub trait RetentionRepository: Send + Sync {
     /// Deletes closed segments (and resolved gaps) that ended before `cutoff`.
     fn purge_older_than(&self, cutoff: UtcMs) -> PortResult<usize>;
     /// Deletes every segment and gap, then compacts the store so nothing lingers on disk.
+    /// Range and age purges leave progress (strokes and seals) alone, since all-time levels
+    /// are built from it; deleting everything clears it too.
     fn delete_all(&self) -> PortResult<()>;
 }
 
@@ -353,6 +356,53 @@ pub trait FocusRepository: Send + Sync {
     /// The newest closed session whose summary the user has not acknowledged.
     fn unseen(&self) -> PortResult<Option<StoredFocus>>;
     fn mark_seen(&self, id: i64) -> PortResult<()>;
+}
+
+/// One row of the strokes ledger.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StrokeEntry {
+    /// [`StrokeAward::key`] of the award it records.
+    pub key: String,
+    /// Local day number the strokes count toward.
+    pub day: i64,
+    pub source: StrokeSource,
+    /// What was granted after the daily cap; 0 once the day was full.
+    pub strokes: u32,
+    pub earned_at: UtcMs,
+}
+
+/// A seal as stored.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EarnedSeal {
+    pub seal: Seal,
+    pub earned_at: UtcMs,
+    /// The user acknowledged it.
+    pub seen: bool,
+}
+
+/// The strokes ledger and the seals earned (migration 0007). Days are local day numbers.
+pub trait ProgressRepository: Send + Sync {
+    /// Records `award` toward `day`, once. In one transaction: `None` when its key is already
+    /// stored; otherwise stores what [`domain::progress::grant`] leaves under the daily cap
+    /// (0 when the day is full: the row still counts for seals) and returns it.
+    fn record(&self, award: StrokeAward, day: i64, at: UtcMs) -> PortResult<Option<u32>>;
+    /// Strokes granted on `day`.
+    fn day_total(&self, day: i64) -> PortResult<u32>;
+    /// Rows of `day`, oldest first.
+    fn day_entries(&self, day: i64) -> PortResult<Vec<StrokeEntry>>;
+    /// Strokes granted ever.
+    fn total(&self) -> PortResult<u64>;
+    /// Days with at least one stroke, ascending.
+    fn stroke_days(&self) -> PortResult<Vec<i64>>;
+    /// Days whose total reached the daily cap, ascending.
+    fn full_days(&self) -> PortResult<Vec<i64>>;
+    /// Rows of `source`, those granted 0 strokes included.
+    fn source_count(&self, source: StrokeSource) -> PortResult<u32>;
+    /// Every seal earned, in the order they were earned.
+    fn seals(&self) -> PortResult<Vec<EarnedSeal>>;
+    /// Stores the seal unless it was already earned; `true` when it is new.
+    fn add_seal(&self, seal: Seal, at: UtcMs) -> PortResult<bool>;
+    fn mark_seal_seen(&self, seal: Seal) -> PortResult<()>;
 }
 
 /// How an AI review answer was stored.

@@ -19,7 +19,10 @@ fn an_existing_v5_database_keeps_its_sessions_as_focus_blocks() {
 
     migrate(&mut conn, MIGRATIONS, Some(&path)).unwrap();
 
-    assert_eq!(current_version(&conn).unwrap(), 6);
+    assert_eq!(
+        current_version(&conn).unwrap(),
+        MIGRATIONS.last().unwrap().version
+    );
     assert!(backup_path(&path, 5).exists());
     let rows: Vec<(String, i64, Option<i64>, i64)> = conn
         .prepare("SELECT kind, untitled, paused_at, paused_ms FROM focus_sessions ORDER BY id")
