@@ -23,6 +23,7 @@ use super::dto::{
     UpdateInfoDto,
 };
 use super::events::{DataChanged, DataKindDto, FocusChanged};
+use super::progress_dto::{MomentDto, ProgressDto};
 use crate::composition::AppState;
 use crate::error::AppError;
 
@@ -744,6 +745,22 @@ pub async fn focus_summary_dismiss(
     let status = run(state, move |s| s.focus_summary_dismiss(id)).await?;
     announce_focus(&app, &status);
     Ok(status)
+}
+
+// ---- progress ----
+
+/// Today's strokes, the level, the streak, the seals and the moment to celebrate.
+#[tauri::command]
+#[specta::specta]
+pub async fn get_progress(state: Shared<'_>) -> Result<ProgressDto, AppError> {
+    run(state, AppState::get_progress).await
+}
+
+/// The user dismissed the moment `get_progress` reported; answers with the fresh progress.
+#[tauri::command]
+#[specta::specta]
+pub async fn dismiss_moment(state: Shared<'_>, moment: MomentDto) -> Result<ProgressDto, AppError> {
+    run(state, move |s| s.dismiss_moment(moment)).await
 }
 
 // ---- weekly review and the optional AI analysis ----

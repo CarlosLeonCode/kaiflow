@@ -260,6 +260,7 @@ pub fn compose(
             db_path,
         )?)),
         reports.clone(),
+        settings.clone(),
         Arc::new(ChronoLocalCalendar),
     ));
     let goals = Arc::new(

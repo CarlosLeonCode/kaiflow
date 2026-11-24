@@ -225,6 +225,8 @@ pub struct Settings {
     pub focus_timer: FocusTimerSettings,
     /// Interface state kept across restarts (`ui` blob).
     pub ui: UiSettings,
+    /// Show progress (strokes, levels, seals). Strokes keep counting while it is off.
+    pub progress_enabled: bool,
 }
 
 impl Default for Settings {
@@ -246,6 +248,7 @@ impl Default for Settings {
             focus_drift_after_secs: DEFAULT_FOCUS_DRIFT_AFTER_SECS,
             focus_timer: FocusTimerSettings::default(),
             ui: UiSettings::default(),
+            progress_enabled: true,
         }
     }
 }
@@ -271,6 +274,7 @@ pub struct SettingsPatch {
     pub focus_timer: Option<FocusTimerSettings>,
     /// Replaces the whole `ui` blob.
     pub ui: Option<UiSettings>,
+    pub progress_enabled: Option<bool>,
 }
 
 /// Tells how much of an active goal streak a purge would cut; implemented by `GoalService`.
@@ -406,6 +410,7 @@ impl Commands {
             focus_drift_after_secs: read_focus_drift_after_secs(self.settings.as_ref())?,
             focus_timer: read_blob(self.settings.as_ref(), KEY_FOCUS_TIMER)?,
             ui: read_blob(self.settings.as_ref(), KEY_UI)?,
+            progress_enabled: self.read(KEY_PROGRESS_ENABLED, parse_bool, d.progress_enabled)?,
         })
     }
 
@@ -460,6 +465,9 @@ impl Commands {
         }
         if let Some(v) = &patch.ui {
             write_blob(self.settings.as_ref(), KEY_UI, &v.clone().normalized())?;
+        }
+        if let Some(v) = patch.progress_enabled {
+            set(KEY_PROGRESS_ENABLED, v.to_string())?;
         }
         self.get_settings()
     }
@@ -661,6 +669,7 @@ const KEY_AUTOSTART: &str = "autostart";
 const KEY_SHORTCUT: &str = "shortcut";
 const KEY_ONBOARDING: &str = "onboarding_completed";
 const KEY_TRAY_DISPLAY: &str = "tray_display";
+const KEY_PROGRESS_ENABLED: &str = "progress_enabled";
 
 fn parse_bool(raw: &str) -> Option<bool> {
     match raw.trim() {
@@ -1316,6 +1325,24 @@ mod tests {
             Err(CommandError::Invalid(_))
         ));
         assert_eq!(f.cmd.get_settings().unwrap().week_start, 6);
+    }
+
+    #[test]
+    fn progress_is_shown_until_switched_off() {
+        let f = fixture();
+        assert!(f.cmd.get_settings().unwrap().progress_enabled);
+        let off = SettingsPatch {
+            progress_enabled: Some(false),
+            ..SettingsPatch::default()
+        };
+        assert!(!f.cmd.update_settings(&off).unwrap().progress_enabled);
+        assert!(!f.cmd.get_settings().unwrap().progress_enabled);
+        // Other patches leave it alone.
+        let theme = SettingsPatch {
+            theme: Some("dark".into()),
+            ..SettingsPatch::default()
+        };
+        assert!(!f.cmd.update_settings(&theme).unwrap().progress_enabled);
     }
 
     #[test]

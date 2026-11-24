@@ -1,11 +1,18 @@
 import type { OsDto, PlatformInfoDto } from "@/shared/ipc";
 
 import { installMockBackend, type DemoFocus } from "./mockBackend";
+import type { DemoProgress } from "./mockProgress";
 
 const DEMO_FOCUS: readonly DemoFocus[] = ["running", "drift", "break", "paused", "ended"];
 
 function demoFocus(value: string | null): DemoFocus | undefined {
   return DEMO_FOCUS.find((demo) => demo === value);
+}
+
+const DEMO_PROGRESS: readonly DemoProgress[] = ["done", "level"];
+
+function demoProgress(value: string | null): DemoProgress | undefined {
+  return DEMO_PROGRESS.find((demo) => demo === value);
 }
 
 const OSES: readonly OsDto[] = ["macos", "windows", "linux"];
@@ -34,6 +41,9 @@ function mockPlatform(params: URLSearchParams): PlatformInfoDto {
  *   `?focus=drift` has the drift alert already showing, `?focus=break` runs a short break,
  *   `?focus=paused` holds a paused timer and `?focus=ended` shows the end card.
  * - `?backup=failing`: the daily backup cannot write (Settings > Data error state).
+ * - `?progress=done`: today's ensō is full and waits to be celebrated; `?progress=level` has a
+ *   level-up (Flow) waiting instead. Without it, a newly earned seal waits.
+ * - `?progress=off`: the `progress_enabled` setting is off.
  * - `?ai=on`: the Ollama provider is already switched on (Insights can analyze a week right away);
  *   `?ai=offline` makes every analysis fail as if the network were down.
  * - `?keychain=missing`: the OS has no secure key store (keys are refused, like Linux without
@@ -51,6 +61,8 @@ export function installMockIpc(search: string = window.location.search): void {
     emptyHistory: params.get("data") === "empty",
     demoGoals: params.get("goals") === "demo",
     demoFocus: demoFocus(params.get("focus")),
+    demoProgress: demoProgress(params.get("progress")),
+    progressEnabled: params.get("progress") !== "off",
     backupFails: params.get("backup") === "failing",
     aiOn: params.get("ai") === "on" || params.get("ai") === "offline",
     aiOffline: params.get("ai") === "offline",

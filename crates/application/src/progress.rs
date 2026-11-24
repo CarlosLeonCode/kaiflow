@@ -10,20 +10,26 @@
 //! dropped there, the way the focus cycle blob is saved (best effort). A lost award is not
 //! retried for blocks and reached goals; limits are re-settled over a lookback window, so a
 //! failed settlement is caught up on the next run.
+//!
+//! The UI celebrates one [`Moment`] at a time: a new seal, a level-up or the full daily ensō.
+//! Seals keep their `seen` flag in the ledger; what was acknowledged of the other two lives in
+//! the [`ProgressMoments`] settings blob.
 
 use std::collections::HashSet;
 use std::sync::Arc;
 
 use domain::progress::{block_awards, day_done, day_streak, earned_seals, level_for, longest_run};
 use domain::{
-    DayStreak, FocusEnd, FocusKind, Goal, GoalKind, LevelProgress, Period, Seal, SealStats,
-    StrokeAward, StrokeSource, UtcMs,
+    DayStreak, FocusEnd, FocusKind, Goal, GoalKind, LevelName, LevelProgress, Period, Seal,
+    SealStats, StrokeAward, StrokeSource, UtcMs,
 };
 
 use crate::goals::{GoalService, WeekResult};
 use crate::ports::{
-    Calendar, PortError, PortResult, ProgressRepository, ReportRepository, StoredFocus, StrokeEntry,
+    Calendar, PortError, PortResult, ProgressRepository, ReportRepository, SettingsRepository,
+    StoredFocus, StrokeEntry,
 };
+use crate::settings_blobs::{KEY_PROGRESS_MOMENTS, ProgressMoments, read_blob, write_blob};
 
 /// Closed days `settle_limits` looks back over: yesterday back to this many days ago.
 pub const LIMIT_LOOKBACK_DAYS: i64 = 7;
@@ -85,13 +91,27 @@ pub struct ProgressSnapshot {
     pub entries: Vec<StrokeEntry>,
     pub level: LevelProgress,
     pub streak: DayStreak,
+    /// Whether each of the last seven local days holds strokes, oldest first, ending today.
+    pub last7: [bool; 7],
     /// Every seal, in [`Seal::ALL`] order.
     pub seals: Vec<SealView>,
+}
+
+/// Something worth celebrating, shown until the user dismisses it. At most one at a time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Moment {
+    /// A seal earned and not seen yet.
+    Seal(Seal),
+    /// A level reached and not acknowledged yet.
+    Level { number: u8, name: LevelName },
+    /// The daily ensō of local day `day` (today when reported) is full.
+    DayDone { day: i64 },
 }
 
 pub struct ProgressService {
     progress: Arc<dyn ProgressRepository>,
     reports: Arc<dyn ReportRepository>,
+    settings: Arc<dyn SettingsRepository>,
     calendar: Arc<dyn Calendar>,
 }
 
@@ -99,11 +119,13 @@ impl ProgressService {
     pub fn new(
         progress: Arc<dyn ProgressRepository>,
         reports: Arc<dyn ReportRepository>,
+        settings: Arc<dyn SettingsRepository>,
         calendar: Arc<dyn Calendar>,
     ) -> Self {
         Self {
             progress,
             reports,
+            settings,
             calendar,
         }
     }
@@ -200,6 +222,7 @@ impl ProgressService {
             entries: self.progress.day_entries(today)?,
             level: level_for(self.progress.total()?),
             streak,
+            last7: std::array::from_fn(|i| stroke_days.contains(&(today - 6 + i as i64))),
             seals,
         })
     }
@@ -207,6 +230,75 @@ impl ProgressService {
     /// The user acknowledged an earned seal.
     pub fn mark_seal_seen(&self, seal: Seal) -> PortResult<()> {
         self.progress.mark_seal_seen(seal)
+    }
+
+    /// The moment to celebrate as of `now`, if any.
+    pub fn moment(&self, now: UtcMs) -> PortResult<Option<Moment>> {
+        let snapshot = self.snapshot(now)?;
+        self.moment_for(&snapshot)
+    }
+
+    /// The moment to celebrate given a fresh `snapshot`, by priority: the oldest unseen seal,
+    /// then a level-up, then today's full ensō.
+    ///
+    /// The first look without any acknowledgement stored takes the current level as already
+    /// seen (and stores it), so nobody gets a level-up card for a level reached before moments
+    /// existed. A day not acknowledged yet is still celebrated.
+    pub fn moment_for(&self, snapshot: &ProgressSnapshot) -> PortResult<Option<Moment>> {
+        let mut acknowledged = self.acknowledged()?;
+        let level = snapshot.level.level;
+        let level_seen = match acknowledged.level_seen {
+            Some(seen) => seen,
+            None => {
+                acknowledged.level_seen = Some(level.number);
+                write_blob(self.settings.as_ref(), KEY_PROGRESS_MOMENTS, &acknowledged)?;
+                level.number
+            }
+        };
+        let unseen_seal = snapshot
+            .seals
+            .iter()
+            .filter(|view| view.earned && !view.seen)
+            .min_by_key(|view| view.earned_at)
+            .map(|view| view.seal);
+        if let Some(seal) = unseen_seal {
+            return Ok(Some(Moment::Seal(seal)));
+        }
+        if level.number > level_seen {
+            return Ok(Some(Moment::Level {
+                number: level.number,
+                name: level.name,
+            }));
+        }
+        let day_done = snapshot.day_done && acknowledged.day_done_seen != Some(snapshot.today);
+        Ok(day_done.then_some(Moment::DayDone {
+            day: snapshot.today,
+        }))
+    }
+
+    /// The user dismissed `moment`; it does not come back. A day-done moment is acknowledged
+    /// for the day it was about, not the day of the dismissal: dismissing yesterday's card after
+    /// midnight must leave today's own full ensō to celebrate.
+    pub fn dismiss(&self, moment: Moment) -> PortResult<()> {
+        match moment {
+            Moment::Seal(seal) => self.mark_seal_seen(seal),
+            Moment::Level { number, .. } => {
+                let mut acknowledged = self.acknowledged()?;
+                acknowledged.level_seen = Some(acknowledged.level_seen.unwrap_or(0).max(number));
+                write_blob(self.settings.as_ref(), KEY_PROGRESS_MOMENTS, &acknowledged)
+            }
+            Moment::DayDone { day } => {
+                let mut acknowledged = self.acknowledged()?;
+                // Never back: a stale card dismissed late cannot revive a later day's.
+                acknowledged.day_done_seen =
+                    Some(acknowledged.day_done_seen.unwrap_or(day).max(day));
+                write_blob(self.settings.as_ref(), KEY_PROGRESS_MOMENTS, &acknowledged)
+            }
+        }
+    }
+
+    fn acknowledged(&self) -> PortResult<ProgressMoments> {
+        read_blob(self.settings.as_ref(), KEY_PROGRESS_MOMENTS)
     }
 
     /// Stores every seal the ledger now qualifies for; returns the new ones.
@@ -288,20 +380,24 @@ mod tests {
         service: Arc<ProgressService>,
         progress: FakeProgress,
         store: FakeStore,
+        settings: FakeSettings,
     }
 
     fn rig() -> Rig {
         let progress = FakeProgress::default();
         let store = FakeStore::default();
+        let settings = FakeSettings::default();
         let service = Arc::new(ProgressService::new(
             Arc::new(progress.clone()),
             Arc::new(store.clone()),
+            Arc::new(settings.clone()),
             Arc::new(FixedCalendar::fixed(0)),
         ));
         Rig {
             service,
             progress,
             store,
+            settings,
         }
     }
 
@@ -595,6 +691,7 @@ mod tests {
         assert_eq!(s.level.level.name, LevelName::Start);
         assert_eq!(s.level.next.map(|l| l.name), Some(LevelName::Steady));
         assert_eq!((s.streak.current, s.streak.best), (3, 3));
+        assert_eq!(s.last7, [false, false, false, false, true, true, true]);
 
         let view = |seal: Seal| *s.seals.iter().find(|v| v.seal == seal).unwrap();
         assert_eq!(s.seals.len(), Seal::ALL.len());
@@ -623,6 +720,145 @@ mod tests {
         // Tomorrow, before any stroke, the streak still stands.
         let s = r.service.snapshot(at(101, HOUR)).unwrap();
         assert_eq!((s.today_total, s.streak.current), (0, 3));
+        assert_eq!(s.last7, [false, false, false, true, true, true, false]);
+    }
+
+    // ---- moments ----
+
+    /// Fills local day `day` to the cap (seven daily goals of 15, the last one capped).
+    fn fill_day(r: &Rig, day: i64) {
+        for goal in 1..=7 {
+            r.progress
+                .record(StrokeAward::GoalMet { goal, day }, day, at(day, HOUR))
+                .unwrap();
+        }
+    }
+
+    fn acknowledged(r: &Rig) -> ProgressMoments {
+        read_blob(&r.settings, KEY_PROGRESS_MOMENTS).unwrap()
+    }
+
+    #[test]
+    fn a_fresh_ledger_has_no_moment_and_the_first_look_stores_the_level_baseline() {
+        let r = rig();
+        assert_eq!(acknowledged(&r), ProgressMoments::default());
+        assert_eq!(r.service.moment(at(100, HOUR)), Ok(None));
+        assert_eq!(acknowledged(&r).level_seen, Some(1));
+        assert_eq!(acknowledged(&r).day_done_seen, None);
+    }
+
+    #[test]
+    fn a_level_reached_before_the_first_look_is_not_celebrated() {
+        let r = rig();
+        for day in 97..=99 {
+            fill_day(&r, day);
+        }
+        // 300 strokes: level 2, reached before moments were ever looked at.
+        assert_eq!(r.service.moment(at(100, HOUR)), Ok(None));
+        assert_eq!(acknowledged(&r).level_seen, Some(2));
+        assert_eq!(r.service.moment(at(100, 2 * HOUR)), Ok(None));
+    }
+
+    #[test]
+    fn without_acknowledgements_a_full_day_is_still_celebrated_but_only_on_that_day() {
+        let r = rig();
+        fill_day(&r, 100);
+        assert_eq!(
+            r.service.moment(at(100, 2 * HOUR)),
+            Ok(Some(Moment::DayDone { day: 100 }))
+        );
+        // Never dismissed: the next day does not bring it back.
+        assert_eq!(r.service.moment(at(101, HOUR)), Ok(None));
+    }
+
+    #[test]
+    fn moments_come_one_at_a_time_seals_oldest_first_then_level_then_the_day() {
+        let r = rig();
+        assert_eq!(r.service.moment(at(97, 0)), Ok(None));
+        let brk = block(
+            FocusKind::Break,
+            FocusEnd::Completed,
+            at(97, 9 * HOUR),
+            at(97, 9 * HOUR + 5 * MIN),
+        );
+        r.service.on_block_closed(&brk, at(97, 10 * HOUR)).unwrap();
+        r.service
+            .on_block_closed(&focus_on(98), at(98, 11 * HOUR))
+            .unwrap();
+        for day in 97..=99 {
+            fill_day(&r, day);
+        }
+        let now = at(99, 20 * HOUR);
+        let expected = [
+            // Earned on day 97, before First focus although it comes later in `Seal::ALL`.
+            Moment::Seal(Seal::TookTheBreak),
+            Moment::Seal(Seal::FirstFocus),
+            Moment::Level {
+                number: 2,
+                name: LevelName::Steady,
+            },
+            Moment::DayDone { day: 99 },
+        ];
+        for moment in expected {
+            assert_eq!(r.service.moment(now), Ok(Some(moment)));
+            r.service.dismiss(moment).unwrap();
+        }
+        assert_eq!(r.service.moment(now), Ok(None));
+
+        let s = r.service.snapshot(now).unwrap();
+        assert!(s.seals.iter().filter(|v| v.earned).all(|v| v.seen));
+        assert_eq!(
+            acknowledged(&r),
+            ProgressMoments {
+                level_seen: Some(2),
+                day_done_seen: Some(99),
+            }
+        );
+        // A new full day is celebrated again.
+        fill_day(&r, 100);
+        assert_eq!(
+            r.service.moment(at(100, 20 * HOUR)),
+            Ok(Some(Moment::DayDone { day: 100 }))
+        );
+    }
+
+    #[test]
+    fn a_full_day_dismissed_after_midnight_leaves_the_new_day_to_celebrate() {
+        let r = rig();
+        fill_day(&r, 100);
+        let card = r.service.moment(at(100, 23 * HOUR)).unwrap().unwrap();
+        assert_eq!(card, Moment::DayDone { day: 100 });
+        // The card stayed up past midnight and is dismissed on day 101.
+        r.service.dismiss(card).unwrap();
+        assert_eq!(acknowledged(&r).day_done_seen, Some(100));
+        fill_day(&r, 101);
+        assert_eq!(
+            r.service.moment(at(101, 20 * HOUR)),
+            Ok(Some(Moment::DayDone { day: 101 }))
+        );
+        // A stale card for day 100 dismissed after day 101's never lowers it.
+        r.service.dismiss(Moment::DayDone { day: 101 }).unwrap();
+        r.service.dismiss(card).unwrap();
+        assert_eq!(acknowledged(&r).day_done_seen, Some(101));
+        assert_eq!(r.service.moment(at(101, 21 * HOUR)), Ok(None));
+    }
+
+    #[test]
+    fn dismissing_a_level_never_lowers_the_one_acknowledged() {
+        let r = rig();
+        r.service
+            .dismiss(Moment::Level {
+                number: 3,
+                name: LevelName::Rhythm,
+            })
+            .unwrap();
+        r.service
+            .dismiss(Moment::Level {
+                number: 2,
+                name: LevelName::Steady,
+            })
+            .unwrap();
+        assert_eq!(acknowledged(&r).level_seen, Some(3));
     }
 
     // ---- hooks in the focus service ----
@@ -756,6 +992,7 @@ mod tests {
         let sink = Arc::new(ProgressService::new(
             Arc::new(BrokenProgress),
             Arc::new(store.clone()),
+            Arc::new(FakeSettings::default()),
             Arc::new(FixedCalendar::fixed(0)),
         ));
         let focus = FakeFocus::default();

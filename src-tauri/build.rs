@@ -70,6 +70,8 @@ const COMMANDS: &[&str] = &[
     "focus_allow_app",
     "focus_history",
     "focus_summary_dismiss",
+    "get_progress",
+    "dismiss_moment",
     "ai_settings_get",
     "ai_settings_update",
     "ai_set_key",

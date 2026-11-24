@@ -72,13 +72,26 @@ export function useBackendEventSync(): void {
     invalidate(queryKeys.timelines);
     invalidate(queryKeys.idleGaps);
     invalidate(queryKeys.goals);
+    // Goals were edited or data was deleted or restored: strokes and seals may differ.
+    invalidate(queryKeys.progress);
   });
-  // A threshold was crossed: the badge shows even when system notifications are denied.
-  useTauriEvent(events.goalCrossed, () => invalidate(queryKeys.goals));
-  // A session started, ended or changed, or a drift alert was raised or cleared.
-  useTauriEvent(events.focusChanged, () => invalidate(queryKeys.focus));
-  // A block ran its course: the end card (or the next block) is waiting.
-  useTauriEvent(events.focusEnded, () => invalidate(queryKeys.focus));
+  // A threshold was crossed: the badge shows even when system notifications are denied. A
+  // daily goal reached also earns strokes.
+  useTauriEvent(events.goalCrossed, () => {
+    invalidate(queryKeys.goals);
+    invalidate(queryKeys.progress);
+  });
+  // A session started, ended or changed, or a drift alert was raised or cleared. Closing a
+  // block (a recovered break, say) can earn strokes.
+  useTauriEvent(events.focusChanged, () => {
+    invalidate(queryKeys.focus);
+    invalidate(queryKeys.progress);
+  });
+  // A block ran its course: the end card (or the next block) is waiting, and strokes were earned.
+  useTauriEvent(events.focusEnded, () => {
+    invalidate(queryKeys.focus);
+    invalidate(queryKeys.progress);
+  });
   useTauriEvent(events.idleGapPending, () => invalidate(queryKeys.idleGaps));
   useTauriEvent(events.idleGapResolved, () => {
     invalidate(queryKeys.idleGaps);

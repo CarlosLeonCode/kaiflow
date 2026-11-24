@@ -5,6 +5,7 @@ pub mod ai_dto;
 pub mod commands;
 pub mod dto;
 pub mod events;
+pub mod progress_dto;
 
 use tauri::Wry;
 use tauri_specta::{Builder, collect_commands, collect_events};
@@ -87,6 +88,8 @@ pub fn builder() -> Builder<Wry> {
             commands::focus_allow_app,
             commands::focus_history,
             commands::focus_summary_dismiss,
+            commands::get_progress,
+            commands::dismiss_moment,
             commands::ai_settings_get,
             commands::ai_settings_update,
             commands::ai_set_key,

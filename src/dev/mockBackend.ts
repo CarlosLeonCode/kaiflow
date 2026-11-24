@@ -68,6 +68,7 @@ import {
   type MockStep,
 } from "./mockFocus";
 import { matchPreset, mockPresets } from "./mockPresets";
+import { createMockProgress, type DemoProgress } from "./mockProgress";
 import { createMockReview } from "./mockReview";
 import { buildSeed, type MockData, type MockSegment } from "./seed";
 
@@ -110,6 +111,13 @@ export interface MockOptions {
   backupFails?: boolean;
   /** The stored `language` setting (`system` by default), for windows opened in another language. */
   language?: string;
+  /**
+   * Progress scenario: by default a new seal waits to be celebrated; `done` has today's ensō
+   * full and `level` a level-up not acknowledged yet.
+   */
+  demoProgress?: DemoProgress;
+  /** The stored `progress_enabled` setting (on by default). */
+  progressEnabled?: boolean;
   now?: () => number;
 }
 
@@ -194,6 +202,7 @@ export function installMockBackend(options: MockOptions = {}): void {
       heads_up: false,
     },
     ui: { dismissed_intros: [] },
+    progress_enabled: options.progressEnabled ?? true,
   };
   const goals: MockGoal[] = [];
   const goalEvents: MockGoalEvent[] = [];
@@ -619,8 +628,11 @@ export function installMockBackend(options: MockOptions = {}): void {
   // E2E tests read how many calls could have reached an AI provider.
   (globalThis as { __mockAiTraffic?: () => number }).__mockAiTraffic = review.trafficCount;
 
+  const progress = createMockProgress({ clock, enabled: () => settings.progress_enabled }, options.demoProgress);
+
   const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
     ...review.handlers,
+    ...progress.handlers,
     get_status: () => status(),
     start: () => {
       const focus = lastFocus();

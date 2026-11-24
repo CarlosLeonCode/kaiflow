@@ -129,6 +129,7 @@ export function settings(overrides: Partial<SettingsDto> = {}): SettingsDto {
       heads_up: false,
     },
     ui: { dismissed_intros: [] },
+    progress_enabled: true,
     ...overrides,
   };
 }

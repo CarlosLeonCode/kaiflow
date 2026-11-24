@@ -343,6 +343,7 @@ mod tests {
         let progress = ProgressService::new(
             Arc::new(ledger.clone()),
             Arc::new(r.store.clone()),
+            Arc::new(application::fakes::FakeSettings::default()),
             Arc::new(calendar.clone()),
         );
         let mut settled = None;

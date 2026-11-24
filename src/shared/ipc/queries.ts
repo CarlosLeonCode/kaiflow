@@ -12,6 +12,7 @@ import type {
   FocusStatusDto,
   GoalDto,
   IdleResolutionDto,
+  MomentDto,
   ProductivityDto,
   RangeDto,
   RuleInputDto,
@@ -193,6 +194,7 @@ export function settingsPatch(changes: Partial<SettingsPatchDto>): SettingsPatch
     focus_drift_after_secs: null,
     focus_timer: null,
     ui: null,
+    progress_enabled: null,
     ...changes,
   };
 }
@@ -214,6 +216,8 @@ export function useUpdateSettingsMutation() {
       void client.invalidateQueries({ queryKey: queryKeys.privacy });
       // The first day of the week moves weekly goals and the Insights periods.
       void client.invalidateQueries({ queryKey: queryKeys.goals });
+      // Progress reports `progress_enabled`, and the local day moves with the settings.
+      void client.invalidateQueries({ queryKey: queryKeys.progress });
     },
     onError: () => {
       void client.invalidateQueries({ queryKey: queryKeys.settings });
@@ -558,6 +562,26 @@ export function useFocusStatusQuery() {
   return useQuery({
     queryKey: queryKeys.focusStatus,
     queryFn: () => unwrap(commands.focusStatus()),
+  });
+}
+
+/**
+ * Today's strokes, the level, the streak, the seals and the one moment to celebrate. Refreshed
+ * when a block ends, a goal is crossed, data changes or the settings change.
+ */
+export function useProgressQuery() {
+  return useQuery({
+    queryKey: queryKeys.progress,
+    queryFn: () => unwrap(commands.getProgress()),
+  });
+}
+
+/** The user dismissed the moment: the answer is the fresh progress (maybe with the next moment). */
+export function useDismissMomentMutation() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (moment: MomentDto) => unwrap(commands.dismissMoment(moment)),
+    onSuccess: (progress) => client.setQueryData(queryKeys.progress, progress),
   });
 }
 

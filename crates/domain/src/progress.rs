@@ -317,6 +317,17 @@ pub enum SealFamily {
     Goals,
 }
 
+impl SealFamily {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Focus => "focus",
+            Self::Streaks => "streaks",
+            Self::Breaks => "breaks",
+            Self::Goals => "goals",
+        }
+    }
+}
+
 /// One-time achievements. Stored by name once earned.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Seal {
@@ -577,6 +588,7 @@ mod tests {
         }
         assert_eq!(Seal::PerfectWeek.family(), SealFamily::Goals);
         assert_eq!(Seal::TookTheBreak.family(), SealFamily::Breaks);
+        assert_eq!(Seal::SevenDays.family().as_str(), "streaks");
     }
 
     proptest! {

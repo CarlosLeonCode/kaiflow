@@ -24,6 +24,8 @@ export const queryKeys = {
   focus: ["focus"] as const,
   focusStatus: ["focus", "status"] as const,
   focusHistory: ["focus", "history"] as const,
+  /** Strokes, level, streak, seals and the moment to celebrate (one query). */
+  progress: ["progress"] as const,
   /** AI settings and the key store state. */
   aiSettings: ["ai", "settings"] as const,
   /** Every stored AI review (the history). */

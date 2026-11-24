@@ -142,6 +142,10 @@ export const commands = {
 	focusHistory: () => typedError<FocusSessionDto[], AppError>(__TAURI_INVOKE("focus_history")),
 	/**  The user closed the end summary of a finished session. */
 	focusSummaryDismiss: (id: number) => typedError<FocusStatusDto, AppError>(__TAURI_INVOKE("focus_summary_dismiss", { id })),
+	/**  Today's strokes, the level, the streak, the seals and the moment to celebrate. */
+	getProgress: () => typedError<ProgressDto, AppError>(__TAURI_INVOKE("get_progress")),
+	/**  The user dismissed the moment `get_progress` reported; answers with the fresh progress. */
+	dismissMoment: (moment: MomentDto) => typedError<ProgressDto, AppError>(__TAURI_INVOKE("dismiss_moment", { moment })),
 	/**  AI settings and the state of the key store. Never returns a key. */
 	aiSettingsGet: () => typedError<AiSettingsDto, AppError>(__TAURI_INVOKE("ai_settings_get")),
 	aiSettingsUpdate: (patch: AiSettingsPatchDto) => typedError<AiSettingsDto, AppError>(__TAURI_INVOKE("ai_settings_update", { patch })),
@@ -715,6 +719,20 @@ export type IdleGapResolved = {
 /**  Same enum as the domain and the database (design section 3). */
 export type IdleResolutionDto = { kind: "discard" } | { kind: "assign_previous" } | { kind: "assign_activity"; activity_id: number };
 
+export type LevelNameDto = "start" | "steady" | "rhythm" | "flow" | "craft" | "mastery" | "kaizen";
+
+/**  The one thing to celebrate, shown until dismissed with `dismiss_moment`. */
+export type MomentDto = 
+/**  A seal earned and not seen yet. */
+{ kind: "seal"; seal: SealDto } | 
+/**  A level reached and not acknowledged yet. */
+{ kind: "level"; number: number; name: LevelNameDto } | 
+/**
+ *  The ensō of local day `day` (days since 1970-01-01; today when reported) is full.
+ *  Dismissing it acknowledges that day, whenever the dismissal happens.
+ */
+{ kind: "day_done"; day: number };
+
 /**  Desktop OS the app was built for; the UI words its permission and privacy copy by it. */
 export type OsDto = "macos" | "windows" | "linux";
 
@@ -773,6 +791,52 @@ export type ProductivityTotalsDto = {
 	productive_ms: number,
 	neutral_ms: number,
 	distracting_ms: number,
+};
+
+/**  Everything the progress views show, in one call. */
+export type ProgressDto = {
+	/**
+	 *  The `progress_enabled` setting. Strokes keep counting while it is off; only the UI
+	 *  hides them.
+	 */
+	enabled: boolean,
+	today: ProgressTodayDto,
+	level: ProgressLevelDto,
+	streak: ProgressStreakDto,
+	/**  Every seal, earned or locked, in a fixed order. */
+	seals: SealViewDto[],
+	moment: MomentDto | null,
+};
+
+export type ProgressLevelDto = {
+	/**  1-based. */
+	number: number,
+	name: LevelNameDto,
+	/**  All-time strokes. */
+	total: number,
+	/**  Strokes earned since reaching this level. */
+	into_level: number,
+	/**  Strokes between this level and the next; `null` at the last level. */
+	span: number | null,
+	/**  `null` at the last level. */
+	next_name: LevelNameDto | null,
+};
+
+export type ProgressStreakDto = {
+	current: number,
+	best: number,
+	/**  Whether each of the last seven days holds strokes, oldest first, ending today. */
+	last7: boolean[],
+};
+
+/**  Today's ensō. */
+export type ProgressTodayDto = {
+	strokes: number,
+	/**  Strokes a day can hold. */
+	cap: number,
+	done: boolean,
+	/**  Oldest first. */
+	entries: StrokeEntryDto[],
 };
 
 /**  Half-open UTC range `[from, to)` computed by the frontend (local day bounds, DST included). */
@@ -877,6 +941,24 @@ export type RulePreviewDto = {
 /**  What a rule matches; used both to read and to write rules. */
 export type RuleSpecDto = { kind: "app"; app_id: string } | { kind: "title_pattern"; pattern: string; app_id: string | null };
 
+export type SealDto = "first_focus" | "ten_sessions" | "took_the_break" | "seven_days" | "thirty_days" | "perfect_week";
+
+/**  The color family a seal is drawn in. */
+export type SealFamilyDto = "focus" | "streaks" | "breaks" | "goals";
+
+/**  A seal, earned or locked. */
+export type SealViewDto = {
+	id: SealDto,
+	family: SealFamilyDto,
+	earned: boolean,
+	earned_at: number | null,
+	/**  The user acknowledged it; always `false` while locked. */
+	seen: boolean,
+	/**  Progress toward `target`, capped at it. */
+	current: number,
+	target: number,
+};
+
 export type SecretStoreDto = {
 	available: boolean,
 	/**  Why keys cannot be kept, when `available` is false. */
@@ -905,6 +987,8 @@ export type SettingsDto = {
 	focus_drift_after_secs: number,
 	focus_timer: FocusTimerSettingsDto,
 	ui: UiSettingsDto,
+	/**  Show progress (strokes, levels, seals). Strokes keep counting while it is off. */
+	progress_enabled: boolean,
 };
 
 /**  Partial update: absent fields stay untouched. */
@@ -924,6 +1008,7 @@ export type SettingsPatchDto = {
 	focus_drift_after_secs: number | null,
 	focus_timer: FocusTimerSettingsDto | null,
 	ui: UiSettingsDto | null,
+	progress_enabled: boolean | null,
 };
 
 export type ShortcutStatusChanged = ShortcutStatusDto;
@@ -949,6 +1034,17 @@ export type StreakDto = {
 	/**  The open period is not met (yet) and would end the streak if it closed as it is. */
 	at_risk: boolean,
 };
+
+/**  One row of today's ledger. */
+export type StrokeEntryDto = {
+	source: StrokeSourceDto,
+	/**  Granted after the daily cap; 0 once the day was full. */
+	strokes: number,
+	at: number,
+};
+
+/**  Why strokes were earned. */
+export type StrokeSourceDto = "focus_completed" | "focus_on_target" | "break_taken" | "goal_met" | "limit_respected";
 
 export type SuggestionAiDto = {
 	action: string,

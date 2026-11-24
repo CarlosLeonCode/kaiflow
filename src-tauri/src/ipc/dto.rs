@@ -1138,6 +1138,8 @@ pub struct SettingsDto {
     pub focus_drift_after_secs: u32,
     pub focus_timer: FocusTimerSettingsDto,
     pub ui: UiSettingsDto,
+    /// Show progress (strokes, levels, seals). Strokes keep counting while it is off.
+    pub progress_enabled: bool,
 }
 
 /// Pomodoro cycle, sound and heads-up of focus blocks; patches replace the whole blob.
@@ -1226,6 +1228,7 @@ impl From<Settings> for SettingsDto {
             focus_drift_after_secs: s.focus_drift_after_secs,
             focus_timer: s.focus_timer.into(),
             ui: s.ui.into(),
+            progress_enabled: s.progress_enabled,
         }
     }
 }
@@ -1256,6 +1259,7 @@ pub struct SettingsPatchDto {
     pub focus_drift_after_secs: Option<u32>,
     pub focus_timer: Option<FocusTimerSettingsDto>,
     pub ui: Option<UiSettingsDto>,
+    pub progress_enabled: Option<bool>,
 }
 
 impl From<SettingsPatchDto> for SettingsPatch {
@@ -1279,6 +1283,7 @@ impl From<SettingsPatchDto> for SettingsPatch {
             focus_drift_after_secs: p.focus_drift_after_secs,
             focus_timer: p.focus_timer.map(Into::into),
             ui: p.ui.map(Into::into),
+            progress_enabled: p.progress_enabled,
         }
     }
 }

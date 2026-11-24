@@ -73,6 +73,8 @@
     "allow-focus-allow-app",
     "allow-focus-history",
     "allow-focus-summary-dismiss",
+    "allow-get-progress",
+    "allow-dismiss-moment",
     "allow-ai-settings-get",
     "allow-ai-settings-update",
     "allow-ai-set-key",
