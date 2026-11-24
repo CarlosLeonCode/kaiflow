@@ -1082,6 +1082,19 @@ impl From<PrivacyPolicy> for PrivacyRulesDto {
     }
 }
 
+/// A dashboard section the main window can be opened on: the sidebar's section ids.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum MainSectionDto {
+    Today,
+    Focus,
+    Goals,
+    Insights,
+    Activities,
+    Privacy,
+    Settings,
+}
+
 /// What the menu-bar / tray text next to the icon shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]

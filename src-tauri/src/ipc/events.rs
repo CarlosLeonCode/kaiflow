@@ -12,7 +12,7 @@ use tauri_specta::Event;
 
 use super::dto::{
     DegradedReasonDto, FocusDto, FocusKindDto, GoalEventKindDto, IdleGapDto, IdleResolutionDto,
-    PermissionStateDto, ShortcutStatusDto, TrackingStatusDto, UpdateInfoDto,
+    MainSectionDto, PermissionStateDto, ShortcutStatusDto, TrackingStatusDto, UpdateInfoDto,
 };
 
 /// Shortcut state shared between the commands, the shortcut registrar and this sink.
@@ -98,6 +98,14 @@ pub struct DataChanged {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type, Event)]
 pub struct StorageFailed {
     pub message: String,
+}
+
+/// Another window asked the main window to show a section (the popover's strokes chip, for
+/// one). Sent to the main window only; it then calls `take_main_section`, which also covers a
+/// webview that was still loading and missed this event.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type, Event)]
+pub struct MainSectionRequested {
+    pub section: MainSectionDto,
 }
 
 /// The updater found a newer signed release; the UI offers to install it.

@@ -173,6 +173,9 @@ const POSES: Record<KaiPose, () => ReactNode> = { hello: Hello, focus: Focus, do
 
 const STICKER = "border-2 border-mark-stroke shadow-(--shadow-sticker)";
 
+/** Hello raises the dot to the right: in the round badge, shift it so the dot stays in view. */
+const BADGE_SHIFT: Partial<Record<KaiPose, string>> = { hello: "-translate-x-[3px]" };
+
 /** Kai, the mochi mascot, in one of four poses. Always on a pop sticker; one per screen. */
 export function Kai({ pose, size = 96, label, frame = "stage", tone, animate = false, className }: Props) {
   const t = useT();
@@ -188,7 +191,7 @@ export function Kai({ pose, size = 96, label, frame = "stage", tone, animate = f
       data-pose={pose}
       className={cn(
         "block overflow-visible",
-        frame === "badge" && "-mb-1",
+        frame === "badge" && ["-mb-1", BADGE_SHIFT[pose]],
         animate && "motion-safe:animate-kf-pop",
         frame === "none" && className,
       )}

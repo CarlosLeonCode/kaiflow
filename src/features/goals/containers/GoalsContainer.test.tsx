@@ -2,9 +2,9 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
-import type { ActivityDto, GoalDto, GoalStatusDto } from "@/shared/ipc";
+import { queryKeys, type ActivityDto, type GoalDto, type GoalStatusDto } from "@/shared/ipc";
 import { HOUR, MINUTE } from "@/shared/lib/time";
-import { goal, goalStatus, mockBackend, renderWithProviders, report } from "@/test/ipc";
+import { goal, goalStatus, mockBackend, progress, renderWithProviders, report } from "@/test/ipc";
 
 import { GoalsContainer } from "./GoalsContainer";
 
@@ -222,5 +222,53 @@ describe("GoalsContainer", () => {
     expect(screen.getByText("1h over")).toBeInTheDocument();
     await user.click(badge);
     await waitFor(() => expect(calls.filter((c) => c.cmd === "goal_events_mark_seen")[0]?.args).toEqual({ goalId: 7 }));
+  });
+
+  describe("progress panel", () => {
+    it("shows today's ensō, the level, the streak, the ledger and the seals on top", async () => {
+      const user = userEvent.setup();
+      let moment: ReturnType<typeof progress>["moment"] = { kind: "level", number: 4, name: "flow" };
+      const { calls } = mockBackend({
+        activities_list: () => [SYSTEM, WORK],
+        get_report: () => report(),
+        get_progress: () => progress({ moment }),
+        dismiss_moment: () => {
+          moment = null;
+          return progress({ moment });
+        },
+      });
+      renderWithProviders(<GoalsContainer />);
+
+      const panel = await screen.findByRole("region", { name: "Progress" });
+      expect(within(panel).getByRole("img", { name: "35 of 100 strokes today" })).toBeInTheDocument();
+      expect(within(panel).getByRole("img", { name: "Level 4, Flow: 410 of 2,000 strokes to Craft" })).toBeInTheDocument();
+      expect(within(panel).getByText("5-day streak")).toBeInTheDocument();
+      expect(within(panel).getByRole("img", { name: "Strokes on 6 of the last 7 days" })).toBeInTheDocument();
+      const ledger = within(panel).getByRole("list", { name: "How today's strokes were earned" });
+      expect(within(ledger).getByText("Focus sessions")).toBeInTheDocument();
+      expect(within(ledger).getByText("Goals met")).toBeInTheDocument();
+      const seals = within(panel).getByRole("list", { name: "Seals" });
+      expect(within(seals).getByRole("img", { name: "Seven days, earned" })).toBeInTheDocument();
+      expect(within(seals).getByRole("img", { name: "Ten sessions, not earned yet" })).toBeInTheDocument();
+
+      const card = within(panel).getByRole("region", { name: "Level 4 · Flow" });
+      await user.click(within(card).getByRole("button", { name: "Dismiss: Level 4 · Flow" }));
+      await waitFor(() => expect(within(panel).queryByRole("region", { name: "Level 4 · Flow" })).toBeNull());
+      expect(calls.find((c) => c.cmd === "dismiss_moment")?.args).toEqual({ moment: { kind: "level", number: 4, name: "flow" } });
+    });
+
+    it("is not rendered while progress is off", async () => {
+      mockBackend({
+        activities_list: () => [SYSTEM, WORK],
+        get_report: () => report(),
+        get_progress: () => progress({ enabled: false, moment: { kind: "day_done", day: 1 } }),
+      });
+      const { client } = renderWithProviders(<GoalsContainer />);
+
+      await screen.findByRole("heading", { name: "No goals yet" });
+      await waitFor(() => expect(client.getQueryData(queryKeys.progress)).toBeDefined());
+      expect(screen.queryByRole("region", { name: "Progress" })).toBeNull();
+      expect(screen.queryByRole("region", { name: "Today's ensō is done" })).toBeNull();
+    });
   });
 });

@@ -10,7 +10,7 @@ describe("StrokesChip", () => {
   it("shows today's strokes on yellow", () => {
     const { container } = render(<StrokesChip strokes={35} cap={100} done={false} />);
     const chip = container.firstElementChild!;
-    expect(chip).toHaveTextContent("+35today");
+    expect(chip).toHaveTextContent("+35 today");
     expect(chip).toHaveClass("bg-pop-sun");
     expect(chip).toHaveAttribute("data-state", "earning");
   });
@@ -18,7 +18,7 @@ describe("StrokesChip", () => {
   it("turns mint and reads Done today once the ensō is full", () => {
     const { container } = render(<StrokesChip strokes={100} cap={100} done />);
     const chip = container.firstElementChild!;
-    expect(chip).toHaveTextContent("Donetoday");
+    expect(chip).toHaveTextContent("Done today");
     expect(chip).toHaveClass("bg-pop-mint");
     expect(chip).toHaveAttribute("data-state", "done");
   });
@@ -26,7 +26,9 @@ describe("StrokesChip", () => {
   it("opens Goals as a named button", async () => {
     const onClick = vi.fn();
     render(<StrokesChip strokes={35} cap={100} done={false} onClick={onClick} />);
-    await userEvent.click(screen.getByRole("button", { name: "35 of 100 strokes today, open Goals" }));
+    const chip = screen.getByRole("button", { name: "+35 today, open Goals" });
+    expect(chip).toHaveAccessibleDescription("35 of 100 strokes today");
+    await userEvent.click(chip);
     expect(onClick).toHaveBeenCalledOnce();
   });
 
@@ -36,8 +38,8 @@ describe("StrokesChip", () => {
         <StrokesChip strokes={100} cap={100} done onClick={() => {}} />
       </LanguageContext.Provider>,
     );
-    expect(screen.getByRole("button", { name: "El ensō de hoy está listo, abrir Objetivos" })).toHaveTextContent(
-      "Listohoy",
-    );
+    const chip = screen.getByRole("button", { name: "Listo hoy, abrir Objetivos" });
+    expect(chip).toHaveTextContent("Listo hoy");
+    expect(chip).toHaveAccessibleDescription("El ensō de hoy está listo");
   });
 });

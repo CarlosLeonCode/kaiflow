@@ -2,6 +2,7 @@
 //! start, hide on blur, hide instead of close) lives next to the specs. Webview pages are
 //! the Vite multi-page entries `popover.html`, `main.html` and `onboarding.html`.
 
+use std::sync::{Mutex, PoisonError};
 use std::time::Duration;
 
 use tauri::{
@@ -10,6 +11,7 @@ use tauri::{
 };
 
 use crate::i18n::Messages;
+use crate::ipc::dto::MainSectionDto;
 
 pub const POPOVER: &str = "popover";
 pub const MAIN: &str = "main";
@@ -269,6 +271,21 @@ pub fn apply_language(app: &AppHandle<Wry>, m: &'static Messages) {
     });
 }
 
+/// The section the main window was last asked to open on, until the main window takes it.
+/// A request without a section clears it, so "Open dashboard" never replays an older one.
+#[derive(Debug, Default)]
+pub struct PendingSection(Mutex<Option<MainSectionDto>>);
+
+impl PendingSection {
+    pub fn set(&self, section: Option<MainSectionDto>) {
+        *self.0.lock().unwrap_or_else(PoisonError::into_inner) = section;
+    }
+
+    pub fn take(&self) -> Option<MainSectionDto> {
+        self.0.lock().unwrap_or_else(PoisonError::into_inner).take()
+    }
+}
+
 /// Opens (and focuses) the main window, e.g. from the popover or the tray menu.
 pub fn show_main(app: &AppHandle<Wry>) {
     if let Some(window) = app.get_webview_window(MAIN) {
@@ -280,6 +297,18 @@ pub fn show_main(app: &AppHandle<Wry>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_pending_section_is_taken_once_and_cleared_by_a_plain_open() {
+        let pending = PendingSection::default();
+        assert_eq!(pending.take(), None);
+        pending.set(Some(MainSectionDto::Goals));
+        assert_eq!(pending.take(), Some(MainSectionDto::Goals));
+        assert_eq!(pending.take(), None);
+        pending.set(Some(MainSectionDto::Settings));
+        pending.set(None);
+        assert_eq!(pending.take(), None);
+    }
 
     #[test]
     fn sizes_follow_the_design() {

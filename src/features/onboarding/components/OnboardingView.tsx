@@ -1,6 +1,7 @@
 import { AppWindow, CheckCircle2, CircleAlert, Clock, Info, Keyboard, Lock, Power, RotateCw } from "lucide-react";
 import { useEffect, useRef } from "react";
 
+import { Kai } from "@/features/progress/components/Kai";
 import { useT } from "@/shared/i18n";
 import type { PermissionStateDto, PlatformInfoDto } from "@/shared/ipc";
 import { isWayland, platformWords } from "@/shared/lib/platform";
@@ -83,14 +84,20 @@ export function OnboardingView(props: Props) {
       </nav>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-8 py-6">
-        {step === "welcome" && <KaiflowMark variant="detailed" className="mb-3 size-12" />}
-        <h1
-          ref={heading}
-          tabIndex={-1}
-          className="text-xl font-semibold outline-none"
-        >
-          {m.headings[step]}
-        </h1>
+        <div className="flex items-end justify-between gap-6">
+          <div className="min-w-0">
+            {step === "welcome" && <KaiflowMark variant="detailed" className="mb-3 size-12" />}
+            <h1
+              ref={heading}
+              tabIndex={-1}
+              className="text-xl font-semibold outline-none"
+            >
+              {m.headings[step]}
+            </h1>
+          </div>
+          {/* Kai greets on the first step even while progress is off; it never replaces the mark. */}
+          {step === "welcome" && <Kai pose="hello" size={120} animate className="shrink-0" />}
+        </div>
         <div className="mt-4">
           {step === "welcome" && <WelcomeStep platform={platform} />}
           {step === "access" && <AccessStep {...props} />}

@@ -16,13 +16,13 @@ use super::ai_dto::{
 use super::dto::{
     ActivityDto, ApplyPresetResultDto, BackupReportDto, BackupStatusDto, DashboardDto, DeleteOpDto,
     DiagnosticsDto, FocusCardActionDto, FocusSessionDto, FocusStartDto, FocusStatusDto, GoalDto,
-    GoalStatusDto, IdleGapDto, IdleResolutionDto, PermissionStateDto, PlatformInfoDto, PresetDto,
-    PrivacyModeDto, PrivacyRulesDto, ProductivityDto, RangeDto, ReportDto, RestorePreviewDto,
-    RestoreResultDto, RetentionImpactDto, RuleDto, RuleInputDto, RulePreviewDto, RuleSpecDto,
-    SettingsDto, SettingsPatchDto, SuggestionDto, TimelineItemDto, TrackingStatusDto,
-    UpdateInfoDto,
+    GoalStatusDto, IdleGapDto, IdleResolutionDto, MainSectionDto, PermissionStateDto,
+    PlatformInfoDto, PresetDto, PrivacyModeDto, PrivacyRulesDto, ProductivityDto, RangeDto,
+    ReportDto, RestorePreviewDto, RestoreResultDto, RetentionImpactDto, RuleDto, RuleInputDto,
+    RulePreviewDto, RuleSpecDto, SettingsDto, SettingsPatchDto, SuggestionDto, TimelineItemDto,
+    TrackingStatusDto, UpdateInfoDto,
 };
-use super::events::{DataChanged, DataKindDto, FocusChanged};
+use super::events::{DataChanged, DataKindDto, FocusChanged, MainSectionRequested};
 use super::progress_dto::{MomentDto, ProgressDto};
 use crate::composition::AppState;
 use crate::error::AppError;
@@ -345,16 +345,38 @@ pub async fn app_restart(app: AppHandle, state: Shared<'_>) -> Result<(), AppErr
     app.restart()
 }
 
-/// Opens and focuses the main window (the popover's "Open dashboard" action). The window
-/// work is queued for the main thread and never waited for.
+/// Opens and focuses the main window: on `section` when given (the popover's strokes chip
+/// opens Goals), where it was left otherwise ("Open dashboard"). The section waits until the
+/// main window takes it with `take_main_section`; `MainSectionRequested` tells a loaded window
+/// to do so now. The window work is queued for the main thread and never waited for.
 #[tauri::command]
 #[specta::specta]
-pub async fn open_main_window(app: AppHandle) -> Result<(), AppError> {
+pub async fn open_main_window(
+    app: AppHandle,
+    pending: State<'_, crate::windows::PendingSection>,
+    section: Option<MainSectionDto>,
+) -> Result<(), AppError> {
+    pending.set(section);
     let target = app.clone();
-    app.run_on_main_thread(move || crate::windows::show_main(&target))
-        .map_err(|e| AppError::Internal {
-            message: e.to_string(),
-        })
+    app.run_on_main_thread(move || {
+        crate::windows::show_main(&target);
+        if let Some(section) = section {
+            let _ = MainSectionRequested { section }.emit_to(&target, crate::windows::MAIN);
+        }
+    })
+    .map_err(|e| AppError::Internal {
+        message: e.to_string(),
+    })
+}
+
+/// The section another window asked the main window to show, once: the main window calls it
+/// when it loads and on `MainSectionRequested`.
+#[tauri::command]
+#[specta::specta]
+pub async fn take_main_section(
+    pending: State<'_, crate::windows::PendingSection>,
+) -> Result<Option<MainSectionDto>, AppError> {
+    Ok(pending.take())
 }
 
 /// Hides the popover (Escape key). Same reason as `close_onboarding`: the popover window gets

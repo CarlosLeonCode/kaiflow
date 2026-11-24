@@ -345,4 +345,28 @@ describe("SettingsContainer", () => {
     expect(await screen.findByRole("region", { name: "Diagnóstico" })).toHaveTextContent("Accesibilidad concedida");
     expect(screen.queryByText(/Changes apply|Week starts|Idle after|Daily backup/)).toBeNull();
   });
+
+  it("turns progress off and on from its own panel", async () => {
+    const user = userEvent.setup();
+    let stored = settings();
+    const { calls } = mockBackend({
+      get_status: () => status(),
+      settings_get: () => stored,
+      settings_update: (args) => {
+        stored = mergePatch(args.patch, stored);
+        return stored;
+      },
+    });
+    renderWithProviders(<SettingsContainer />);
+
+    const panel = await screen.findByRole("region", { name: "Progress" });
+    const toggle = within(panel).getByRole("switch", { name: "Strokes, levels and seals" });
+    expect(toggle).toBeChecked();
+    expect(toggle).toHaveAccessibleDescription(/keeps counting quietly in the background. Nothing leaves your device/);
+    await user.click(toggle);
+    await waitFor(() => expect(lastUpdate(calls)).toMatchObject({ progress_enabled: false }));
+    await waitFor(() => expect(toggle).not.toBeChecked());
+    await user.click(toggle);
+    await waitFor(() => expect(lastUpdate(calls)).toMatchObject({ progress_enabled: true }));
+  });
 });

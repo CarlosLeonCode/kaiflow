@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 
 import { toSubmitResult, type SubmitResult } from "@/features/activities/lib/submit";
+import { ProgressPanelContainer } from "@/features/progress/containers/ProgressPanelContainer";
 import { useSectionIntro } from "@/features/shell/hooks/useSectionIntro";
 import { useNow } from "@/features/tracking/hooks/useNow";
 import {
@@ -30,8 +31,11 @@ async function attempt(action: () => Promise<unknown>, t: Messages): Promise<Sub
   }
 }
 
-/** Wires Goals to the backend: the goals, their progress, the activities and the recent apps. */
-export function GoalsContainer() {
+/**
+ * Wires Goals to the backend: the goals, their progress, the activities and the recent apps.
+ * A positive `revealProgress` that changes scrolls the Progress panel into view.
+ */
+export function GoalsContainer({ revealProgress = 0 }: { revealProgress?: number } = {}) {
   const intro = useSectionIntro("goals");
   const t = useT();
   const now = useNow(60_000);
@@ -74,6 +78,7 @@ export function GoalsContainer() {
       onSave={(goal) => attempt(() => save.mutateAsync(goal), t)}
       onDelete={(id) => attempt(() => remove.mutateAsync(id), t)}
       onMarkSeen={(goalId) => markSeen.mutate(goalId)}
+      progress={<ProgressPanelContainer reveal={revealProgress} />}
     />
   );
 }

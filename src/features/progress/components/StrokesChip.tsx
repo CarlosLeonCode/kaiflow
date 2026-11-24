@@ -22,10 +22,11 @@ const CHIP =
 /** A yellow sticker pill beside the day's total: a tiny ensō and today's strokes. */
 export function StrokesChip({ strokes, cap, done, onClick, className }: Props) {
   const t = useT();
+  const lead = done ? t.progress.chip.done : t.progress.chip.earned(strokes);
   const content = (
     <>
       <DailyEnso progress={done ? 1 : fraction(strokes, cap)} label="" size={18} weight={16} onPop />
-      {done ? t.progress.chip.done : t.progress.chip.earned(strokes)}
+      {lead}{" "}
       <span className="font-semibold text-on-pop-muted">{t.progress.chip.today}</span>
     </>
   );
@@ -37,12 +38,14 @@ export function StrokesChip({ strokes, cap, done, onClick, className }: Props) {
       </span>
     );
   }
+  // The name starts with the visible words (WCAG 2.5.3); the count over the cap is the description.
   const summary = done ? t.progress.enso.done : t.progress.enso.label(strokes, cap);
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-label={t.progress.chip.open(summary)}
+      aria-label={t.progress.chip.open(`${lead} ${t.progress.chip.today}`)}
+      title={summary}
       data-state={done ? "done" : "earning"}
       className={cn(classes, "focus-visible:outline-offset-3")}
     >

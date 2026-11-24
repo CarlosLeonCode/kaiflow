@@ -39,6 +39,7 @@ const COMMANDS: &[&str] = &[
     "permission_open_settings",
     "app_restart",
     "open_main_window",
+    "take_main_section",
     "close_onboarding",
     "hide_popover",
     "prepare_delete",

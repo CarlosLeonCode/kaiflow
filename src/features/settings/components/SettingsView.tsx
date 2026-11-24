@@ -356,6 +356,17 @@ export function SettingsView({
             </Row>
           </Panel>
 
+          <Panel title={s.progress.title}>
+            <Row label={s.progress.enabled} description={s.progress.enabledHint} controlId="setting-progress">
+              <Switch
+                id="setting-progress"
+                aria-describedby="setting-progress-hint"
+                checked={settings.progress_enabled}
+                onCheckedChange={(progress_enabled) => onChange({ progress_enabled })}
+              />
+            </Row>
+          </Panel>
+
           <Panel title={s.tracking.title}>
             <Row
               label={s.tracking.openAtLogin}

@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { emit } from "@tauri-apps/api/event";
 import { describe, expect, it } from "vitest";
 
-import { mergePatch, mockBackend, platform, renderWithProviders, status } from "@/test/ipc";
+import { mergePatch, mockBackend, platform, renderWithProviders, settings, status } from "@/test/ipc";
 
 import { OnboardingContainer } from "./OnboardingContainer";
 
@@ -269,5 +269,18 @@ describe("OnboardingContainer", () => {
       });
       expect(screen.queryByText("Restart to apply")).toBeNull();
     });
+  });
+
+  it("greets with Kai on the welcome step, even while progress is off, next to the mark", async () => {
+    const user = userEvent.setup();
+    mockBackend({ permission_status: () => "denied", settings_get: () => settings({ progress_enabled: false }) });
+    renderWithProviders(<OnboardingContainer />);
+
+    const kai = await screen.findByRole("img", { name: "Kai waving, holding the vermilion dot" });
+    expect(kai).toHaveAttribute("data-pose", "hello");
+    expect(kai).toHaveAttribute("width", "120");
+    expect(kai.parentElement).toHaveClass("rounded-card", "bg-pop-sun");
+    await toAccessStep(user);
+    expect(screen.queryByRole("img", { name: /^Kai/ })).toBeNull();
   });
 });

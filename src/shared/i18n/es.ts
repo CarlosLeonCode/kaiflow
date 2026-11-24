@@ -1159,6 +1159,11 @@ export const es: Messages = {
       driftHint:
         "Bloques de enfoque con apps permitidas: tiempo seguido fuera de ellas antes de un aviso suave. Nunca más de un aviso cada 5 minutos.",
     },
+    progress: {
+      title: "Progreso",
+      enabled: "Trazos, niveles y sellos",
+      enabledHint: "Desactivado: el progreso sigue contando en segundo plano. Nada sale de tu dispositivo.",
+    },
     tracking: {
       title: "Registro",
       openAtLogin: "Abrir al iniciar sesión",
@@ -1277,7 +1282,7 @@ export const es: Messages = {
       earned: (strokes) => `+${strokes}`,
       today: "hoy",
       done: "Listo",
-      open: (summary) => `${summary}, abrir Objetivos`,
+      open: (visible) => `${visible}, abrir Objetivos`,
     },
     streak: {
       current: (days) => (days === 1 ? `Racha de ${days} día` : `Racha de ${days} días`),
@@ -1349,6 +1354,12 @@ export const es: Messages = {
       focus: "Kai concentrado, con una cinta bermellón",
       done: "Kai celebrando dentro del ensō abierto",
       rest: "Kai dormido, abrazando el punto",
+    },
+    panel: {
+      title: "Progreso",
+      today: "Trazos de hoy",
+      streak: "Racha",
+      seals: "Sellos",
     },
   },
 };

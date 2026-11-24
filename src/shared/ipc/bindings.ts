@@ -58,10 +58,17 @@ export const commands = {
 	 */
 	appRestart: () => typedError<null, AppError>(__TAURI_INVOKE("app_restart")),
 	/**
-	 *  Opens and focuses the main window (the popover's "Open dashboard" action). The window
-	 *  work is queued for the main thread and never waited for.
+	 *  Opens and focuses the main window: on `section` when given (the popover's strokes chip
+	 *  opens Goals), where it was left otherwise ("Open dashboard"). The section waits until the
+	 *  main window takes it with `take_main_section`; `MainSectionRequested` tells a loaded window
+	 *  to do so now. The window work is queued for the main thread and never waited for.
 	 */
-	openMainWindow: () => typedError<null, AppError>(__TAURI_INVOKE("open_main_window")),
+	openMainWindow: (section: "today" | "focus" | "goals" | "insights" | "activities" | "privacy" | "settings" | null) => typedError<null, AppError>(__TAURI_INVOKE("open_main_window", { section })),
+	/**
+	 *  The section another window asked the main window to show, once: the main window calls it
+	 *  when it loads and on `MainSectionRequested`.
+	 */
+	takeMainSection: () => typedError<"today" | "focus" | "goals" | "insights" | "activities" | "privacy" | "settings" | null, AppError>(__TAURI_INVOKE("take_main_section")),
 	/**
 	 *  Closes the onboarding window once the user finished (or dismissed) the guided steps. The
 	 *  window never gets `core:window` permissions (R6.5), so the backend does it.
@@ -210,6 +217,7 @@ export const events = {
 	goalCrossed: makeEvent<GoalCrossed>("goal-crossed"),
 	idleGapPending: makeEvent<IdleGapPending>("idle-gap-pending"),
 	idleGapResolved: makeEvent<IdleGapResolved>("idle-gap-resolved"),
+	mainSectionRequested: makeEvent<MainSectionRequested>("main-section-requested"),
 	permissionChanged: makeEvent<PermissionChanged>("permission-changed"),
 	shortcutStatusChanged: makeEvent<ShortcutStatusChanged>("shortcut-status-changed"),
 	storageFailed: makeEvent<StorageFailed>("storage-failed"),
@@ -720,6 +728,18 @@ export type IdleGapResolved = {
 export type IdleResolutionDto = { kind: "discard" } | { kind: "assign_previous" } | { kind: "assign_activity"; activity_id: number };
 
 export type LevelNameDto = "start" | "steady" | "rhythm" | "flow" | "craft" | "mastery" | "kaizen";
+
+/**  A dashboard section the main window can be opened on: the sidebar's section ids. */
+export type MainSectionDto = "today" | "focus" | "goals" | "insights" | "activities" | "privacy" | "settings";
+
+/**
+ *  Another window asked the main window to show a section (the popover's strokes chip, for
+ *  one). Sent to the main window only; it then calls `take_main_section`, which also covers a
+ *  webview that was still loading and missed this event.
+ */
+export type MainSectionRequested = {
+	section: MainSectionDto,
+};
 
 /**  The one thing to celebrate, shown until dismissed with `dismiss_moment`. */
 export type MomentDto = 

@@ -1,12 +1,23 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { emit } from "@tauri-apps/api/event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { aiSettings, dashboard, mockBackend, renderWithProviders, report, review, settings, status } from "@/test/ipc";
+import {
+  aiSettings,
+  dashboard,
+  mockBackend,
+  renderWithProviders,
+  report,
+  review,
+  settings,
+  status,
+  type Handlers,
+} from "@/test/ipc";
 
 import { MainApp } from "./MainApp";
 
-function backend() {
+function backend(extra: Handlers = {}) {
   return mockBackend({
     get_status: () => status(),
     get_report: () => report(),
@@ -21,6 +32,7 @@ function backend() {
     ai_settings_get: () => aiSettings(),
     ai_reviews_list: () => [],
     privacy_list: () => ({ store_titles: true, excluded_apps: [], redacted_apps: [] }),
+    ...extra,
   });
 }
 
@@ -173,5 +185,51 @@ describe("MainApp shell", () => {
     renderWithProviders(<MainApp />);
 
     await waitFor(() => expect(screen.getByText("Tracking")).toBeInTheDocument());
+  });
+
+  describe("opened on a section by another window", () => {
+    const scrolled = vi.fn();
+    beforeEach(() => {
+      scrolled.mockClear();
+      Element.prototype.scrollIntoView = scrolled;
+    });
+
+    it("lands on Goals with the progress panel in view, then follows later requests once", async () => {
+      const user = userEvent.setup();
+      let pending: string | null = "goals";
+      const { calls } = backend({
+        take_main_section: () => {
+          const section = pending;
+          pending = null;
+          return section;
+        },
+      });
+      renderWithProviders(<MainApp />);
+
+      expect(await screen.findByRole("heading", { level: 1, name: "Goals" })).toBeInTheDocument();
+      await screen.findByRole("region", { name: "Progress" });
+      await waitFor(() => expect(scrolled).toHaveBeenCalled());
+
+      pending = "settings";
+      await act(async () => {
+        await emit("main-section-requested", { section: "settings" });
+      });
+      expect(await screen.findByRole("heading", { level: 1, name: "Settings" })).toBeInTheDocument();
+      expect(calls.filter((c) => c.cmd === "take_main_section").length).toBeGreaterThanOrEqual(2);
+
+      // The sidebar still rules afterwards, and Goals opened by hand does not scroll.
+      scrolled.mockClear();
+      await user.click(within(screen.getByRole("navigation")).getByRole("button", { name: /^Goals/ }));
+      await screen.findByRole("region", { name: "Progress" });
+      expect(scrolled).not.toHaveBeenCalled();
+    });
+
+    it("stays on Today when nothing was requested", async () => {
+      backend();
+      renderWithProviders(<MainApp />);
+
+      expect(await screen.findByRole("heading", { level: 1, name: "Today" })).toBeInTheDocument();
+      await waitFor(() => expect(scrolled).not.toHaveBeenCalled());
+    });
   });
 });

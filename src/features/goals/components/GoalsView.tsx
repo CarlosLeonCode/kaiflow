@@ -1,5 +1,5 @@
 import { Archive, ArchiveRestore, CircleAlert, Pencil, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import { useT } from "@/shared/i18n";
 import type { ActivityDto, GoalDto, GoalStatusDto } from "@/shared/ipc";
@@ -33,6 +33,8 @@ interface Props {
   onSave: Submit<GoalDto>;
   onDelete: Submit<number>;
   onMarkSeen: (goalId: number) => void;
+  /** The Progress panel, on top of the goals; absent while progress is off. */
+  progress?: ReactNode;
 }
 
 type Mode = { kind: "idle" } | { kind: "create" } | { kind: "edit"; goal: GoalDto };
@@ -50,6 +52,7 @@ export function GoalsView({
   onSave,
   onDelete,
   onMarkSeen,
+  progress,
 }: Props) {
   const t = useT();
   const m = t.goals;
@@ -91,6 +94,7 @@ export function GoalsView({
       }
     >
       <div className="max-w-2xl space-y-6">
+        {progress}
         {error && (
           <Alert variant="warning" role="alert">
             <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />

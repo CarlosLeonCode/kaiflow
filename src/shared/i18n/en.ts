@@ -1180,6 +1180,11 @@ export const en = {
       driftHint:
         "Focus blocks with allowed apps: time away from them, in a row, before a gentle alert. Never more than one alert every 5 minutes.",
     },
+    progress: {
+      title: "Progress",
+      enabled: "Strokes, levels and seals",
+      enabledHint: "Off: progress keeps counting quietly in the background. Nothing leaves your device.",
+    },
     tracking: {
       title: "Tracking",
       openAtLogin: "Open at login",
@@ -1308,8 +1313,8 @@ export const en = {
       today: "today",
       /** Followed by `today`: "Done today". */
       done: "Done",
-      /** Accessible name when the chip opens Goals. */
-      open: (summary: string) => `${summary}, open Goals`,
+      /** Accessible name when the chip opens Goals: its visible words ("+35 today"), then the action. */
+      open: (visible: string) => `${visible}, open Goals`,
     },
     streak: {
       current: (days: number) => `${days}-day streak`,
@@ -1388,6 +1393,13 @@ export const en = {
       focus: "Kai focusing with a vermilion headband",
       done: "Kai celebrating inside the open ensō",
       rest: "Kai asleep, hugging the dot",
+    },
+    /** The Progress panel on Goals. */
+    panel: {
+      title: "Progress",
+      today: "Today's strokes",
+      streak: "Streak",
+      seals: "Seals",
     },
   },
 } as const;

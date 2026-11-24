@@ -12,6 +12,7 @@ import type {
   FocusStatusDto,
   GoalDto,
   IdleResolutionDto,
+  MainSectionDto,
   MomentDto,
   ProductivityDto,
   RangeDto,
@@ -168,8 +169,9 @@ export function useTrackingCommandMutation() {
   });
 }
 
+/** Opens the main window on `section`, or where it was left with `null`. */
 export function useOpenMainWindowMutation() {
-  return useMutation({ mutationFn: () => unwrap(commands.openMainWindow()) });
+  return useMutation({ mutationFn: (section: MainSectionDto | null) => unwrap(commands.openMainWindow(section)) });
 }
 
 export function useOpenAccessibilitySettingsMutation() {

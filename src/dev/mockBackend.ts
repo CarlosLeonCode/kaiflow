@@ -21,6 +21,7 @@ import type {
   FocusStatusDto,
   GoalDto,
   IdleResolutionDto,
+  MainSectionDto,
   PermissionStateDto,
   PlatformInfoDto,
   ProductivityDto,
@@ -118,6 +119,11 @@ export interface MockOptions {
   demoProgress?: DemoProgress;
   /** The stored `progress_enabled` setting (on by default). */
   progressEnabled?: boolean;
+  /**
+   * A section another window asked the main window to show (`take_main_section` answers it
+   * once). Each mocked window has its own backend, so the popover's request is seeded here.
+   */
+  mainSection?: MainSectionDto;
   now?: () => number;
 }
 
@@ -169,6 +175,7 @@ export function installMockBackend(options: MockOptions = {}): void {
   const dismissedSuggestions = new Set<string>();
   const platform = options.platform ?? DEFAULT_PLATFORM;
   const wayland = isWayland(platform);
+  let pendingSection: MainSectionDto | null = options.mainSection ?? null;
   // Only macOS has a permission to revoke; Wayland reports it missing like the Linux adapter.
   let permission: PermissionStateDto = wayland
     ? "denied"
@@ -843,7 +850,16 @@ export function installMockBackend(options: MockOptions = {}): void {
       return null;
     },
     app_restart: () => null,
-    open_main_window: () => null,
+    open_main_window: (args) => {
+      // Only this window's backend: a real main window would take it on the event.
+      pendingSection = (args.section as MainSectionDto | null) ?? null;
+      return null;
+    },
+    take_main_section: () => {
+      const section = pendingSection;
+      pendingSection = null;
+      return section;
+    },
     close_onboarding: () => null,
     hide_popover: () => null,
     prepare_delete: () => issueToken(),

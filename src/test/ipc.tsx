@@ -16,6 +16,7 @@ import type {
   GoalStatusDto,
   OsDto,
   PlatformInfoDto,
+  ProgressDto,
   ReportDto,
   WeeklyReviewDto,
   SettingsDto,
@@ -134,6 +135,39 @@ export function settings(overrides: Partial<SettingsDto> = {}): SettingsDto {
   };
 }
 
+/**
+ * Progress on, 35 of 100 strokes today (two focus blocks, one on target), level 4 (Flow), a
+ * five-day streak, two seals earned and nothing to celebrate; override what the test needs.
+ */
+export function progress(overrides: Partial<ProgressDto> = {}): ProgressDto {
+  return {
+    enabled: true,
+    today: {
+      strokes: 35,
+      cap: 100,
+      done: false,
+      entries: [
+        { source: "focus_completed", strokes: 10, at: FIXED_NOW - 3 * 3_600_000 },
+        { source: "focus_on_target", strokes: 5, at: FIXED_NOW - 3 * 3_600_000 },
+        { source: "focus_completed", strokes: 10, at: FIXED_NOW - 3_600_000 },
+        { source: "goal_met", strokes: 10, at: FIXED_NOW - 30 * 60_000 },
+      ],
+    },
+    level: { number: 4, name: "flow", total: 2_410, into_level: 410, span: 2_000, next_name: "craft" },
+    streak: { current: 5, best: 12, last7: [true, false, true, true, true, true, true] },
+    seals: [
+      { id: "first_focus", family: "focus", earned: true, earned_at: FIXED_NOW - 30 * 86_400_000, seen: true, current: 1, target: 1 },
+      { id: "seven_days", family: "streaks", earned: true, earned_at: FIXED_NOW - 86_400_000, seen: true, current: 7, target: 7 },
+      { id: "ten_sessions", family: "focus", earned: false, earned_at: null, seen: false, current: 6, target: 10 },
+      { id: "took_the_break", family: "breaks", earned: false, earned_at: null, seen: false, current: 0, target: 1 },
+      { id: "perfect_week", family: "goals", earned: false, earned_at: null, seen: false, current: 2, target: 7 },
+      { id: "thirty_days", family: "streaks", earned: false, earned_at: null, seen: false, current: 12, target: 30 },
+    ],
+    moment: null,
+    ...overrides,
+  };
+}
+
 /** No session running and nothing waiting; override what the test needs. */
 export function idleFocus(overrides: Partial<FocusStatusDto> = {}): FocusStatusDto {
   return {
@@ -196,6 +230,10 @@ export function mockBackend(handlers: Handlers): { calls: Call[] } {
               ? () => []
               : cmd === "focus_status"
                 ? () => idleFocus()
+                : cmd === "get_progress"
+                  ? () => progress()
+                  : cmd === "take_main_section"
+                    ? () => null
                 : cmd === "rules_preview"
                   ? () => ({ total_ms: 0, windows: 0, unassigned_ms: 0 })
                   : undefined);

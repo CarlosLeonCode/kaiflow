@@ -109,6 +109,7 @@ pub fn run() {
             let settings = state.commands.get_settings()?;
             app.manage(state.clone());
             app.manage(updater::UpdaterState::default());
+            app.manage(windows::PendingSection::default());
 
             windows::create_all(
                 &handle,
