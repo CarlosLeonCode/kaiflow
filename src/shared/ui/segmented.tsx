@@ -17,7 +17,10 @@ interface Props<T extends string> {
   disabled?: boolean;
 }
 
-/** Single-choice control (radio group semantics, arrow-key navigation). */
+/**
+ * Single-choice control (radio group semantics, arrow-key navigation): a muted pill track
+ * whose selected segment is a small sticker (ink edge, hard shadow).
+ */
 export function Segmented<T extends string>({
   value,
   options,
@@ -32,15 +35,15 @@ export function Segmented<T extends string>({
       aria-label={label}
       disabled={disabled}
       orientation="horizontal"
-      className="inline-flex gap-0.5 rounded-md border border-border bg-muted p-0.5"
+      className="inline-flex gap-0.5 rounded-full bg-muted p-0.5"
     >
       {options.map((option) => (
         <RadioGroup.Item
           key={option.value}
           value={option.value}
           className={cn(
-            "inline-flex h-6 items-center gap-1.5 rounded-sm px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50",
-            "data-[state=checked]:bg-background data-[state=checked]:text-foreground data-[state=checked]:shadow-[0_0_0_1px_var(--border)]",
+            "inline-flex h-6 items-center gap-1.5 rounded-full border-[1.5px] border-transparent px-2.5 font-display text-xs font-bold text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50 [&_svg]:size-3.5",
+            "data-[state=checked]:border-mark-stroke data-[state=checked]:bg-background data-[state=checked]:text-foreground data-[state=checked]:shadow-(--shadow-sticker-sm)",
           )}
         >
           {option.icon}

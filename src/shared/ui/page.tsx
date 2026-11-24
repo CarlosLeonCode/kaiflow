@@ -35,7 +35,7 @@ export function Page({
         className="flex h-14 shrink-0 items-end justify-between gap-4 border-b border-border px-6 pb-2.5"
       >
         <div className="min-w-0" data-tauri-drag-region>
-          <h1 className="truncate text-lg font-semibold leading-6" data-tauri-drag-region>
+          <h1 className="truncate font-display text-xl leading-6 font-extrabold tracking-[-0.025em]" data-tauri-drag-region>
             {title}
           </h1>
           {subtitle && (

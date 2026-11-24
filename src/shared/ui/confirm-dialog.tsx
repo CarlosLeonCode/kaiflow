@@ -42,8 +42,8 @@ export function ConfirmDialog({
     <AlertDialog.Root open={open} onOpenChange={onOpenChange}>
       <AlertDialog.Portal>
         <AlertDialog.Overlay className="fixed inset-0 z-40 bg-black/40" />
-        <AlertDialog.Content className="fixed left-1/2 top-1/2 z-50 w-[min(420px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-border bg-background p-4 shadow-xl">
-          <AlertDialog.Title className="text-lg font-semibold">{title}</AlertDialog.Title>
+        <AlertDialog.Content className="fixed left-1/2 top-1/2 z-50 w-[min(420px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 rounded-card border-2 border-mark-stroke bg-background p-5 shadow-(--shadow-sticker)">
+          <AlertDialog.Title className="font-display text-[18px] leading-[1.2] font-bold tracking-[-0.01em]">{title}</AlertDialog.Title>
           <AlertDialog.Description asChild>
             <div className="mt-1.5 space-y-2 text-muted-foreground">{description}</div>
           </AlertDialog.Description>
@@ -52,16 +52,11 @@ export function ConfirmDialog({
               {error}
             </p>
           )}
-          <div className="mt-4 flex justify-end gap-2">
+          <div className="mt-5 flex justify-end gap-2">
             <AlertDialog.Cancel asChild>
               <Button disabled={busy}>{t.common.cancel}</Button>
             </AlertDialog.Cancel>
-            <Button
-              variant="primary"
-              disabled={busy}
-              onClick={onConfirm}
-              className={destructive ? "bg-destructive text-background hover:bg-destructive/90" : undefined}
-            >
+            <Button variant={destructive ? "destructive" : "primary"} disabled={busy} onClick={onConfirm}>
               {confirmLabel}
             </Button>
           </div>

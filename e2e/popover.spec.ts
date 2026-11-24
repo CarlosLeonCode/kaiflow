@@ -23,6 +23,7 @@ test.describe("menu bar popover", () => {
     test(`the footer fits the 360 px popover without overlap (${language})`, async ({ page }) => {
       await openWindow(page, "popover", `?language=${language}`);
       const footer = page.locator("footer");
+      await expect(footer.getByRole("button").first()).toBeVisible();
 
       const fits = async () => {
         const boxes = await footer.locator(":scope > *").evaluateAll((items) =>

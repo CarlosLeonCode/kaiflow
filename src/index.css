@@ -10,7 +10,7 @@
 @theme {
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
-  /* Progress headlines, numbers, chips and seal names (`font-display`). */
+  /* Headlines, numbers, button labels, chips and seal names (`font-display`). */
   --font-display: "Bricolage Grotesque Variable", "Bricolage Grotesque", -apple-system, system-ui, sans-serif;
 
   /* Dense utility scale: 13px body, 4px grid spacing. */
@@ -32,7 +32,7 @@
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-lg: 8px;
-  /* Moment cards, the Progress panel and Kai's stage (`rounded-card`). */
+  /* Cards, dialogs, the section intros, moment cards and Kai's stage (`rounded-card`). */
   --radius-card: 22px;
 
   --color-background: var(--background);
@@ -68,6 +68,9 @@
   --color-kai-body: var(--kai-body);
   --color-kai-ink: var(--kai-ink);
   --color-kai-cheek: var(--kai-cheek);
+
+  /* Short spring for presses and toggles: hover lifts 2px, a press drops 2px. */
+  --ease-spring: cubic-bezier(0.2, 0.9, 0.3, 1.35);
 
   /* One-shot springs, used as `motion-safe:animate-kf-draw` / `motion-safe:animate-kf-pop`
      (only under `prefers-reduced-motion: no-preference`). Never looped. */
@@ -134,6 +137,8 @@
   --kai-ink: #17140f;
   --kai-cheek: var(--pop-pink);
   --shadow-sticker: 0 3px 0 #17140f;
+  /* The same hard edge for small stickers inside a control (the selected segment). */
+  --shadow-sticker-sm: 0 2px 0 #17140f;
   --shadow-press: 0 3px 0 #e0452b;
 }
 
@@ -158,6 +163,7 @@
   --on-ink: #17140f;
   --paper-surface: #2b2721;
   --shadow-sticker: 0 3px 0 #000000;
+  --shadow-sticker-sm: 0 2px 0 #000000;
 }
 
 @layer base {

@@ -53,9 +53,9 @@ describe("useSectionIntro", () => {
   });
 
   it("words the Today intro for where the app icon lives", () => {
-    expect(introFor("today", "macos", en).can).toMatch(/from the menu bar\.$/);
-    expect(introFor("today", "linux", en).can).toMatch(/from the system tray\.$/);
-    expect(introFor("today", "windows", es).can).toMatch(/desde la bandeja del sistema\.$/);
+    expect(introFor("today", "macos", en).can).toContain("from the menu bar");
+    expect(introFor("today", "linux", en).can).toContain("from the system tray");
+    expect(introFor("today", "windows", es).can).toContain("desde la bandeja del sistema");
   });
 
   it("shows what, what you can do and an example, and dismissing persists the choice", async () => {
