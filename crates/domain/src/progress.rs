@@ -5,6 +5,7 @@
 //! Days are local day numbers, as in [`crate::calendar`].
 
 use crate::focus_session::{FocusEnd, FocusKind};
+use crate::time::UtcMs;
 
 /// Strokes one day can hold: the daily ensō. Staying late earns nothing past it.
 pub const DAILY_CAP: u32 = 100;
@@ -57,12 +58,13 @@ impl Source {
     }
 }
 
-/// One thing that earns strokes, tied to the record it came from.
+/// One thing that earns strokes, tied to the record it came from: a block by its start time,
+/// a goal by its id and day.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Award {
-    FocusCompleted { session: i64 },
-    FocusOnTarget { session: i64 },
-    BreakTaken { session: i64 },
+    FocusCompleted { started: UtcMs },
+    FocusOnTarget { started: UtcMs },
+    BreakTaken { started: UtcMs },
     GoalMet { goal: i64, day: i64 },
     LimitRespected { goal: i64, day: i64 },
 }
@@ -86,9 +88,9 @@ impl Award {
     pub fn key(self) -> String {
         let source = self.source().as_str();
         match self {
-            Self::FocusCompleted { session }
-            | Self::FocusOnTarget { session }
-            | Self::BreakTaken { session } => format!("{source}:{session}"),
+            Self::FocusCompleted { started }
+            | Self::FocusOnTarget { started }
+            | Self::BreakTaken { started } => format!("{source}:{}", started.0),
             Self::GoalMet { goal, day } | Self::LimitRespected { goal, day } => {
                 format!("{source}:{goal}:{day}")
             }
@@ -102,8 +104,11 @@ impl Award {
 /// [`Source::FocusOnTarget`] when [`ON_TARGET_PERCENT`] or more of it was inside. A break that
 /// ran its course earns [`Source::BreakTaken`]. Cancelled blocks and plain timers earn nothing.
 /// `Recovered` counts as run: the time passed while the app was closed.
+///
+/// Blocks are identified by `started`, not by their row id: ids can be reused after the newest
+/// sessions are deleted, and a reused id would make a new block look already rewarded.
 pub fn block_awards(
-    session: i64,
+    started: UtcMs,
     kind: FocusKind,
     end: FocusEnd,
     percent_inside: Option<u32>,
@@ -113,13 +118,13 @@ pub fn block_awards(
     }
     match kind {
         FocusKind::Focus => {
-            let mut awards = vec![Award::FocusCompleted { session }];
+            let mut awards = vec![Award::FocusCompleted { started }];
             if percent_inside.is_some_and(|pct| pct >= ON_TARGET_PERCENT) {
-                awards.push(Award::FocusOnTarget { session });
+                awards.push(Award::FocusOnTarget { started });
             }
             awards
         }
-        FocusKind::Break => vec![Award::BreakTaken { session }],
+        FocusKind::Break => vec![Award::BreakTaken { started }],
         FocusKind::Timer => Vec::new(),
     }
 }
@@ -410,12 +415,12 @@ mod tests {
 
     #[test]
     fn focus_block_that_ran_earns_ten_and_the_bonus_on_target() {
-        let awards = block_awards(7, FocusKind::Focus, FocusEnd::Completed, Some(80));
+        let awards = block_awards(UtcMs(7), FocusKind::Focus, FocusEnd::Completed, Some(80));
         assert_eq!(
             awards,
             vec![
-                Award::FocusCompleted { session: 7 },
-                Award::FocusOnTarget { session: 7 }
+                Award::FocusCompleted { started: UtcMs(7) },
+                Award::FocusOnTarget { started: UtcMs(7) }
             ]
         );
         assert_eq!(awards.iter().map(|a| a.strokes()).sum::<u32>(), 15);
@@ -425,8 +430,8 @@ mod tests {
     fn focus_block_under_target_or_without_data_earns_no_bonus() {
         for pct in [Some(79), None] {
             assert_eq!(
-                block_awards(1, FocusKind::Focus, FocusEnd::Completed, pct),
-                vec![Award::FocusCompleted { session: 1 }]
+                block_awards(UtcMs(1), FocusKind::Focus, FocusEnd::Completed, pct),
+                vec![Award::FocusCompleted { started: UtcMs(1) }]
             );
         }
     }
@@ -434,27 +439,29 @@ mod tests {
     #[test]
     fn recovered_blocks_count_and_cancelled_ones_do_not() {
         assert_eq!(
-            block_awards(2, FocusKind::Break, FocusEnd::Recovered, None),
-            vec![Award::BreakTaken { session: 2 }]
+            block_awards(UtcMs(2), FocusKind::Break, FocusEnd::Recovered, None),
+            vec![Award::BreakTaken { started: UtcMs(2) }]
         );
         for kind in [FocusKind::Focus, FocusKind::Break, FocusKind::Timer] {
-            assert!(block_awards(3, kind, FocusEnd::Cancelled, Some(100)).is_empty());
+            assert!(block_awards(UtcMs(3), kind, FocusEnd::Cancelled, Some(100)).is_empty());
         }
     }
 
     #[test]
     fn plain_timers_earn_nothing() {
-        assert!(block_awards(4, FocusKind::Timer, FocusEnd::Completed, Some(100)).is_empty());
+        assert!(
+            block_awards(UtcMs(4), FocusKind::Timer, FocusEnd::Completed, Some(100)).is_empty()
+        );
     }
 
     #[test]
     fn award_keys_are_stable_and_distinct() {
         assert_eq!(
-            Award::FocusCompleted { session: 12 }.key(),
+            Award::FocusCompleted { started: UtcMs(12) }.key(),
             "focus_completed:12"
         );
         assert_eq!(
-            Award::FocusOnTarget { session: 12 }.key(),
+            Award::FocusOnTarget { started: UtcMs(12) }.key(),
             "focus_on_target:12"
         );
         assert_eq!(
