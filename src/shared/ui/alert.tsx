@@ -3,7 +3,7 @@ import type { ComponentProps } from "react";
 
 import { cn } from "@/shared/lib/utils";
 
-const alertVariants = cva("flex gap-2 rounded-lg border px-3 py-2 text-xs", {
+const alertVariants = cva("flex gap-2 rounded-2xl border px-3.5 py-2.5 text-xs", {
   variants: {
     variant: {
       warning: "border-warning-foreground/20 bg-warning text-warning-foreground",

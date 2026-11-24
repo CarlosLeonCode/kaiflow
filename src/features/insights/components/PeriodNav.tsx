@@ -26,7 +26,7 @@ export function PeriodNav({ period, label, canGoNext, isCurrent, onPrevious, onN
       <Button variant="secondary" size="icon" aria-label={words.next[period]} onClick={onNext} disabled={!canGoNext}>
         <ChevronRight />
       </Button>
-      <h2 aria-live="polite" className="tabular ml-2 text-base font-medium">
+      <h2 aria-live="polite" className="tabular ml-2 font-display text-lg leading-[1.2] font-bold">
         {label}
       </h2>
       <Button variant="ghost" size="sm" className="ml-1" onClick={onToday} disabled={isCurrent}>

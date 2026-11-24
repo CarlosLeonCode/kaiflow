@@ -21,7 +21,7 @@ export function DriftCard({ app, intent, busy = false, onAllowApp, onBackToIt, o
     <div
       role="status"
       aria-label={m.label}
-      className="mt-3 rounded-md border border-warning-foreground/20 bg-warning px-3 py-2.5 text-warning-foreground"
+      className="mt-3 rounded-2xl border border-warning-foreground/20 bg-warning px-3 py-2.5 text-warning-foreground"
     >
       <p className="font-medium">{m.title}</p>
       <p className="mt-0.5 text-xs">

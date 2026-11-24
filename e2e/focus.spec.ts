@@ -101,18 +101,18 @@ test.describe("Focus", () => {
 
     const card = page.getByRole("region", { name: "Active timer" });
     await expect(card.getByTestId("focus-countdown")).toHaveText("40:00");
-    await expect(card.getByTestId("timer-ring-progress")).toHaveAttribute("stroke", "var(--primary)");
+    await expect(card.getByTestId("timer-ring-progress")).toHaveAttribute("stroke", "var(--mark-stroke)");
     await expect(card.getByRole("img", { name: "1 of 4 blocks before the long break" })).toBeVisible();
     await expect(page.getByRole("status", { name: "Drift alert" })).toHaveCount(0);
   });
 
-  test("a break is green and says so", async ({ page }) => {
+  test("a break is mint and says so", async ({ page }) => {
     await openFocus(page, "?focus=break");
 
     const card = page.getByRole("region", { name: "Active timer" });
     await expect(card).toContainText("Break");
     await expect(card.getByTestId("focus-countdown")).toHaveText("04:12");
-    await expect(card.getByTestId("timer-ring-progress")).toHaveAttribute("stroke", "var(--success)");
+    await expect(card.getByTestId("timer-ring-progress")).toHaveAttribute("stroke", "var(--pop-mint)");
     await expectNoA11yViolations(page);
   });
 

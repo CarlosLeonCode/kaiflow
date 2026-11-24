@@ -8,7 +8,7 @@ import { formatDuration, formatHour } from "@/shared/lib/time";
 import { axisTicks, type TimelineBlock } from "../lib/today";
 
 const WIDTH = 1000;
-const HEIGHT = 36;
+const HEIGHT = 40;
 
 interface Props {
   window: RangeDto;
@@ -53,9 +53,9 @@ export function DayTimeline({ window, blocks, now, dark }: Props) {
         aria-label={summary}
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         preserveAspectRatio="none"
-        className="block h-9 w-full overflow-visible"
+        className="block h-10 w-full overflow-visible"
       >
-        <rect x={0} y={0} width={WIDTH} height={HEIGHT} rx={4} style={{ fill: "var(--muted)" }} />
+        <rect x={0} y={0} width={WIDTH} height={HEIGHT} rx={10} style={{ fill: "var(--muted)" }} />
         {ticks.map((tick) => (
           <line
             key={tick.at}
@@ -93,7 +93,7 @@ export function DayTimeline({ window, blocks, now, dark }: Props) {
             y1={0}
             y2={HEIGHT}
             vectorEffect="non-scaling-stroke"
-            style={{ stroke: "var(--foreground)", strokeWidth: 1.5 }}
+            style={{ stroke: "var(--now-dot)", strokeWidth: 2 }}
           />
         )}
       </svg>

@@ -21,7 +21,7 @@ export function ActivityList({ rows, dark }: { rows: readonly ActivityRow[]; dar
               <span className="tabular text-xs text-muted-foreground">{formatDuration(row.totalMs)}</span>
               <span className="tabular w-9 text-right text-xs text-muted-foreground">{formatPercent(row.fraction)}</span>
             </div>
-            <div aria-hidden="true" className="mt-1.5 h-0.5 overflow-hidden rounded-full bg-muted">
+            <div aria-hidden="true" className="mt-1.5 h-1 overflow-hidden rounded-full bg-muted">
               <div
                 className="h-full rounded-full"
                 style={{ width: `${Math.max(2, Math.round(row.fraction * 100))}%`, backgroundColor: color }}

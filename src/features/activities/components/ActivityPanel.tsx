@@ -73,7 +73,7 @@ export function ActivityPanel({
     <section aria-label={t.shell.sections.activities} className="space-y-2">
       <div className="flex items-end justify-between px-1">
         <div>
-          <h2 className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
+          <h2 className="font-display text-sm leading-[1.2] font-bold text-foreground">
             {t.shell.sections.activities}
           </h2>
           <p className="mt-0.5 text-xs text-muted-foreground">{words.description}</p>
@@ -83,7 +83,7 @@ export function ActivityPanel({
         </Button>
       </div>
 
-      <div className="divide-y divide-border rounded-lg border border-border bg-background">
+      <div className="divide-y divide-border overflow-hidden rounded-card border border-border bg-background">
         {mode.kind === "create" && (
           <ActivityForm
             editing={null}
@@ -100,7 +100,7 @@ export function ActivityPanel({
         )}
         {onlySystem && mode.kind === "idle" && (
           <EmptyState
-            className="mt-0 px-3 py-6"
+            className="mt-0 px-4 py-6"
             title={words.emptyTitle}
             action={{ label: words.createFirst, onClick: () => setMode({ kind: "create" }) }}
           >
@@ -131,7 +131,7 @@ export function ActivityPanel({
               );
             }
             return (
-              <li key={activity.id} className="group flex items-center gap-2.5 px-3 py-2">
+              <li key={activity.id} className="group flex items-center gap-2.5 px-4 py-2">
                 <span
                   aria-hidden="true"
                   className="size-3 shrink-0 rounded-full"

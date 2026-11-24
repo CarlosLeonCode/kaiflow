@@ -5,6 +5,7 @@ import { useLocale, useT } from "@/shared/i18n";
 import type { DegradedReasonDto, FocusSessionDto } from "@/shared/ipc";
 import { formatDuration, formatTimeOfDay } from "@/shared/lib/time";
 import { Alert, AlertDescription, AlertTitle } from "@/shared/ui/alert";
+import { CARD_HEADING } from "@/shared/ui/card";
 import { Page, type IntroSlot } from "@/shared/ui/page";
 import { Skeleton } from "@/shared/ui/skeleton";
 import { degradedCopy } from "@/features/tracking/components/StatusBanners";
@@ -32,9 +33,9 @@ function dayLabel(ms: number, locale: string): string {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-border bg-background px-4 py-3">
-      <dt className="text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">{label}</dt>
-      <dd className="tabular mt-1 text-xl font-semibold">{value}</dd>
+    <div className="rounded-card border border-border bg-background px-5 py-4">
+      <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
+      <dd className="tabular mt-0.5 font-display text-2xl leading-[1.1] font-extrabold tracking-[-0.02em]">{value}</dd>
     </div>
   );
 }
@@ -76,8 +77,8 @@ export function FocusView({ intro, loading, error, unavailable, today, main, sum
           {main}
           {summary}
           {history.length > 0 && (
-            <section aria-label={t.focus.recent} className="rounded-xl border border-border bg-background p-4">
-              <h2 className="mb-2 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">{t.focus.recent}</h2>
+            <section aria-label={t.focus.recent} className="rounded-card border border-border bg-background p-5">
+              <h2 className={`mb-2 ${CARD_HEADING}`}>{t.focus.recent}</h2>
               <ul className="divide-y divide-border">
                 {history.map((session) => (
                   <li key={session.id} className="flex items-baseline justify-between gap-4 py-2">

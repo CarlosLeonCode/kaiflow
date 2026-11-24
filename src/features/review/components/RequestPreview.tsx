@@ -20,7 +20,7 @@ export function RequestPreview({ preview, providerLabel, busy, onSend, onCancel 
   return (
     <section
       aria-label={words.title}
-      className="space-y-3 rounded-md border border-border bg-surface p-3"
+      className="space-y-3 rounded-xl border border-border bg-surface p-3"
       data-testid="request-preview"
     >
       <div>
@@ -31,7 +31,7 @@ export function RequestPreview({ preview, providerLabel, busy, onSend, onCancel 
         </p>
       </div>
       <div>
-        <h4 className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">{words.yourData}</h4>
+        <h4 className="font-display text-sm leading-[1.2] font-bold text-foreground">{words.yourData}</h4>
         <pre
           data-selectable
           data-testid="preview-data"

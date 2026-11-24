@@ -33,12 +33,12 @@ export function SuggestionsPanel({ suggestions, onAccept, onDismiss, onFailure }
   return (
     <section id={SUGGESTIONS_ID} tabIndex={-1} aria-label={words.title} className="mb-6 space-y-2">
       <div className="px-1">
-        <h2 className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">{words.title}</h2>
+        <h2 className="font-display text-sm leading-[1.2] font-bold text-foreground">{words.title}</h2>
         <p className="mt-0.5 text-xs text-muted-foreground">{words.intro}</p>
       </div>
-      <ul aria-label={words.list} className="divide-y divide-border rounded-lg border border-border bg-background">
+      <ul aria-label={words.list} className="divide-y divide-border overflow-hidden rounded-card border border-border bg-background">
         {suggestions.map((suggestion) => (
-          <li key={suggestion.app_id} className="flex items-center gap-2.5 px-3 py-2">
+          <li key={suggestion.app_id} className="flex items-center gap-2.5 px-4 py-2">
             <span className="min-w-0 flex-1">
               <span className="block truncate font-medium" title={suggestion.app_name}>
                 {suggestion.app_name}

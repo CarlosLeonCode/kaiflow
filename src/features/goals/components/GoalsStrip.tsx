@@ -27,9 +27,9 @@ export function GoalsStrip({ goals, onCreate, onOpenGoals, onMarkSeen }: Props) 
   const t = useT();
   if (!goals) return null;
   return (
-    <section aria-label={t.shell.sections.goals} className="rounded-lg border border-border bg-background p-4">
+    <section aria-label={t.shell.sections.goals} className="rounded-card border border-border bg-background p-5">
       <div className="mb-2 flex items-center justify-between gap-3">
-        <h2 className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">{t.shell.sections.goals}</h2>
+        <h2 className="font-display text-sm leading-[1.2] font-bold text-foreground">{t.shell.sections.goals}</h2>
         {goals.length > 0 && (
           <Button variant="ghost" size="sm" onClick={onOpenGoals}>
             {t.goals.allGoals} <ArrowRight aria-hidden="true" />

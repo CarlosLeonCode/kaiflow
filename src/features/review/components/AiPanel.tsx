@@ -47,8 +47,8 @@ interface Props {
 
 function Card({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section aria-label={title} className="min-w-0 space-y-3 rounded-lg border border-border bg-background p-4">
-      <h2 className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">{title}</h2>
+    <section aria-label={title} className="min-w-0 space-y-3 rounded-card border border-border bg-background p-5">
+      <h2 className="font-display text-sm leading-[1.2] font-bold text-foreground">{title}</h2>
       {children}
     </section>
   );
@@ -178,7 +178,7 @@ export function AiPanel(props: Props) {
       )}
 
       {props.running && (
-        <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface p-3" role="status">
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-surface p-3" role="status">
           <p className="flex items-center gap-2">
             <Loader2 className="size-4 animate-spin" aria-hidden="true" />
             {words.analyzing}
@@ -203,7 +203,7 @@ function SavedList(props: Props) {
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between gap-3">
-        <h3 className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">{words.saved}</h3>
+        <h3 className="font-display text-sm leading-[1.2] font-bold text-foreground">{words.saved}</h3>
         <Button size="sm" variant="ghost" onClick={props.onAskDeleteAll}>
           <Trash2 aria-hidden="true" /> {words.deleteAll}
         </Button>

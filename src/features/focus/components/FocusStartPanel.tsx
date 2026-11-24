@@ -9,6 +9,7 @@ import type { AppOption } from "@/shared/lib/apps";
 import { activityLabel } from "@/shared/lib/labels";
 import { cn } from "@/shared/lib/utils";
 import { Button } from "@/shared/ui/button";
+import { CARD_HEADING } from "@/shared/ui/card";
 import { Input } from "@/shared/ui/input";
 
 import {
@@ -44,7 +45,7 @@ function Choice({ checked, label, disabled, onChange }: { checked: boolean; labe
 }
 
 const tile =
-  "flex flex-col items-center justify-center rounded-xl border border-border bg-background transition-colors hover:border-primary/40 focus-visible:outline-2 data-[state=checked]:border-primary data-[state=checked]:bg-primary/8 data-[state=checked]:shadow-[0_0_0_1px_var(--primary)]";
+  "group flex flex-col items-center justify-center rounded-2xl border-[1.5px] border-border bg-background transition-colors hover:border-mark-stroke/50 focus-visible:outline-2 data-[state=checked]:border-mark-stroke data-[state=checked]:bg-pop-sun data-[state=checked]:text-on-pop data-[state=checked]:shadow-(--shadow-sticker-sm)";
 
 /**
  * Start view of the Focus section: an optional task, a big choice of length, and (under
@@ -83,8 +84,8 @@ export function FocusStartPanel({ activities, apps, driftUnavailable, onSubmit }
   }
 
   return (
-    <form onSubmit={submit} noValidate aria-label={m.label} className="rounded-xl border border-border bg-surface p-5">
-      <label htmlFor={`${id}-intent`} className="block text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+    <form onSubmit={submit} noValidate aria-label={m.label} className="rounded-card bg-paper-surface p-6">
+      <label htmlFor={`${id}-intent`} className={`block ${CARD_HEADING}`}>
         {m.task}
       </label>
       <Input
@@ -96,7 +97,7 @@ export function FocusStartPanel({ activities, apps, driftUnavailable, onSubmit }
         onChange={(event) => change({ intent: event.target.value })}
       />
 
-      <p id={`${id}-length`} className="mt-5 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+      <p id={`${id}-length`} className={`mt-5 ${CARD_HEADING}`}>
         {m.length}
       </p>
       <RadioGroup.Root
@@ -108,13 +109,13 @@ export function FocusStartPanel({ activities, apps, driftUnavailable, onSubmit }
       >
         {DURATION_PRESETS.map((minutes) => (
           <RadioGroup.Item key={minutes} value={`${minutes}`} aria-label={t.focus.minutes(minutes)} className={cn(tile, "h-20")}>
-            <span className="tabular text-2xl font-semibold leading-none">{minutes}</span>{" "}
-            <span className="mt-1.5 text-2xs text-muted-foreground">min · {m.presetHints[minutes]}</span>
+            <span className="tabular font-display text-2xl leading-none font-extrabold">{minutes}</span>{" "}
+            <span className="mt-1.5 text-2xs text-muted-foreground group-data-[state=checked]:text-on-pop-muted">min · {m.presetHints[minutes]}</span>
           </RadioGroup.Item>
         ))}
         <RadioGroup.Item value="custom" aria-label={m.custom} className={cn(tile, "h-20")}>
-          <span className="text-base font-semibold leading-none">{m.custom}</span>
-          <span className="mt-1.5 text-2xs text-muted-foreground">{m.customHint}</span>
+          <span className="font-display text-base leading-none font-extrabold">{m.custom}</span>
+          <span className="mt-1.5 text-2xs text-muted-foreground group-data-[state=checked]:text-on-pop-muted">{m.customHint}</span>
         </RadioGroup.Item>
       </RadioGroup.Root>
       {draft.duration === "custom" && (
@@ -133,7 +134,7 @@ export function FocusStartPanel({ activities, apps, driftUnavailable, onSubmit }
         </div>
       )}
 
-      <div className="mt-5 rounded-lg border border-border bg-background">
+      <div className="mt-5 rounded-card border border-border bg-background">
         <button
           type="button"
           aria-expanded={advanced}
@@ -159,7 +160,7 @@ export function FocusStartPanel({ activities, apps, driftUnavailable, onSubmit }
             {!driftUnavailable && (
             <div className="max-h-48 space-y-2 overflow-y-auto">
               <div role="group" aria-label={m.allowedActivities}>
-                <p className="px-1 text-2xs font-medium uppercase tracking-wide text-muted-foreground">{m.activities}</p>
+                <p className="px-1 font-display text-sm leading-[1.2] font-bold text-foreground">{m.activities}</p>
                 {activities.map((activity) => (
                   <Choice
                     key={activity.id}
@@ -171,7 +172,7 @@ export function FocusStartPanel({ activities, apps, driftUnavailable, onSubmit }
                 ))}
               </div>
               <div role="group" aria-label={m.allowedApps}>
-                <p className="px-1 text-2xs font-medium uppercase tracking-wide text-muted-foreground">{m.recentApps}</p>
+                <p className="px-1 font-display text-sm leading-[1.2] font-bold text-foreground">{m.recentApps}</p>
                 {apps.length === 0 ? (
                   <p className="px-1 py-1 text-xs text-muted-foreground">
                     {m.noApps}

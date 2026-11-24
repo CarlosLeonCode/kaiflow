@@ -41,7 +41,7 @@ function fillFor(ms: number, max: number): string {
   if (ms <= 0 || max <= 0) return "var(--muted)";
   const share = Math.pow(ms / max, 0.7);
   const percent = Math.round(22 + 78 * share);
-  return `color-mix(in oklab, var(--primary) ${percent}%, var(--muted))`;
+  return `color-mix(in oklab, var(--mark-stroke) ${percent}%, var(--muted))`;
 }
 
 /**
@@ -143,7 +143,7 @@ export function Heatmap({ cells, label, weekStart = 0 }: Props) {
                     y={row * CELL + INSET}
                     width={CELL - 2 * INSET}
                     height={CELL - 2 * INSET}
-                    rx={1.5}
+                    rx={3}
                     vectorEffect="non-scaling-stroke"
                     style={{
                       fill: fillFor(ms, max),

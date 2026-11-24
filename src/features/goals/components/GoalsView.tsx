@@ -123,8 +123,8 @@ export function GoalsView({
           <>
             {statuses.length > 0 && (
               <section aria-label={m.activeGoals} className="space-y-2">
-                <h2 className="px-1 text-2xs font-medium uppercase tracking-wide text-muted-foreground">{m.active}</h2>
-                <ul aria-label={m.goalList} className="divide-y divide-border rounded-lg border border-border bg-background">
+                <h2 className="px-1 font-display text-sm leading-[1.2] font-bold text-foreground">{m.active}</h2>
+                <ul aria-label={m.goalList} className="divide-y divide-border overflow-hidden rounded-card border border-border bg-background">
                   {statuses.map((status) => {
                     const { goal, unseen } = status;
                     return (
@@ -194,8 +194,8 @@ export function GoalsView({
 
             {archived.length > 0 && (
               <section aria-label={m.archivedGoals} className="space-y-2">
-                <h2 className="px-1 text-2xs font-medium uppercase tracking-wide text-muted-foreground">{m.archived}</h2>
-                <ul aria-label={m.archivedList} className="divide-y divide-border rounded-lg border border-border bg-background">
+                <h2 className="px-1 font-display text-sm leading-[1.2] font-bold text-foreground">{m.archived}</h2>
+                <ul aria-label={m.archivedList} className="divide-y divide-border overflow-hidden rounded-card border border-border bg-background">
                   {archived.map((goal) => (
                     <li key={goal.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
                       <div className="min-w-0">

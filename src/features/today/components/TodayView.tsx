@@ -5,6 +5,7 @@ import { useLocale, useT } from "@/shared/i18n";
 import type { RangeDto, TimelineItemDto, TrackingStateDto } from "@/shared/ipc";
 import { formatClock, formatDuration } from "@/shared/lib/time";
 import { Alert, AlertDescription } from "@/shared/ui/alert";
+import { BIG_NUMBER, Card } from "@/shared/ui/card";
 import { EmptyState } from "@/shared/ui/EmptyState";
 import { Page, type IntroSlot } from "@/shared/ui/page";
 import { Skeleton } from "@/shared/ui/skeleton";
@@ -51,18 +52,6 @@ function dateLabel(range: RangeDto, locale: string): string {
     month: "long",
     day: "numeric",
   });
-}
-
-function Card({ title, hint, children, label }: { title: string; hint?: string; children: React.ReactNode; label?: string }) {
-  return (
-    <section aria-label={label ?? title} className="rounded-lg border border-border bg-background p-4">
-      <div className="mb-2 flex items-baseline justify-between gap-3">
-        <h2 className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">{title}</h2>
-        {hint && <p className="truncate text-2xs text-muted-foreground">{hint}</p>}
-      </div>
-      {children}
-    </section>
-  );
 }
 
 /** Today dashboard (presentational): totals, SVG timeline, by app and by activity. */
@@ -141,11 +130,11 @@ export function TodayView({
         <div className="space-y-4">
           {focus}
           {goals}
-          <Card title={t.today.activeTime} hint={t.today.activeHint} label={t.today.activeAndAway}>
+          <Card title={t.today.activeTime} hint={t.today.activeHint} label={t.today.activeAndAway} tone="paper">
             <div className="flex flex-wrap items-end gap-x-10 gap-y-3">
               <p
                 data-testid="today-total"
-                className="tabular text-display font-semibold tracking-tight"
+                className={BIG_NUMBER}
                 aria-label={t.today.activeTotal(formatDuration(totalMs))}
               >
                 {formatClock(totalMs)}
@@ -154,18 +143,18 @@ export function TodayView({
                 <div
                   role="img"
                   aria-label={t.today.activeBar(formatDuration(totalMs), formatDuration(awayMs))}
-                  className="flex h-1.5 overflow-hidden rounded-full bg-muted"
+                  className="flex h-3 overflow-hidden rounded-full border-[1.5px] border-mark-stroke bg-background"
                 >
-                  <div className="h-full bg-primary" style={{ width: `${activePct}%` }} />
+                  <div className="h-full bg-pop-mint" style={{ width: `${activePct}%` }} />
                 </div>
                 <dl className="mt-2 flex gap-6 text-xs">
                   <div className="flex items-center gap-1.5">
-                    <span aria-hidden="true" className="size-2 rounded-full bg-primary" />
+                    <span aria-hidden="true" className="size-2.5 rounded-full border-[1.5px] border-mark-stroke bg-pop-mint" />
                     <dt className="text-muted-foreground">{t.today.active}</dt>
                     <dd className="tabular font-medium">{formatDuration(totalMs)}</dd>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <span aria-hidden="true" className="size-2 rounded-full bg-muted-foreground/40" />
+                    <span aria-hidden="true" className="size-2.5 rounded-full border-[1.5px] border-mark-stroke bg-background" />
                     <dt className="text-muted-foreground">{t.today.away}</dt>
                     <dd className="tabular font-medium">{formatDuration(awayMs)}</dd>
                   </div>

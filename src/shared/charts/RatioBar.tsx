@@ -1,5 +1,6 @@
 import { useT } from "@/shared/i18n";
 import { formatDuration } from "@/shared/lib/time";
+import { BIG_NUMBER } from "@/shared/ui/card";
 
 import type { FocusRatioDto } from "@/shared/ipc";
 
@@ -12,8 +13,8 @@ interface Props {
 
 /** The bar compares only these two, exactly like the headline percentage. Labels live in `charts.ratio`. */
 const SEGMENTS = [
-  { key: "productive", color: "var(--success)" },
-  { key: "distracting", color: "var(--destructive)" },
+  { key: "productive", color: "var(--pop-mint)" },
+  { key: "distracting", color: "var(--pop-pink)" },
 ] as const;
 
 /** Whole percent of the productive share, e.g. `75%`. */
@@ -24,7 +25,7 @@ export function ratioText(ratio: FocusRatioDto): string | null {
 
 /**
  * Productive against distracting time as one proportional bar, so the bar and the headline
- * percentage always agree (100% looks like a full green bar). Neutral time is not part of the
+ * percentage always agree (100% looks like a full mint bar). Neutral time is not part of the
  * ratio: it is listed as text underneath. Every part is named with its duration in text (color
  * is never the only carrier), and without any productive or distracting time the ratio says so
  * instead of showing a number.
@@ -40,9 +41,9 @@ export function RatioBar({ productiveMs, neutralMs, distractingMs, ratio }: Prop
   return (
     <div>
       {percent ? (
-        <p className="tabular text-display font-semibold tracking-tight" data-testid="focus-ratio">
+        <p className={BIG_NUMBER} data-testid="focus-ratio">
           {percent}
-          <span className="ml-2 text-xs font-normal tracking-normal text-muted-foreground">{m.productiveSuffix}</span>
+          <span className="ml-2 font-sans text-xs font-normal tracking-normal text-muted-foreground">{m.productiveSuffix}</span>
         </p>
       ) : (
         <p className="text-sm font-medium" data-testid="focus-ratio">
@@ -53,13 +54,13 @@ export function RatioBar({ productiveMs, neutralMs, distractingMs, ratio }: Prop
         {percent ? m.explainer : m.hint}
       </p>
 
-      <div className="mt-3 overflow-hidden rounded-full bg-muted">
+      <div className="mt-3 overflow-hidden rounded-full border-[1.5px] border-mark-stroke bg-background">
         <svg
           role="img"
           aria-label={m.label(SEGMENTS.map((s) => `${m[s.key]} ${formatDuration(values[s.key])}`).join(", "))}
           viewBox="0 0 100 6"
           preserveAspectRatio="none"
-          className="block h-2 w-full"
+          className="block h-2.5 w-full"
         >
           {productiveWidth > 0 && (
             <rect x={0} y={0} width={productiveWidth} height={6} style={{ fill: SEGMENTS[0].color }} />
@@ -74,7 +75,7 @@ export function RatioBar({ productiveMs, neutralMs, distractingMs, ratio }: Prop
         {SEGMENTS.map((segment) => (
           <div key={segment.key}>
             <dt className="flex items-center gap-1.5 text-muted-foreground">
-              <span aria-hidden="true" className="size-2 rounded-full" style={{ backgroundColor: segment.color }} />
+              <span aria-hidden="true" className="size-2.5 rounded-full border-[1.5px] border-mark-stroke" style={{ backgroundColor: segment.color }} />
               {m[segment.key]}
             </dt>
             <dd className="tabular font-medium">{formatDuration(values[segment.key])}</dd>

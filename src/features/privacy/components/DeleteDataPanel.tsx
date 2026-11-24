@@ -25,7 +25,7 @@ function Block({
   children: React.ReactNode;
 }) {
   return (
-    <div className="px-3 py-3">
+    <div className="px-4 py-3">
       <h3 className="font-medium">{title}</h3>
       <p className="mb-2 text-xs text-muted-foreground">{description}</p>
       {children}
@@ -53,10 +53,10 @@ export function DeleteDataPanel({ today, onRequest, busy }: Props) {
   return (
     <section aria-label={words.title} className="space-y-2">
       <div className="px-1">
-        <h2 className="text-2xs font-medium uppercase tracking-wide text-destructive">{words.title}</h2>
+        <h2 className="font-display text-sm leading-[1.2] font-bold text-destructive">{words.title}</h2>
         <p className="mt-0.5 text-xs text-muted-foreground">{words.intro}</p>
       </div>
-      <div className="divide-y divide-border rounded-lg border border-border bg-background">
+      <div className="divide-y divide-border overflow-hidden rounded-card border border-border bg-background">
         <Block title={words.range} description={words.rangeHint}>
           <div className="flex flex-wrap items-end gap-2">
             <div>

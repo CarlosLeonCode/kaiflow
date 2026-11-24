@@ -108,7 +108,7 @@ export function RuleForm({ activities, apps, onSubmit, onDraftChange, preview, p
   const describedBy = [patternError ? patternErrorId : null, patternHintId].filter(Boolean).join(" ");
 
   return (
-    <form id={RULE_FORM_ID} onSubmit={submit} aria-label={words.label} className="space-y-2.5 px-3 py-3">
+    <form id={RULE_FORM_ID} onSubmit={submit} aria-label={words.label} className="space-y-2.5 px-4 py-3">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <Segmented
           aria-label={words.type}

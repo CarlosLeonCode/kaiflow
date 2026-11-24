@@ -88,7 +88,7 @@ export function TrendLine({ points, label }: Props) {
               style={{ stroke: "var(--border)", strokeWidth: 1 }}
             />
           ))}
-          {area && <polygon points={area} style={{ fill: "var(--primary)", opacity: 0.12 }} />}
+          {area && <polygon points={area} style={{ fill: "var(--pop-sun)", opacity: 0.35 }} />}
           {points.length > 1 && (
             <polyline
               points={line}
@@ -96,7 +96,7 @@ export function TrendLine({ points, label }: Props) {
               vectorEffect="non-scaling-stroke"
               strokeLinejoin="round"
               strokeLinecap="round"
-              style={{ stroke: "var(--primary)", strokeWidth: 2 }}
+              style={{ stroke: "var(--mark-stroke)", strokeWidth: 2.5, strokeLinecap: "round", strokeLinejoin: "round" }}
             />
           )}
           {points.map((point, index) => (

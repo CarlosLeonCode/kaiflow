@@ -73,11 +73,11 @@ export function RulesPanel({
   return (
     <section aria-label={words.title} className="space-y-2">
       <div className="px-1">
-        <h2 className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">{words.title}</h2>
+        <h2 className="font-display text-sm leading-[1.2] font-bold text-foreground">{words.title}</h2>
         <p className="mt-0.5 text-xs text-muted-foreground">{words.intro}</p>
       </div>
 
-      <div className="divide-y divide-border rounded-lg border border-border bg-background">
+      <div className="divide-y divide-border overflow-hidden rounded-card border border-border bg-background">
         <RuleForm
           activities={activities}
           apps={apps}
@@ -90,7 +90,7 @@ export function RulesPanel({
         />
 
         {rules.length === 0 ? (
-          <p className="px-3 py-6 text-center text-xs text-muted-foreground">{words.none}</p>
+          <p className="px-4 py-6 text-center text-xs text-muted-foreground">{words.none}</p>
         ) : (
           GROUPS.map((kind) => {
             const items = tierOf(rules, kind);
@@ -98,15 +98,15 @@ export function RulesPanel({
             const group = words.groups[kind];
             return (
               <div key={kind}>
-                <h3 className="flex items-baseline justify-between px-3 pt-2.5 text-xs font-medium">
+                <h3 className="flex items-baseline justify-between px-4 pt-3 text-xs font-medium">
                   {group.title}
                   <span className="font-normal text-muted-foreground">{group.hint}</span>
                 </h3>
-                <ul aria-label={words.groupLabel(group.title)} className="px-1.5 py-1.5">
+                <ul aria-label={words.groupLabel(group.title)} className="px-2.5 py-2">
                   {items.map((rule) => {
                     const label = describeSpec(rule.spec, apps, t);
                     return (
-                      <li key={rule.id} className="flex items-center gap-1 rounded-md px-1.5 py-1 hover:bg-accent/50">
+                      <li key={rule.id} className="flex items-center gap-1 rounded-xl px-1.5 py-1 hover:bg-accent/50">
                         <span className="flex">
                           <Button
                             variant="ghost"

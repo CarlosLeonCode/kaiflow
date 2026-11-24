@@ -88,7 +88,7 @@ export function GuidedSetup({
   }
 
   return (
-    <section aria-labelledby={`${id}-title`} className="mb-6 rounded-lg border border-border bg-background p-4">
+    <section aria-labelledby={`${id}-title`} className="mb-6 rounded-card border border-border bg-background p-5">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 id={`${id}-title`} ref={titleRef} tabIndex={-1} className="text-sm font-semibold">
@@ -133,7 +133,7 @@ export function GuidedSetup({
               {own.length > 0 && words.youHave(own.map((activity) => activity.name).join(", "))}
             </p>
             {creating ? (
-              <div className="rounded-lg border border-border">
+              <div className="overflow-hidden rounded-xl border border-border">
                 <ActivityForm
                   editing={null}
                   existing={activities}
@@ -202,7 +202,7 @@ export function GuidedSetup({
             </dl>
             <p className="text-muted-foreground">{t.activities.productivity.use}</p>
             {own.length > 0 ? (
-              <ul aria-label={words.howEachCounts} className="divide-y divide-border rounded-md border border-border">
+              <ul aria-label={words.howEachCounts} className="divide-y divide-border overflow-hidden rounded-xl border border-border">
                 {own.map((activity) => (
                   <li key={activity.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5">
                     <span className="min-w-0 truncate text-sm font-medium">{activity.name}</span>

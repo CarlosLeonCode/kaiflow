@@ -215,7 +215,7 @@ describe("FocusContainer", () => {
 
     const card = await screen.findByRole("region", { name: "Active timer" });
     expect(within(card).getByText("Break")).toBeInTheDocument();
-    expect(within(card).getByTestId("timer-ring-progress")).toHaveAttribute("stroke", "var(--success)");
+    expect(within(card).getByTestId("timer-ring-progress")).toHaveAttribute("stroke", "var(--pop-mint)");
     expect(within(card).getByRole("img", { name: "2 of 4 blocks before the long break" })).toBeInTheDocument();
     expect(within(card).queryByText(/Allowed:/)).not.toBeInTheDocument();
   });

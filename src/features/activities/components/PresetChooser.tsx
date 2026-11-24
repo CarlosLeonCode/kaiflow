@@ -37,10 +37,10 @@ export function PresetChooser({ packs, onApply, onStartEmpty }: Props) {
 
   if (selected) {
     return (
-      <section aria-label={words.packTitle(selected.name)} className="rounded-lg border border-border bg-background p-4">
+      <section aria-label={words.packTitle(selected.name)} className="rounded-card border border-border bg-background p-5">
         <h4 className="text-sm font-semibold">{words.packTitle(selected.name)}</h4>
         <p className="mt-0.5 text-xs text-muted-foreground">{words.adds}</p>
-        <ul aria-label={words.activitiesIn(selected.name)} className="mt-3 divide-y divide-border rounded-md border border-border">
+        <ul aria-label={words.activitiesIn(selected.name)} className="mt-3 divide-y divide-border overflow-hidden rounded-xl border border-border">
           {selected.activities.map((activity) => (
             <li key={activity.key} className="flex items-center gap-2.5 px-3 py-2">
               <span aria-hidden="true" className="size-3 shrink-0 rounded-full" style={{ backgroundColor: activity.color }} />
@@ -82,7 +82,7 @@ export function PresetChooser({ packs, onApply, onStartEmpty }: Props) {
       <p className="text-xs text-muted-foreground">{words.intro}</p>
       <ul aria-label={words.waysToStart} className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {packs.map((pack) => (
-          <li key={pack.key} className="flex flex-col rounded-lg border border-border bg-background p-3">
+          <li key={pack.key} className="flex flex-col rounded-2xl border border-border bg-background p-4">
             <h4 className="font-medium">{pack.name}</h4>
             <p className="mt-0.5 flex-1 text-xs text-muted-foreground">{pack.description}</p>
             <Button className="mt-3 self-start" aria-label={words.previewLabel(pack.name)} onClick={() => setSelected(pack)}>
@@ -90,7 +90,7 @@ export function PresetChooser({ packs, onApply, onStartEmpty }: Props) {
             </Button>
           </li>
         ))}
-        <li className="flex flex-col rounded-lg border border-border bg-background p-3">
+        <li className="flex flex-col rounded-2xl border border-border bg-background p-4">
           <h4 className="font-medium">{words.startEmpty}</h4>
           <p className="mt-0.5 flex-1 text-xs text-muted-foreground">{words.startEmptyText}</p>
           <Button className="mt-3 self-start" onClick={onStartEmpty}>

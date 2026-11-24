@@ -2,6 +2,7 @@ import { ArrowDownRight, ArrowUpRight, Equal, Minus } from "lucide-react";
 
 import { useT } from "@/shared/i18n";
 import { formatDuration } from "@/shared/lib/time";
+import { BIG_NUMBER } from "@/shared/ui/card";
 
 import type { Period } from "../lib/periods";
 import type { Averages, TrendView } from "../lib/summary";
@@ -29,7 +30,7 @@ export function SummaryCard({ period, totalMs, trend, averages, busiest, bucket 
       <div className="min-w-0">
         <p
           data-testid="insights-total"
-          className="tabular text-display font-semibold tracking-tight"
+          className={BIG_NUMBER}
           aria-label={t.insights.trackedTime(formatDuration(totalMs))}
         >
           {formatDuration(totalMs)}

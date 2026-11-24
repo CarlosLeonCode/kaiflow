@@ -60,7 +60,7 @@ export function ActivityForm({ editing, existing, initialColor, dark, onSubmit, 
         }
       }}
       aria-label={editing ? words.editLabel(editing.name) : words.newLabel}
-      className="space-y-2.5 px-3 py-3"
+      className="space-y-2.5 px-4 py-3"
     >
       <div>
         <label htmlFor={`${id}-name`} className="mb-1 block text-xs font-medium text-muted-foreground">

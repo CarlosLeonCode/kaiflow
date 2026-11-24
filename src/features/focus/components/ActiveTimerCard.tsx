@@ -39,7 +39,7 @@ function ModeLabel({ session }: { session: FocusActiveDto }) {
     <p className="flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
       <span
         aria-hidden="true"
-        className={cn("size-1.5 rounded-full", session.kind === "break" ? "bg-success" : "bg-primary", paused && "opacity-40")}
+        className={cn("size-1.5 rounded-full", session.kind === "break" ? "bg-pop-mint" : "bg-mark-stroke", paused && "opacity-40")}
       />
       {kindLabel(session.kind, t)}
       {paused && <span className="font-medium normal-case tracking-normal">· {t.focus.paused}</span>}
@@ -79,7 +79,7 @@ export function ActiveTimerCard({
       aria-label={paused ? t.focus.pausedTimer(spoken) : spoken}
       className={cn(
         "tabular tracking-tight",
-        compact ? "text-xl font-semibold" : "text-display font-light",
+        compact ? "text-xl font-semibold" : "font-display text-display font-extrabold tracking-[-0.03em]",
         // Opacity, not a color class: tailwind-merge would take `text-display` for a color.
         paused && "opacity-60",
       )}
@@ -153,7 +153,7 @@ export function ActiveTimerCard({
   }
 
   return (
-    <section aria-label={t.focus.activeTimer} className="rounded-xl border border-border bg-surface px-6 py-6">
+    <section aria-label={t.focus.activeTimer} className="rounded-card bg-paper-surface px-6 py-7">
       <div className="flex flex-col items-center text-center">
         <TimerRing progress={done} kind={session.kind} paused={paused} size={208} stroke={8}>
           <ModeLabel session={session} />
@@ -161,7 +161,7 @@ export function ActiveTimerCard({
           <p className="text-xs text-muted-foreground tabular">{t.focus.ofMinutes(Math.round(session.planned_ms / 60_000))}</p>
         </TimerRing>
         <p
-          className={cn("mt-4 max-w-full truncate text-lg font-semibold", !hasTask && "text-muted-foreground font-medium")}
+          className={cn("mt-4 max-w-full truncate font-display text-xl leading-[1.15] font-extrabold tracking-[-0.02em]", !hasTask && "text-muted-foreground font-bold")}
           title={hasTask ? title : undefined}
         >
           {title}

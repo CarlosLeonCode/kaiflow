@@ -34,7 +34,7 @@ export function AppList({ rows }: { rows: readonly AppRow[] }) {
               aria-expanded={expanded}
               aria-controls={panelId}
               onClick={() => toggle(row.key)}
-              className="group flex w-full items-center gap-2 rounded-md px-1 py-2 text-left hover:bg-accent"
+              className="group flex w-full items-center gap-2 rounded-lg px-1.5 py-2 text-left hover:bg-accent"
             >
               <ChevronRight
                 aria-hidden="true"
@@ -47,9 +47,9 @@ export function AppList({ rows }: { rows: readonly AppRow[] }) {
                 <span className="block truncate" title={row.name}>
                   {row.name}
                 </span>
-                <span aria-hidden="true" className="mt-1 block h-0.5 overflow-hidden rounded-full bg-muted">
+                <span aria-hidden="true" className="mt-1.5 block h-1 overflow-hidden rounded-full bg-muted">
                   <span
-                    className="block h-full rounded-full bg-primary/70"
+                    className="block h-full rounded-full bg-mark-stroke"
                     style={{ width: `${Math.max(2, Math.round(row.share * 100))}%` }}
                   />
                 </span>
