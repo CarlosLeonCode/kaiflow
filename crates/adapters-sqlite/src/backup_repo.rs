@@ -5,8 +5,9 @@ use std::sync::Mutex;
 
 use application::backup::{
     ActivityRecord, AiReviewRecord, BackupData, DEVICE_SETTINGS, FocusDistractionRecord,
-    FocusSessionRecord, GapRecord, GoalEventRecord, GoalRecord, PrivacyRuleRecord, RuleRecord,
-    SegmentRecord, SettingRecord,
+    FocusSessionRecord, GapRecord, GoalEventRecord, GoalRecord, PROGRESS_SETTINGS,
+    PrivacyRuleRecord, ProgressRecord, RuleRecord, SealRecord, SegmentRecord, SettingRecord,
+    StrokeAwardRecord,
 };
 use application::ports::{BackupStore, PortError, PortResult};
 use domain::UtcMs;
@@ -47,6 +48,7 @@ impl BackupStore for SqliteBackupStore {
             goal_events: read_goal_events(&tx, from, to)?,
             focus_sessions: read_focus_sessions(&tx, from, to)?,
             ai_reviews: read_ai_reviews(&tx, from, to)?,
+            progress: Some(read_progress(&tx, from, to)?),
         };
         tx.finish().map_err(port_err)?;
         Ok(data)
@@ -93,13 +95,28 @@ fn replace_in(tx: &rusqlite::Transaction<'_>, data: &BackupData) -> PortResult<(
     }
     tx.execute("DELETE FROM activities WHERE id <> ?1", [SYSTEM_ACTIVITY])
         .map_err(port_err)?;
-    let device = DEVICE_SETTINGS
+    // A document without progress (written before it existed) leaves the device's ledger,
+    // seals and acknowledged moments as they are; one with progress replaces them all.
+    let kept: Vec<&str> = match &data.progress {
+        Some(_) => {
+            tx.execute("DELETE FROM stroke_awards", [])
+                .map_err(port_err)?;
+            tx.execute("DELETE FROM seals", []).map_err(port_err)?;
+            DEVICE_SETTINGS.to_vec()
+        }
+        None => DEVICE_SETTINGS
+            .iter()
+            .chain(&PROGRESS_SETTINGS)
+            .copied()
+            .collect(),
+    };
+    let kept_sql = kept
         .iter()
         .map(|k| format!("'{k}'"))
         .collect::<Vec<_>>()
         .join(",");
     tx.execute(
-        &format!("DELETE FROM settings WHERE key NOT IN ({device})"),
+        &format!("DELETE FROM settings WHERE key NOT IN ({kept_sql})"),
         [],
     )
     .map_err(port_err)?;
@@ -140,7 +157,7 @@ fn replace_in(tx: &rusqlite::Transaction<'_>, data: &BackupData) -> PortResult<(
     for s in data
         .settings
         .iter()
-        .filter(|s| !DEVICE_SETTINGS.contains(&s.key.as_str()))
+        .filter(|s| !kept.contains(&s.key.as_str()))
     {
         tx.execute(
             "INSERT INTO settings(key, value) VALUES (?1, ?2)",
@@ -280,7 +297,66 @@ fn replace_in(tx: &rusqlite::Transaction<'_>, data: &BackupData) -> PortResult<(
         )
         .map_err(port_err)?;
     }
+    if let Some(progress) = &data.progress {
+        for a in &progress.stroke_awards {
+            tx.execute(
+                "INSERT INTO stroke_awards(award_key, day, source, strokes, earned_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![a.award_key, a.day, a.source, a.strokes, a.earned_at],
+            )
+            .map_err(port_err)?;
+        }
+        for s in &progress.seals {
+            tx.execute(
+                "INSERT INTO seals(seal, earned_at, seen) VALUES (?1, ?2, ?3)",
+                params![s.seal, s.earned_at, s.seen],
+            )
+            .map_err(port_err)?;
+        }
+    }
     Ok(())
+}
+
+/// Strokes earned in `[from, to)` and every seal: seals are all-time achievements, like goal
+/// definitions.
+fn read_progress(c: &Connection, from: i64, to: i64) -> PortResult<ProgressRecord> {
+    let mut stmt = c
+        .prepare(
+            "SELECT award_key, day, source, strokes, earned_at FROM stroke_awards
+             WHERE earned_at >= ?1 AND earned_at < ?2 ORDER BY earned_at, id",
+        )
+        .map_err(port_err)?;
+    let stroke_awards = stmt
+        .query_map([from, to], |r| {
+            Ok(StrokeAwardRecord {
+                award_key: r.get(0)?,
+                day: r.get(1)?,
+                source: r.get(2)?,
+                strokes: r.get(3)?,
+                earned_at: r.get(4)?,
+            })
+        })
+        .map_err(port_err)?
+        .collect::<Result<_, _>>()
+        .map_err(port_err)?;
+    let mut stmt = c
+        .prepare("SELECT seal, earned_at, seen FROM seals ORDER BY earned_at, seal")
+        .map_err(port_err)?;
+    let seals = stmt
+        .query_map([], |r| {
+            Ok(SealRecord {
+                seal: r.get(0)?,
+                earned_at: r.get(1)?,
+                seen: r.get::<_, i64>(2)? != 0,
+            })
+        })
+        .map_err(port_err)?
+        .collect::<Result<_, _>>()
+        .map_err(port_err)?;
+    Ok(ProgressRecord {
+        stroke_awards,
+        seals,
+    })
 }
 
 fn read_activities(c: &Connection) -> PortResult<Vec<ActivityRecord>> {
@@ -621,7 +697,14 @@ mod tests {
                        '[{\"app_id\":\"slack\",\"app_name\":\"Slack\",\"ms\":500}]', 1),
                       (2, 'Running now', 9000, 99000, NULL, NULL, 0, 0, 0, '[]', 0);
              INSERT INTO focus_allowed(session_id, app_id, activity_id)
-               VALUES (1, 'excel', NULL), (1, NULL, 2), (2, 'excel', NULL);",
+               VALUES (1, 'excel', NULL), (1, NULL, 2), (2, 'excel', NULL);
+             INSERT INTO stroke_awards(award_key, day, source, strokes, earned_at)
+               VALUES ('focus_completed:1000', 19000, 'focus_completed', 10, 3000),
+                      ('focus_on_target:1000', 19000, 'focus_on_target', 5, 3000),
+                      ('goal_met:1:19000', 19000, 'goal_met', 15, 6500);
+             INSERT INTO seals(seal, earned_at, seen) VALUES ('first_focus', 3000, 1);
+             INSERT INTO settings(key, value)
+               VALUES ('progress_moments', '{\"level_seen\":1,\"day_done_seen\":null}');",
         )
         .unwrap();
         SqliteBackupStore::new(conn)
@@ -655,7 +738,15 @@ mod tests {
         assert_eq!(session.distractions[0].app_name, "Slack");
         assert!(session.seen);
         let keys: Vec<&str> = data.settings.iter().map(|s| s.key.as_str()).collect();
-        assert_eq!(keys, ["theme"], "the AI opt-in is device bound too");
+        assert_eq!(
+            keys,
+            ["progress_moments", "theme"],
+            "the AI opt-in is device bound too"
+        );
+        let progress = data.progress.unwrap();
+        assert_eq!(progress.stroke_awards.len(), 3);
+        assert_eq!(progress.seals.len(), 1);
+        assert!(progress.seals[0].seen);
         assert_eq!(data.ai_reviews.len(), 1);
         assert_eq!(data.ai_reviews[0].provider, "ollama");
         assert!(!data.ai_reviews[0].included_titles);
@@ -671,6 +762,13 @@ mod tests {
         // Goal definitions are not time-bound; their events follow the range.
         assert_eq!((data.goals.len(), data.goal_events.len()), (2, 1));
         assert_eq!(data.ai_reviews.len(), 1, "the review overlaps the range");
+        let progress = data.progress.unwrap();
+        assert_eq!(
+            progress.stroke_awards.len(),
+            2,
+            "strokes follow the range by when they were earned"
+        );
+        assert_eq!(progress.seals.len(), 1, "seals are not time-bound");
         let narrow = store.snapshot(Some((UtcMs(0), UtcMs(3000)))).unwrap();
         assert_eq!((narrow.goals.len(), narrow.goal_events.len()), (2, 1));
         assert!(
@@ -719,6 +817,7 @@ mod tests {
         assert_eq!(again.goal_events, data.goal_events);
         assert_eq!(again.focus_sessions, data.focus_sessions);
         assert_eq!(again.ai_reviews, data.ai_reviews);
+        assert_eq!(again.progress, data.progress);
         assert_eq!(again.settings, data.settings, "stale setting replaced");
         let conn = open(&other_path).unwrap();
         let shortcut: String = conn
@@ -735,6 +834,94 @@ mod tests {
             })
             .unwrap();
         assert_eq!(violations, 0);
+    }
+
+    /// `data` written as a backup file and read back, as a restore sees it.
+    fn through_a_file(data: BackupData, drop_progress: bool) -> BackupData {
+        use application::backup::{Document, Kind};
+        let doc = Document::new(Kind::Backup, "0.1.0", UtcMs(1), "UTC+00:00", None, data);
+        let mut value: serde_json::Value = serde_json::from_slice(&doc.to_json()).unwrap();
+        if drop_progress {
+            value.as_object_mut().unwrap().remove("progress");
+        }
+        Document::parse(&serde_json::to_vec(&value).unwrap())
+            .unwrap()
+            .data
+    }
+
+    fn moments(path: &Path) -> Option<String> {
+        open(path)
+            .unwrap()
+            .query_row(
+                "SELECT value FROM settings WHERE key = 'progress_moments'",
+                [],
+                |r| r.get(0),
+            )
+            .ok()
+    }
+
+    #[test]
+    fn a_restore_with_progress_replaces_the_ledger_seals_and_moments() {
+        let (_d, path, store) = fixture();
+        let data = through_a_file(store.snapshot(None).unwrap(), false);
+        assert!(data.progress.is_some());
+
+        let dir = tempfile::tempdir().unwrap();
+        let other_path = dir.path().join("other.db");
+        let other = SqliteBackupStore::new(open(&other_path).unwrap());
+        // The target already has progress of its own, which the document replaces.
+        open(&other_path)
+            .unwrap()
+            .execute_batch(
+                "INSERT INTO stroke_awards(award_key, day, source, strokes, earned_at)
+                   VALUES ('break_taken:1', 20000, 'break_taken', 3, 1);
+                 INSERT INTO seals(seal, earned_at, seen) VALUES ('took_the_break', 1, 0);
+                 INSERT INTO settings(key, value)
+                   VALUES ('progress_moments', '{\"level_seen\":4}');",
+            )
+            .unwrap();
+        other.replace_all(&data).unwrap();
+
+        assert_eq!(other.snapshot(None).unwrap().progress, data.progress);
+        assert_eq!(moments(&other_path), moments(&path));
+    }
+
+    #[test]
+    fn a_restore_without_progress_keeps_the_device_progress_and_moments() {
+        let (_d, path, store) = fixture();
+        let before = store.snapshot(None).unwrap();
+        let moments_before = moments(&path);
+        assert!(moments_before.is_some());
+
+        // A document written before progress existed; it may still list the moments blob
+        // among its settings, which must not override the device's.
+        let mut legacy = through_a_file(before.clone(), true);
+        assert_eq!(legacy.progress, None);
+        legacy.segments.clear();
+        legacy.settings = vec![SettingRecord {
+            key: "progress_moments".into(),
+            value: "{\"level_seen\":6}".into(),
+        }];
+        store.replace_all(&legacy).unwrap();
+
+        let after = store.snapshot(None).unwrap();
+        assert!(after.segments.is_empty(), "the rest is replaced");
+        assert_eq!(after.progress, before.progress, "levels are not wiped");
+        assert_eq!(moments(&path), moments_before);
+    }
+
+    #[test]
+    fn a_restore_with_an_empty_ledger_clears_the_device_progress() {
+        let (_d, path, store) = fixture();
+        let mut data = store.snapshot(None).unwrap();
+        data.progress = Some(ProgressRecord::default());
+        data.settings.retain(|s| s.key != "progress_moments");
+        store.replace_all(&data).unwrap();
+        assert_eq!(
+            store.snapshot(None).unwrap().progress,
+            Some(ProgressRecord::default())
+        );
+        assert_eq!(moments(&path), None, "the moments go with the ledger");
     }
 
     #[test]
