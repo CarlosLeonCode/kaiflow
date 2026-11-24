@@ -16,8 +16,9 @@ use adapters_common::locale::OsLocale;
 use adapters_common::secrets::KeyringSecretStore;
 use adapters_sqlite::{
     DbError, SqliteActivityRepository, SqliteAiReviewRepository, SqliteBackupStore,
-    SqliteFocusRepository, SqliteGoalRepository, SqlitePrivacyRepository, SqliteReportRepository,
-    SqliteRetentionRepository, SqliteSessionRepository, SqliteSettingsRepository,
+    SqliteFocusRepository, SqliteGoalRepository, SqlitePrivacyRepository, SqliteProgressRepository,
+    SqliteReportRepository, SqliteRetentionRepository, SqliteSessionRepository,
+    SqliteSettingsRepository,
 };
 use application::ai::{AiProvider, LEGACY_KEYCHAIN_SERVICE, SecretStore};
 use application::commands::Commands;
@@ -32,6 +33,7 @@ use application::ports::{
     PortResult, PowerEventsProvider, PrivacyMode, PrivacyRepository,
 };
 use application::presets::PresetService;
+use application::progress::ProgressService;
 use application::queries::Queries;
 use application::review::ReviewService;
 use application::secret_migration::MigratingSecretStore;
@@ -183,6 +185,9 @@ pub struct AppState {
     pub goals: Arc<GoalService>,
     /// Focus sessions: start, drift detection, summary and recovery.
     pub focus: Arc<FocusService>,
+    /// Strokes, levels, streaks and seals. Focus and goals feed it; the goal watcher settles
+    /// the daily limits.
+    pub progress: Arc<ProgressService>,
     /// The weekly review and its optional AI analysis.
     pub review: Arc<ReviewService>,
     /// Read-only listing of activities and rules (writes go through `commands`).
@@ -250,19 +255,32 @@ pub fn compose(
 
     let reports = Arc::new(reports);
     let queries = Queries::new(reports.clone(), activities.clone());
-    let goals = Arc::new(GoalService::new(
-        Arc::new(SqliteGoalRepository::new(adapters_sqlite::open(db_path)?)),
+    let progress = Arc::new(ProgressService::new(
+        Arc::new(SqliteProgressRepository::new(adapters_sqlite::open(
+            db_path,
+        )?)),
         reports.clone(),
-        activities.clone(),
-        settings.clone(),
         Arc::new(ChronoLocalCalendar),
     ));
-    let focus = Arc::new(FocusService::new(
-        Arc::new(SqliteFocusRepository::new(adapters_sqlite::open(db_path)?)),
-        reports.clone(),
-        activities.clone(),
-        settings.clone(),
-    ));
+    let goals = Arc::new(
+        GoalService::new(
+            Arc::new(SqliteGoalRepository::new(adapters_sqlite::open(db_path)?)),
+            reports.clone(),
+            activities.clone(),
+            settings.clone(),
+            Arc::new(ChronoLocalCalendar),
+        )
+        .with_progress(progress.clone()),
+    );
+    let focus = Arc::new(
+        FocusService::new(
+            Arc::new(SqliteFocusRepository::new(adapters_sqlite::open(db_path)?)),
+            reports.clone(),
+            activities.clone(),
+            settings.clone(),
+        )
+        .with_progress(progress.clone()),
+    );
     let review = Arc::new(ReviewService::new(
         reports.clone(),
         activities.clone(),
@@ -314,6 +332,7 @@ pub fn compose(
         data,
         goals,
         focus,
+        progress,
         review,
         activities,
         permission: providers.permission,

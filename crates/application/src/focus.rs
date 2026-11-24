@@ -25,6 +25,7 @@ use crate::ports::{
     ActivityRepository, DegradedReason, FocusEndAlert, FocusRepository, NewFocus, PortError,
     ReportRepository, RunningFocus, SettingsRepository, StoredFocus,
 };
+use crate::progress::ProgressSink;
 use crate::settings_blobs::{
     FocusTimerSettings, KEY_FOCUS_CYCLE, KEY_FOCUS_TIMER, read_blob, read_focus_drift_after_secs,
     write_blob,
@@ -155,6 +156,8 @@ pub struct FocusService {
     reports: Arc<dyn ReportRepository>,
     activities: Arc<dyn ActivityRepository>,
     settings: Arc<dyn SettingsRepository>,
+    /// Told about every block once its row is closed (best effort).
+    progress: Option<Arc<dyn ProgressSink>>,
     inner: Mutex<Inner>,
 }
 
@@ -170,6 +173,7 @@ impl FocusService {
             reports,
             activities,
             settings,
+            progress: None,
             inner: Mutex::new(Inner {
                 machine: FocusMachine::new(Config::default()),
                 id: None,
@@ -177,6 +181,14 @@ impl FocusService {
                 timer: FocusTimerSettings::default(),
             }),
         }
+    }
+
+    /// Awards strokes for the blocks that close (completed, cancelled or recovered). The sink
+    /// never fails, so progress can never break a session.
+    #[must_use]
+    pub fn with_progress(mut self, progress: Arc<dyn ProgressSink>) -> Self {
+        self.progress = Some(progress);
+        self
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
@@ -668,14 +680,19 @@ impl FocusService {
         if !with_summary {
             self.focus.mark_seen(stored.id)?;
         }
-        Ok(StoredFocus {
+        let closed = StoredFocus {
             ended_at: Some(at),
             end_reason: Some(reason),
             paused_at: None,
             summary,
             seen: !with_summary,
             ..stored.clone()
-        })
+        };
+        // Every way a block ends goes through here: completion, cancel and recovery.
+        if let Some(progress) = &self.progress {
+            progress.block_closed(&closed, now);
+        }
+        Ok(closed)
     }
 
     /// Tracked time of the session split into inside and outside, from the segments.

@@ -15,6 +15,7 @@ pub mod idle_policy;
 pub mod language;
 pub mod ports;
 pub mod presets;
+pub mod progress;
 pub mod queries;
 pub mod review;
 pub mod review_payload;

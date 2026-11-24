@@ -22,6 +22,7 @@ use crate::ports::{
     ActivityRepository, Calendar, GoalEvent, GoalRepository, PortError, PortResult,
     ReportRepository, SettingsRepository,
 };
+use crate::progress::ProgressSink;
 use crate::settings_blobs::read_week_start;
 
 /// How far back streaks look; older periods are ignored (a streak never reads more than this).
@@ -135,6 +136,8 @@ pub struct GoalService {
     activities: Arc<dyn ActivityRepository>,
     settings: Arc<dyn SettingsRepository>,
     calendar: Arc<dyn Calendar>,
+    /// Told when a goal is announced as reached (best effort).
+    progress: Option<Arc<dyn ProgressSink>>,
 }
 
 /// Period boundaries of one kind: `starts[i]` is the first local day of period `i`,
@@ -170,7 +173,16 @@ impl GoalService {
             activities,
             settings,
             calendar,
+            progress: None,
         }
+    }
+
+    /// Awards strokes when [`Self::evaluate`] finds a goal newly reached. The sink never
+    /// fails, so progress can never break the evaluation.
+    #[must_use]
+    pub fn with_progress(mut self, progress: Arc<dyn ProgressSink>) -> Self {
+        self.progress = Some(progress);
+        self
     }
 
     /// Every goal, archived ones included.
@@ -371,6 +383,11 @@ impl GoalService {
                         seen: false,
                     };
                     if self.goals.record_event(&event)? {
+                        if kind == EventKind::Reached
+                            && let Some(progress) = &self.progress
+                        {
+                            progress.goal_reached(&goal, event.period_start_day, now);
+                        }
                         crossings.push(Crossing { goal, kind });
                     }
                 }

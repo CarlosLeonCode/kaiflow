@@ -8,6 +8,10 @@
 //! is an in-app event (the badge) plus a best-effort system notification.
 //!
 //! Nothing here ever blocks an app: a crossed limit only produces an alert.
+//!
+//! It also settles the daily limits for progress (strokes for each limit respected on a
+//! closed day): on its first evaluation after startup and on the first one of each new local
+//! day, which the midnight wake-up guarantees. Settling is idempotent, so a repeat is harmless.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -15,7 +19,8 @@ use std::time::Duration;
 use application::engine::{Command, Reply};
 use application::goals::GoalService;
 use application::language::UiLanguage;
-use application::ports::{Clock, Notifier, TrackingKind};
+use application::ports::{Calendar, Clock, Notifier, TrackingKind};
+use application::progress::ProgressService;
 use crossbeam_channel::{Receiver, RecvTimeoutError, Sender, unbounded};
 use domain::UtcMs;
 use tauri::{AppHandle, Manager, Wry};
@@ -34,6 +39,26 @@ const MIN_WAIT_MS: i64 = 1_000;
 const DEBOUNCE: Duration = Duration::from_millis(150);
 /// Retry delay when the state or the database is not reachable.
 const RETRY: Duration = Duration::from_secs(60);
+
+/// Settles the daily limits unless it was already done on the local day of `now`.
+/// `settled` is the last day it ran for. Failures are logged and not retried until the next
+/// day: the lookback window of [`ProgressService::settle_limits`] catches up then.
+pub fn settle_once_a_day(
+    progress: &ProgressService,
+    goals: &GoalService,
+    calendar: &dyn Calendar,
+    settled: &mut Option<i64>,
+    now: UtcMs,
+) {
+    let today = calendar.local_day(now);
+    if *settled == Some(today) {
+        return;
+    }
+    *settled = Some(today);
+    if let Err(error) = progress.settle_limits(goals, now) {
+        eprintln!("goal watcher: could not settle the daily limits: {error}");
+    }
+}
 
 /// One evaluation: announce the new crossings and say when to look again.
 ///
@@ -105,6 +130,7 @@ impl GoalWatcher {
 fn run(app: &AppHandle<Wry>, rx: &Receiver<Msg>, language: UiLanguage) {
     let notifier = SystemNotifier::new(TauriToaster::new(app.clone()), language);
     let mut wait = Some(Duration::ZERO);
+    let mut settled = None;
     loop {
         let woke = match wait {
             Some(timeout) => rx.recv_timeout(timeout),
@@ -123,7 +149,7 @@ fn run(app: &AppHandle<Wry>, rx: &Receiver<Msg>, language: UiLanguage) {
             wait = Some(RETRY);
             continue;
         };
-        wait = match evaluate(&state, &notifier, &|event| {
+        wait = match evaluate(&state, &notifier, &mut settled, &|event| {
             let _ = event.emit(app);
         }) {
             Ok(next) => Some(next),
@@ -149,8 +175,16 @@ fn drain(rx: &Receiver<Msg>) -> bool {
 fn evaluate(
     state: &AppState,
     notifier: &dyn Notifier,
+    settled: &mut Option<i64>,
     emit: &dyn Fn(GoalCrossed),
 ) -> Result<Duration, String> {
+    settle_once_a_day(
+        &state.progress,
+        &state.goals,
+        &state.calendar,
+        settled,
+        state.clock.now(),
+    );
     let tracking = match state
         .engine
         .request(Command::GetStatus)
@@ -167,8 +201,10 @@ mod tests {
     use std::sync::Mutex;
 
     use application::fakes::{
-        FakeActivities, FakeGoals, FakeSettings, FakeStore, FixedCalendar, RecordingNotifier,
+        FakeActivities, FakeGoals, FakeProgress, FakeSettings, FakeStore, FixedCalendar,
+        RecordingNotifier,
     };
+    use application::ports::ProgressRepository;
     use domain::{EndReason, Goal, GoalKind, GoalScope, Period, Segment, SegmentId, SegmentSource};
 
     use super::*;
@@ -296,6 +332,32 @@ mod tests {
         // 20 hours away but only 1 hour to midnight: the day rolls over first.
         let wake = r.step(true, 23 * HOUR);
         assert_eq!(wake, Duration::from_millis((HOUR + SLACK_MS) as u64));
+    }
+
+    #[test]
+    fn limits_are_settled_once_per_local_day() {
+        let r = rig();
+        r.add(GoalKind::Maximum, HOUR);
+        let ledger = FakeProgress::default();
+        let calendar = FixedCalendar::fixed(0);
+        let progress = ProgressService::new(
+            Arc::new(ledger.clone()),
+            Arc::new(r.store.clone()),
+            Arc::new(calendar.clone()),
+        );
+        let mut settled = None;
+        let settle = |settled: &mut Option<i64>, at: i64| {
+            settle_once_a_day(&progress, &r.goals, &calendar, settled, UtcMs(D0 + at));
+        };
+        // Day 100 is today: the goal only exists from today, so nothing is due yet.
+        settle(&mut settled, HOUR);
+        assert_eq!(settled, Some(100));
+        // Today's time is only settled once the day is over, on the next local day.
+        r.use_mail(9 * HOUR, 9 * HOUR + 30 * MIN);
+        settle(&mut settled, 10 * HOUR);
+        assert_eq!(ledger.total(), Ok(0));
+        settle(&mut settled, DAY + HOUR);
+        assert_eq!((settled, ledger.total()), (Some(101), Ok(10)));
     }
 
     #[test]
