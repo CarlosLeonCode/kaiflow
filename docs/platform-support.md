@@ -81,8 +81,11 @@ las secciones (`⌘1`..`⌘8` en macOS, `Ctrl+1`..`Ctrl+8` en el resto).
 - **Permisos**: ninguno. El estado de permiso es siempre "concedido".
 - **Bandeja**: Windows no admite texto junto al icono; el total del dia o la app actual se
   muestran en el tooltip.
-- **Limitaciones conocidas**: las apps UWP (Calculadora, Configuracion...) aparecen como
-  `applicationframehost.exe`; las ventanas de procesos con mas privilegios pueden no revelar
+- **Apps UWP** (Calculadora, Configuracion, Fotos...): su ventana principal pertenece a
+  `ApplicationFrameHost.exe`, asi que se usa el proceso de la ventana hija que pertenece a otro
+  proceso (`EnumChildWindows`), que es la app. Si la app esta suspendida y aun no tiene esa
+  ventana hija, se registra `applicationframehost.exe` como antes.
+- **Limitaciones conocidas**: las ventanas de procesos con mas privilegios pueden no revelar
   su ejecutable y en ese caso no se registran.
 
 ## Linux
