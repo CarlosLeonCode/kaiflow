@@ -32,7 +32,7 @@ export function EndCard({ card, cycle, compact = false, busy = false, error, onS
   return (
     <section
       aria-label={t.focus.endCard.label}
-      className={cn(compact ? "rounded-xl border border-border bg-surface p-3" : "rounded-card bg-paper-surface px-6 py-7 text-center")}
+      className={cn(compact ? "rounded-2xl bg-paper-surface p-3" : "rounded-card bg-paper-surface px-6 py-7 text-center")}
     >
       <div className={cn("flex gap-3", compact ? "items-start" : "flex-col items-center")}>
         <span
@@ -47,7 +47,7 @@ export function EndCard({ card, cycle, compact = false, busy = false, error, onS
           <Icon className={compact ? "size-4.5" : "size-6"} />
         </span>
         <div className="min-w-0">
-          <h2 className={cn(compact ? "text-sm font-semibold" : "font-display text-xl leading-[1.15] font-extrabold tracking-[-0.02em]")}>{copy.title}</h2>
+          <h2 className={cn(compact ? "font-display text-sm font-bold" : "font-display text-xl leading-[1.15] font-extrabold tracking-[-0.02em]")}>{copy.title}</h2>
           <p className="truncate text-xs text-muted-foreground" title={card.finished.intent || undefined}>
             {blockTitle(card.finished, t)}
           </p>

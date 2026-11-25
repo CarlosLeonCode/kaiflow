@@ -30,15 +30,15 @@ export function IdlePromptCard({ gap, moreCount, activities, busy, error, onReso
   const range = `${formatTimeOfDay(gap.started_at, locale)} – ${formatTimeOfDay(gap.ended_at, locale)}`;
 
   return (
-    <section aria-label={m.label} className="rounded-lg border border-border bg-background px-3 py-2">
+    <section aria-label={m.label} className="rounded-2xl border-[1.5px] border-mark-stroke bg-background px-3 py-2.5 shadow-(--shadow-sticker-sm)">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="flex min-w-0 items-center gap-1.5 font-medium" title={range}>
+        <h2 className="flex min-w-0 items-center gap-1.5 font-display font-bold" title={range}>
           <Moon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
           <span className="tabular shrink-0">{m.away(formatDuration(gap.ended_at - gap.started_at))}</span>
-          {previous && <span className="truncate font-normal text-muted-foreground">· {previous.app_name}</span>}
+          {previous && <span className="truncate font-sans font-normal text-muted-foreground">· {previous.app_name}</span>}
           {moreCount > 0 && (
             <>
-              <span aria-hidden="true" className="shrink-0 rounded bg-muted px-1 text-2xs font-normal text-muted-foreground">
+              <span aria-hidden="true" className="shrink-0 rounded-full bg-muted px-1.5 font-sans text-2xs font-normal text-muted-foreground">
                 +{moreCount}
               </span>
               <span className="sr-only">{m.moreWaiting(moreCount)}</span>
@@ -98,7 +98,7 @@ export function IdlePromptCard({ gap, moreCount, activities, busy, error, onReso
                     type="button"
                     disabled={busy}
                     onClick={() => onResolve({ kind: "assign_activity", activity_id: activity.id })}
-                    className="flex h-7 w-full items-center gap-2 rounded-md px-2 text-left hover:bg-accent disabled:opacity-50"
+                    className="flex h-7 w-full items-center gap-2 rounded-lg px-2 text-left hover:bg-accent disabled:opacity-50"
                   >
                     <span
                       aria-hidden="true"

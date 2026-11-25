@@ -45,7 +45,7 @@ export function TrackingFooter({ state, shortcut, pending, onToggle, onOpenDashb
   const action = toggleAction(state, t);
   return (
     // The popover is 360 px wide: nothing here may shrink, or the shortcut slides under the button.
-    <footer className="flex items-center gap-2 border-t border-border bg-surface px-4 py-2.5">
+    <footer className="flex items-center gap-2 border-t border-border bg-paper-surface px-4 py-2.5">
       {action ? (
         <Button
           variant="primary"

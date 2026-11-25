@@ -79,7 +79,7 @@ export function ActiveTimerCard({
       aria-label={paused ? t.focus.pausedTimer(spoken) : spoken}
       className={cn(
         "tabular tracking-tight",
-        compact ? "text-xl font-semibold" : "font-display text-display font-extrabold tracking-[-0.03em]",
+        compact ? "font-display text-xl font-extrabold" : "font-display text-display font-extrabold tracking-[-0.03em]",
         // Opacity, not a color class: tailwind-merge would take `text-display` for a color.
         paused && "opacity-60",
       )}
@@ -132,7 +132,7 @@ export function ActiveTimerCard({
 
   if (compact) {
     return (
-      <section aria-label={t.focus.activeTimer} className="rounded-xl border border-border bg-surface p-3">
+      <section aria-label={t.focus.activeTimer} className="rounded-2xl bg-paper-surface p-3">
         <div className="flex items-center gap-4">
           <TimerRing progress={done} kind={session.kind} paused={paused} size={96} stroke={5}>
             {countdown}

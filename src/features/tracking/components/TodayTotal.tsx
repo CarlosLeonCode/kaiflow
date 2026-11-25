@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { useT } from "@/shared/i18n";
 import { formatClock } from "@/shared/lib/time";
+import { BIG_NUMBER } from "@/shared/ui/card";
 
 interface Props {
   totalMs: number | undefined;
@@ -20,7 +21,7 @@ export function TodayTotal({ totalMs, live, aside, badge }: Props) {
         <p className="text-xs font-medium text-muted-foreground">{today}</p>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <p
-            className="tabular text-display font-semibold tracking-tight"
+            className={BIG_NUMBER}
             aria-live="off"
             data-testid="today-total"
             data-live={live}

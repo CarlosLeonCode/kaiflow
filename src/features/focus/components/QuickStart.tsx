@@ -28,7 +28,7 @@ export function QuickStart({ busy = false, error, onStart }: Props) {
             disabled={busy}
             aria-label={t.focus.minutes(minutes)}
             onClick={() => onStart(minutes)}
-            className="tabular h-7 min-w-11 rounded-md border border-border bg-background px-2 text-xs font-medium transition-colors hover:border-primary/50 hover:bg-accent disabled:opacity-50"
+            className="tabular h-7 min-w-11 rounded-full border-[1.5px] border-border bg-background px-2.5 font-display text-xs font-bold transition-colors hover:border-mark-stroke hover:bg-pop-sun hover:text-on-pop disabled:opacity-50"
           >
             {minutes}
           </button>

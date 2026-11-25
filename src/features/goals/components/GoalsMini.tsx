@@ -1,4 +1,5 @@
 import { useT } from "@/shared/i18n";
+import { CARD_HEADING } from "@/shared/ui/card";
 import type { GoalStatusDto } from "@/shared/ipc";
 
 import { streakText, topGoals, unseenLabel } from "../lib/goals";
@@ -13,7 +14,7 @@ export function GoalsMini({ goals }: { goals: readonly GoalStatusDto[] }) {
   if (goals.length === 0) return null;
   return (
     <section aria-label={t.shell.sections.goals} className="mt-4 px-4">
-      <h2 className="mb-1 text-2xs font-medium uppercase tracking-wide text-muted-foreground">{t.shell.sections.goals}</h2>
+      <h2 className={`mb-1 ${CARD_HEADING}`}>{t.shell.sections.goals}</h2>
       <ul aria-label={t.goals.progress} className="space-y-2.5">
         {topGoals(goals, MINI_LIMIT).map((status) => {
           const run = streakText(status.streak, status.goal.period, t);

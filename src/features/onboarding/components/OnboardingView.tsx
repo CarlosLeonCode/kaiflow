@@ -67,16 +67,16 @@ export function OnboardingView(props: Props) {
                 <span
                   aria-hidden="true"
                   className={cn(
-                    "flex size-5 items-center justify-center rounded-full border text-2xs tabular",
-                    current && "border-primary bg-primary text-primary-foreground",
-                    done && "border-primary text-primary",
+                    "flex size-6 items-center justify-center rounded-full border-[1.5px] font-display text-2xs font-bold tabular",
+                    current && "border-mark-stroke bg-pop-sun text-on-pop shadow-(--shadow-sticker-sm)",
+                    done && "border-mark-stroke bg-mark-stroke text-on-ink",
                     !current && !done && "border-border",
                   )}
                 >
                   {index + 1}
                 </span>
                 {labels[id]}
-                {index < STEPS.length - 1 && <span aria-hidden="true" className="mx-1 h-px w-6 bg-border" />}
+                {index < STEPS.length - 1 && <span aria-hidden="true" className="mx-1 h-[1.5px] w-6 rounded-full bg-border" />}
               </li>
             );
           })}
@@ -90,7 +90,7 @@ export function OnboardingView(props: Props) {
             <h1
               ref={heading}
               tabIndex={-1}
-              className="text-xl font-semibold outline-none"
+              className="font-display text-2xl leading-[1.15] font-extrabold tracking-[-0.02em] outline-none"
             >
               {m.headings[step]}
             </h1>
@@ -160,14 +160,14 @@ function WelcomeStep({ platform }: { platform: PlatformInfoDto }) {
       <p className="text-muted-foreground">
         {m.intro(words.tray)}
       </p>
-      <ul className="divide-y divide-border rounded-lg border border-border">
+      <ul className="divide-y divide-border overflow-hidden rounded-2xl border border-border">
         {items.map(({ icon: Icon, title, text }) => (
-          <li key={title} className="flex gap-3 px-3 py-3">
-            <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+          <li key={title} className="flex gap-3 px-4 py-3">
+            <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-xl bg-paper-surface text-foreground">
               <Icon className="size-4" aria-hidden="true" />
             </span>
             <div>
-              <p className="font-medium">{title}</p>
+              <p className="font-display font-bold">{title}</p>
               <p className="text-xs text-muted-foreground">{text}</p>
             </div>
           </li>
@@ -186,7 +186,7 @@ function AccessStep(props: Props) {
   const m = useT().onboarding.access;
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between gap-4 rounded-lg border border-border px-3 py-2.5">
+      <div className="flex items-center justify-between gap-4 rounded-2xl border border-border px-4 py-3">
         <div>
           <label htmlFor="onboarding-titles" className="block font-medium">
             {m.recordTitles}
@@ -219,8 +219,8 @@ function NoPermissionSection({ platform }: { platform: PlatformInfoDto }) {
   const t = useT();
   const m = t.onboarding.access;
   return (
-    <section aria-label={m.noPermission} className="space-y-2 rounded-lg border border-border px-3 py-3">
-      <h2 className="flex items-center gap-1.5 font-medium">
+    <section aria-label={m.noPermission} className="space-y-2 rounded-2xl border border-border px-4 py-3">
+      <h2 className="flex items-center gap-1.5 font-display font-bold">
         <CheckCircle2 className="size-4 text-success" aria-hidden="true" />
         {m.noPermission}
       </h2>
@@ -236,8 +236,8 @@ function WaylandSection() {
   const t = useT();
   const m = t.onboarding.access;
   return (
-    <section aria-label={m.waylandSession} className="space-y-2 rounded-lg border border-border px-3 py-3">
-      <h2 className="flex items-center gap-1.5 font-medium">
+    <section aria-label={m.waylandSession} className="space-y-2 rounded-2xl border border-border px-4 py-3">
+      <h2 className="flex items-center gap-1.5 font-display font-bold">
         <CircleAlert className="size-4 text-warning-foreground" aria-hidden="true" />
         {t.tracking.degraded.wayland_session.title}
       </h2>
@@ -261,10 +261,10 @@ function AccessibilitySection({
   return (
     <section
       aria-label={m.accessibility}
-      className="space-y-3 rounded-lg border border-border px-3 py-3"
+      className="space-y-3 rounded-2xl border border-border px-4 py-3.5"
     >
       <div className="flex items-center justify-between gap-3">
-        <h2 className="font-medium">{m.accessibility}</h2>
+        <h2 className="font-display font-bold">{m.accessibility}</h2>
         <p
           role="status"
           className={cn(
@@ -323,12 +323,12 @@ function ReadyStep({ platform, storeTitles, permission }: Props) {
       <p className="text-muted-foreground">
         {mac ? m.macNote : isWayland(platform) ? m.waylandNote : m.otherNote}
       </p>
-      <dl className="divide-y divide-border rounded-lg border border-border text-sm">
-        <div className="flex justify-between gap-4 px-3 py-2.5">
+      <dl className="divide-y divide-border overflow-hidden rounded-2xl border border-border text-sm">
+        <div className="flex justify-between gap-4 px-4 py-2.5">
           <dt className="text-muted-foreground">{m.recording}</dt>
           <dd className="text-right font-medium">{summary.titles}</dd>
         </div>
-        <div className="flex justify-between gap-4 px-3 py-2.5">
+        <div className="flex justify-between gap-4 px-4 py-2.5">
           <dt className="text-muted-foreground">{summary.accessLabel}</dt>
           <dd className="text-right font-medium">{summary.access}</dd>
         </div>
