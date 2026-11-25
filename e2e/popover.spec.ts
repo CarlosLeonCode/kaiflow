@@ -19,9 +19,10 @@ test.describe("menu bar popover", () => {
     await expect(page.getByText("Tracking", { exact: true })).toBeVisible();
   });
 
-  for (const language of ["en", "es"]) {
-    test(`the footer fits the 360 px popover without overlap (${language})`, async ({ page }) => {
-      await openWindow(page, "popover", `?language=${language}`);
+  // Windows and Linux spell the shortcut out ("Ctrl+Alt+Shift+K"), the widest footer.
+  for (const [os, language] of [["macos", "en"], ["macos", "es"], ["windows", "en"], ["windows", "es"], ["linux", "en"]] as const) {
+    test(`the footer fits the 360 px popover without overlap (${os}, ${language})`, async ({ page }) => {
+      await openWindow(page, "popover", `?language=${language}&os=${os}`);
       const footer = page.locator("footer");
       await expect(footer.getByRole("button").first()).toBeVisible();
 

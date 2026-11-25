@@ -39,7 +39,11 @@ interface FooterProps {
   onOpenDashboard: () => void;
 }
 
-/** Primary pause/resume/start action plus the way into the dashboard. */
+/**
+ * Primary pause/resume/start action, the global shortcut and the way into the dashboard. The
+ * dashboard button is an icon with a tooltip: on Windows and Linux the shortcut reads
+ * "Ctrl+Alt+Shift+K", and with a labelled button the row no longer fit the 360 px popover.
+ */
 export function TrackingFooter({ state, shortcut, pending, onToggle, onOpenDashboard }: FooterProps) {
   const t = useT();
   const action = toggleAction(state, t);
@@ -69,13 +73,13 @@ export function TrackingFooter({ state, shortcut, pending, onToggle, onOpenDashb
       )}
       <Button
         variant="ghost"
-        className="ml-auto shrink-0"
+        size="icon"
+        className="ml-auto size-8 shrink-0"
         aria-label={t.tracking.openDashboard}
         title={t.tracking.openDashboard}
         onClick={onOpenDashboard}
       >
         <LayoutDashboard aria-hidden="true" />
-        {t.tracking.dashboard}
       </Button>
     </footer>
   );
