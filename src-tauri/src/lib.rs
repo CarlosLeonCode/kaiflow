@@ -63,7 +63,7 @@ pub fn run() {
         // Single-instance must be the first plugin (R6.4): a second launch focuses the
         // running app instead of starting another engine.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            windows::show_main(app);
+            show_on_second_launch(app);
         }))
         // Plugins are registered here and only invoked from Rust (R6.5): no capability file
         // grants any plugin permission to a window.
@@ -179,6 +179,33 @@ pub fn run() {
     });
 }
 
+/// Which window a second launch brings forward: the welcome while the onboarding is pending
+/// (`Some(true)`), the dashboard otherwise, including before the settings can be read.
+fn second_launch_window(onboarding_pending: Option<bool>) -> &'static str {
+    if onboarding_pending == Some(true) {
+        windows::ONBOARDING
+    } else {
+        windows::MAIN
+    }
+}
+
+/// A second launch focuses the running app instead of starting another engine (R6.4).
+fn show_on_second_launch(app: &AppHandle<Wry>) {
+    let state = app.try_state::<Arc<AppState>>();
+    let pending = state
+        .as_ref()
+        .and_then(|state| state.commands.get_settings().ok())
+        .map(|settings| !settings.onboarding_completed);
+    if second_launch_window(pending) == windows::ONBOARDING {
+        let language = state.map_or(application::language::Language::En, |state| {
+            state.language.current()
+        });
+        windows::show_onboarding(app, i18n::messages(language));
+    } else {
+        windows::show_main(app);
+    }
+}
+
 /// Brings the data of the app's former identity over before SQLite opens the database.
 /// A failure is logged and the app starts with what the new directory holds: the old
 /// directory is never touched, so nothing is lost and the next launch tries again.
@@ -264,6 +291,13 @@ mod tests {
             current, fresh,
             "src/shared/ipc/bindings.ts is stale: run `UPDATE_BINDINGS=1 cargo test -p kaiflow generated_bindings`"
         );
+    }
+
+    #[test]
+    fn a_second_launch_shows_the_welcome_until_the_onboarding_is_done() {
+        assert_eq!(second_launch_window(Some(true)), windows::ONBOARDING);
+        assert_eq!(second_launch_window(Some(false)), windows::MAIN);
+        assert_eq!(second_launch_window(None), windows::MAIN);
     }
 
     #[test]

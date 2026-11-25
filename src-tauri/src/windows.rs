@@ -494,6 +494,25 @@ pub fn show_main(app: &AppHandle<Wry>) {
     }
 }
 
+/// Brings the welcome window forward, creating it again if it was closed before the
+/// onboarding was completed. Titles use the catalog `m`.
+pub fn show_onboarding(app: &AppHandle<Wry>, m: &Messages) {
+    let window = match app.get_webview_window(ONBOARDING) {
+        Some(window) => window,
+        None => match build(app, &ONBOARDING_SPEC, m) {
+            Ok(window) => window,
+            Err(error) => {
+                eprintln!("could not open the welcome window: {error}");
+                show_main(app);
+                return;
+            }
+        },
+    };
+    let _ = window.unminimize();
+    let _ = window.show();
+    let _ = window.set_focus();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
