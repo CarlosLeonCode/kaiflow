@@ -3,7 +3,7 @@
 //! the Vite multi-page entries `popover.html`, `main.html` and `onboarding.html`.
 
 use std::sync::{Mutex, PoisonError};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use tauri::{
     AppHandle, Manager, Monitor, PhysicalPosition, Rect, WebviewUrl, WebviewWindow,
@@ -161,9 +161,44 @@ fn hide_when_unfocused(window: &WebviewWindow<Wry>) {
     let target = window.clone();
     window.on_window_event(move |event| {
         if matches!(event, WindowEvent::Focused(false)) {
+            if target.is_visible().unwrap_or(false) {
+                POPOVER_BLUR.hidden_at(Instant::now());
+            }
             let _ = target.hide();
         }
     });
+}
+
+/// How long after a blur a tray click is taken as the click that caused it.
+const BLUR_ECHO: Duration = Duration::from_millis(300);
+
+/// When the popover last hid because it lost the focus. Clicking the tray icon while the
+/// popover is open moves the focus to the taskbar first (Windows), which hides the popover;
+/// the click then arrives and would open it again. A toggle that soon after the blur is that
+/// same click, so it leaves the popover closed.
+#[derive(Debug, Default)]
+struct PopoverBlur(Mutex<Option<Instant>>);
+
+static POPOVER_BLUR: PopoverBlur = PopoverBlur::new();
+
+impl PopoverBlur {
+    const fn new() -> Self {
+        Self(Mutex::new(None))
+    }
+
+    fn hidden_at(&self, at: Instant) {
+        *self.0.lock().unwrap_or_else(PoisonError::into_inner) = Some(at);
+    }
+
+    /// Whether a toggle at `now` is the click that just hid the popover. Each blur is
+    /// consumed by the first toggle after it.
+    fn is_echo(&self, now: Instant) -> bool {
+        self.0
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take()
+            .is_some_and(|hidden| now.saturating_duration_since(hidden) < BLUR_ECHO)
+    }
 }
 
 /// Closing the main window keeps the app alive in the menu bar.
@@ -184,6 +219,9 @@ pub fn toggle_popover(app: &AppHandle<Wry>, tray_rect: Option<Rect>) {
     };
     if window.is_visible().unwrap_or(false) {
         let _ = window.hide();
+        return;
+    }
+    if POPOVER_BLUR.is_echo(Instant::now()) {
         return;
     }
     place_and_show(&window, tray_rect);
@@ -496,6 +534,26 @@ mod tests {
             assert!(MAIN_SPEC.decorations && !MAIN_SPEC.always_on_top);
             assert!(ONBOARDING_SPEC.decorations && !ONBOARDING_SPEC.always_on_top);
         }
+    }
+
+    #[test]
+    fn a_toggle_right_after_a_blur_is_the_click_that_caused_it() {
+        let blur = PopoverBlur::new();
+        let at = Instant::now();
+        assert!(!blur.is_echo(at), "no blur yet");
+        blur.hidden_at(at);
+        assert!(blur.is_echo(at + Duration::from_millis(120)));
+        // Consumed: the next click opens the popover again.
+        assert!(!blur.is_echo(at + Duration::from_millis(150)));
+    }
+
+    #[test]
+    fn a_later_toggle_opens_the_popover() {
+        let blur = PopoverBlur::new();
+        let at = Instant::now();
+        blur.hidden_at(at);
+        assert!(!blur.is_echo(at + BLUR_ECHO));
+        assert!(!blur.is_echo(at + Duration::from_secs(5)));
     }
 
     #[test]
