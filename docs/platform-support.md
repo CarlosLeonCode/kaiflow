@@ -87,6 +87,14 @@ las secciones (`⌘1`..`⌘8` en macOS, `Ctrl+1`..`Ctrl+8` en el resto).
 
 ## Linux
 
+### Instalacion
+
+- El `.deb` instala sus dependencias con `apt` y es la opcion mas sencilla en Ubuntu y Debian.
+- La AppImage necesita FUSE 2 (`libfuse2`). Ubuntu 24.04 ya no lo trae instalado y la AppImage
+  no abre: instalar `libfuse2t64` (`sudo apt install libfuse2t64`) o usar el `.deb`.
+
+### Modos
+
 El modo se decide una vez al iniciar:
 
 | Sesion | Modo | Que se registra |

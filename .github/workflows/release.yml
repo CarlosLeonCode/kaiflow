@@ -153,6 +153,8 @@ jobs:
             echo "  chmod +x Kaiflow_*.AppImage"
             echo "  ./Kaiflow_*.AppImage"
             echo "  \`\`\`"
+            echo
+            echo "  The AppImage needs FUSE 2. Ubuntu 24.04 no longer ships it, so the AppImage does not open there: install it with \`sudo apt install libfuse2t64\` or use the \`.deb\`."
             echo "- **\`.deb\`** (Ubuntu 22.04 or later, Debian 12 or later):"
             echo
             echo "  \`\`\`sh"
