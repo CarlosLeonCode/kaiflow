@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use std::thread::JoinHandle;
 
 use adapters_common::activation::Activation;
+use adapters_common::diagnostics::Diagnostics;
 use crossbeam_channel::Sender;
 use x11rb::connection::{Connection, RequestConnection};
 use x11rb::protocol::Event;
@@ -180,19 +181,24 @@ fn read_process_name(pid: u32) -> Option<String> {
 
 /// Reports active-window switches as they happen, on its own connection. Ends (without
 /// retrying) when the server closes the connection, so it never spins.
-pub fn spawn_listener(activations: Sender<Activation>) -> std::io::Result<JoinHandle<()>> {
+pub fn spawn_listener(
+    activations: Sender<Activation>,
+    diagnostics: Diagnostics,
+) -> std::io::Result<JoinHandle<()>> {
     std::thread::Builder::new()
         .name("x11-events".into())
         .spawn(move || {
             let x11 = match X11::connect() {
                 Ok(x11) => x11,
                 Err(error) => {
-                    eprintln!("X11 event listener unavailable: {error}");
+                    diagnostics
+                        .record_failure("x11", &format!("event listener unavailable: {error}"));
                     return;
                 }
             };
             if let Err(error) = x11.watch_root() {
-                eprintln!("cannot watch the X11 root window: {error}");
+                diagnostics
+                    .record_failure("x11", &format!("cannot watch the root window: {error}"));
                 return;
             }
             loop {
@@ -207,7 +213,7 @@ pub fn spawn_listener(activations: Sender<Activation>) -> std::io::Result<JoinHa
                     }
                     Ok(_) => {}
                     Err(error) => {
-                        eprintln!("X11 connection closed: {error}");
+                        diagnostics.record_failure("x11", &format!("connection closed: {error}"));
                         return;
                     }
                 }

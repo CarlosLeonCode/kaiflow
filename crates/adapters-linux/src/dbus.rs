@@ -7,6 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::JoinHandle;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use adapters_common::diagnostics::Diagnostics;
 use adapters_common::fanout::SignalFanout;
 use zbus::blocking::{Connection, MessageIterator};
 use zbus::message::Type;
@@ -72,10 +73,15 @@ fn signal_of(message: &Message, session: Option<&str>) -> Option<application::po
     }
 }
 
-fn listen(power: &SignalFanout) -> zbus::Result<()> {
+fn listen(power: &SignalFanout, diagnostics: &Diagnostics) -> zbus::Result<()> {
     let system = Connection::system()?;
     let session = own_session(&system)
-        .map_err(|error| eprintln!("logind session unknown, lock signals disabled: {error}"))
+        .map_err(|error| {
+            diagnostics.record_failure(
+                "logind",
+                &format!("session unknown, lock signals disabled: {error}"),
+            );
+        })
         .ok();
     let session = session.as_ref().map(|p| p.as_str().to_owned());
     let rule = MatchRule::builder()
@@ -94,12 +100,15 @@ fn listen(power: &SignalFanout) -> zbus::Result<()> {
 
 /// Starts the logind listener. Without a system bus (containers, minimal systems) it logs
 /// once and ends: tracking continues without sleep/lock signals.
-pub fn spawn_logind_listener(power: SignalFanout) -> std::io::Result<JoinHandle<()>> {
+pub fn spawn_logind_listener(
+    power: SignalFanout,
+    diagnostics: Diagnostics,
+) -> std::io::Result<JoinHandle<()>> {
     std::thread::Builder::new()
         .name("logind".into())
         .spawn(move || {
-            if let Err(error) = listen(&power) {
-                eprintln!("logind signals unavailable: {error}");
+            if let Err(error) = listen(&power, &diagnostics) {
+                diagnostics.record_failure("logind", &format!("signals unavailable: {error}"));
             }
         })
 }

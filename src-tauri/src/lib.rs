@@ -88,10 +88,11 @@ pub fn run() {
 
             let handle = app.handle().clone();
             let data_dir = app.path().app_data_dir()?;
-            carry_over_legacy_data(&data_dir);
-            let shortcut = AppState::default_shortcut();
-            // Privacy-safe adapter log (never window titles): `diagnostics.log` next to the DB.
+            // Privacy-safe log (never window titles): `diagnostics.log` next to the DB. A
+            // Windows release has no console, so failures are written there too.
             let diagnostics = adapters_common::diagnostics::Diagnostics::in_dir(&data_dir);
+            carry_over_legacy_data(&data_dir, &diagnostics);
+            let shortcut = AppState::default_shortcut();
             // `setup` runs on the main thread, where the AppKit observers must be created.
             let language = composition::native_language();
             let providers = platform::providers(&handle, &diagnostics, &language);
@@ -146,7 +147,10 @@ pub fn run() {
             if settings.onboarding_completed
                 && let Err(error) = state.start()
             {
-                eprintln!("could not start tracking at launch: {error}");
+                state.diagnostics().record_failure(
+                    "startup",
+                    &format!("could not start tracking at launch: {error}"),
+                );
             }
             Ok(())
         })
@@ -225,7 +229,10 @@ fn show_on_second_launch(app: &AppHandle<Wry>) {
 /// Brings the data of the app's former identity over before SQLite opens the database.
 /// A failure is logged and the app starts with what the new directory holds: the old
 /// directory is never touched, so nothing is lost and the next launch tries again.
-fn carry_over_legacy_data(data_dir: &std::path::Path) {
+fn carry_over_legacy_data(
+    data_dir: &std::path::Path,
+    diagnostics: &adapters_common::diagnostics::Diagnostics,
+) {
     let legacy_dir = data_migration::legacy_data_dir(data_dir);
     match data_migration::migrate_legacy_data(
         data_dir,
@@ -239,9 +246,12 @@ fn carry_over_legacy_data(data_dir: &std::path::Path) {
             data_dir.display()
         ),
         Ok(_) => {}
-        Err(error) => eprintln!(
-            "could not copy earlier data from {}: {error}",
-            legacy_dir.display()
+        Err(error) => diagnostics.record_failure(
+            "data-migration",
+            &format!(
+                "could not copy earlier data from {}: {error}",
+                legacy_dir.display()
+            ),
         ),
     }
 }
@@ -268,13 +278,17 @@ fn apply_outside_settings(
         )
         .blocked_by(shortcuts::session_blocker()),
     );
+    let diagnostics = state.diagnostics();
     if let Err(error) = shortcuts.apply(&settings.shortcut) {
-        eprintln!("{error}");
+        diagnostics.record_failure("shortcut", &error);
     }
 
     let login = TauriLoginItem::new(handle.clone());
     if let Err(error) = reconcile(&login, settings.autostart) {
-        eprintln!("autostart could not be aligned with the settings: {error}");
+        diagnostics.record_failure(
+            "autostart",
+            &format!("could not be aligned with the settings: {error}"),
+        );
     }
     state.set_applier(Arc::new(ShellApplier::new(
         handle.clone(),

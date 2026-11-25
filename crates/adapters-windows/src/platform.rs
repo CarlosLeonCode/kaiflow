@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use adapters_common::activation::Activation;
+use adapters_common::diagnostics::Diagnostics;
 use adapters_common::fanout::SignalFanout;
 use adapters_common::sampler::SamplerEnv;
 use application::ports::{IdleProvider, PermissionProvider};
@@ -51,13 +52,18 @@ pub struct WindowsPlatform {
 
 impl WindowsPlatform {
     /// Starts the event thread. If it cannot be spawned, focus tracking still works through
-    /// polling; only the lock and sleep notifications are lost (logged).
-    pub fn start() -> Self {
+    /// polling; only the lock and sleep notifications are lost (logged to `diagnostics`).
+    pub fn start(diagnostics: &Diagnostics) -> Self {
         let env = WinEnv::default();
         let power = SignalFanout::new();
         let (tx, activations) = bounded(ACTIVATION_QUEUE);
-        if let Err(error) = message_loop::spawn(tx, power.clone(), env.cache.clone()) {
-            eprintln!("could not start the Windows event thread: {error}");
+        if let Err(error) =
+            message_loop::spawn(tx, power.clone(), env.cache.clone(), diagnostics.clone())
+        {
+            diagnostics.record_failure(
+                "win-events",
+                &format!("could not start the event thread: {error}"),
+            );
         }
         Self {
             env,
@@ -101,7 +107,7 @@ mod tests {
     #[test]
     #[ignore = "needs an interactive desktop session"]
     fn the_environment_answers_without_panicking() {
-        let platform = WindowsPlatform::start();
+        let platform = WindowsPlatform::start(&Diagnostics::in_memory());
         let _ = platform.frontmost();
         assert!(platform.env.seconds_since_input() >= 0.0);
     }
