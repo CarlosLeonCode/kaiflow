@@ -52,6 +52,9 @@ pub fn export_bindings(path: &std::path::Path) -> Result<(), specta_typescript::
 }
 
 pub fn run() {
+    #[cfg(target_os = "linux")]
+    avoid_blank_webkit_windows();
+
     let builder = ipc::builder();
 
     #[cfg(debug_assertions)]
@@ -177,6 +180,19 @@ pub fn run() {
         }
         _ => {}
     });
+}
+
+/// WebKitGTK's DMA-BUF renderer shows blank white windows with NVIDIA drivers and on some
+/// Wayland compositors. Turning it off is the usual Tauri workaround and costs little for a
+/// small UI. A value the user set (for example `0` to keep the renderer) is respected.
+#[cfg(target_os = "linux")]
+fn avoid_blank_webkit_windows() {
+    const VAR: &str = "WEBKIT_DISABLE_DMABUF_RENDERER";
+    if std::env::var_os(VAR).is_none() {
+        // SAFETY: this runs first in `run`, before Tauri or any other thread starts, so no
+        // other thread reads or writes the environment at the same time.
+        unsafe { std::env::set_var(VAR, "1") };
+    }
 }
 
 /// Which window a second launch brings forward: the welcome while the onboarding is pending
