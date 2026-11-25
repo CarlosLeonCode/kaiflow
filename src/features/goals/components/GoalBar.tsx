@@ -5,15 +5,15 @@ import { cn } from "@/shared/lib/utils";
 import { barPercent, formatAmount, remainingText, stateLabel, type Tone } from "../lib/goals";
 
 const FILL: Record<Tone, string> = {
-  neutral: "bg-primary",
-  good: "bg-success",
-  warning: "bg-warning-foreground",
+  neutral: "bg-mark-stroke",
+  good: "bg-pop-mint",
+  warning: "bg-pop-pink",
 };
 
 const DOT: Record<Tone, string> = {
   neutral: "bg-muted-foreground/50",
-  good: "bg-success",
-  warning: "bg-warning-foreground",
+  good: "bg-pop-mint",
+  warning: "bg-pop-pink",
 };
 
 /** Colored dot plus the state in words: color is never the only signal. */
@@ -21,7 +21,7 @@ export function StateBadge({ status }: { status: GoalStatusDto }) {
   const state = stateLabel(status, useT());
   return (
     <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-      <span aria-hidden="true" className={cn("size-1.5 rounded-full", DOT[state.tone])} />
+      <span aria-hidden="true" className={cn("size-2 rounded-full", DOT[state.tone])} />
       {state.label}
     </span>
   );
@@ -46,7 +46,7 @@ export function GoalBar({ status, className }: { status: GoalStatusDto; classNam
         aria-valuemax={100}
         aria-valuenow={barPercent(status)}
         aria-valuetext={`${status.percent}%`}
-        className="h-1.5 overflow-hidden rounded-full bg-muted"
+        className="h-2 overflow-hidden rounded-full bg-muted"
       >
         <div
           className={cn("h-full rounded-full transition-[width]", FILL[state.tone])}

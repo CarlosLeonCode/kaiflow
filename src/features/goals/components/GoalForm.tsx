@@ -248,9 +248,9 @@ export function GoalForm({ editing, activities, apps, names, onSubmit, onCancel 
                     aria-pressed={on}
                     onClick={() => change({ days: draft.days ^ (1 << index) })}
                     className={cn(
-                      "h-7 w-10 rounded-md border text-xs font-medium",
+                      "h-7 w-10 rounded-full border-[1.5px] text-xs font-medium",
                       on
-                        ? "border-primary bg-primary text-primary-foreground"
+                        ? "border-mark-stroke bg-pop-sun font-bold text-on-pop"
                         : "border-border bg-background text-muted-foreground hover:bg-accent",
                     )}
                   >

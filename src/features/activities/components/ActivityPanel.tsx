@@ -160,7 +160,7 @@ export function ActivityPanel({
                     <button
                       type="button"
                       onClick={onShowSuggestions}
-                      className="mt-0.5 text-xs font-medium text-primary underline-offset-2 hover:underline"
+                      className="mt-0.5 text-xs font-medium text-foreground underline underline-offset-2 hover:decoration-2"
                     >
                       {words.seeSuggestions}
                     </button>

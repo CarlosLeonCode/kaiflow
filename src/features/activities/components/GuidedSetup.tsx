@@ -109,9 +109,9 @@ export function GuidedSetup({
               aria-current={index === step ? "step" : undefined}
               onClick={() => goTo(index as Step)}
               className={cn(
-                "rounded-full border px-2.5 py-0.5 text-xs",
+                "rounded-full border-[1.5px] px-2.5 py-0.5 text-xs",
                 index === step
-                  ? "border-primary bg-primary text-primary-foreground"
+                  ? "border-mark-stroke bg-pop-sun font-bold text-on-pop"
                   : "border-border text-muted-foreground hover:text-foreground",
               )}
             >
