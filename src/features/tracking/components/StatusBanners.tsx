@@ -3,6 +3,7 @@ import { TriangleAlert } from "lucide-react";
 import { useT, type Messages } from "@/shared/i18n";
 import type { DegradedReasonDto, OsDto } from "@/shared/ipc";
 import { platformWords } from "@/shared/lib/platform";
+import { shortcutReason } from "@/shared/lib/shortcut";
 import { Alert, AlertDescription, AlertTitle } from "@/shared/ui/alert";
 import { Button } from "@/shared/ui/button";
 
@@ -61,7 +62,7 @@ export function ShortcutBanner({ shortcut, reason, os = "macos" }: { shortcut: s
       <div className="min-w-0 flex-1 space-y-1">
         <AlertTitle>{t.tracking.shortcutUnavailable(shortcut)}</AlertTitle>
         <AlertDescription data-selectable>
-          {t.tracking.shortcutFallback(reason, platformWords(os, t).tray)}
+          {t.tracking.shortcutFallback(shortcutReason(reason, t), platformWords(os, t).tray)}
         </AlertDescription>
       </div>
     </Alert>

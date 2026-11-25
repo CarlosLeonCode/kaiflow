@@ -35,7 +35,7 @@ equipos reales. Las listas de prueba manual estan en `docs/checklists/beta-windo
 | Suspension y reanudacion | Si | Si | Si (logind) | Si (logind) |
 | Apagado o cierre de sesion | Si | Si | Si (logind) | Si (logind) |
 | Texto junto al icono de la bandeja | Titulo del item de la barra de menus | No: solo tooltip | Etiqueta de AppIndicator | Etiqueta de AppIndicator |
-| Atajo por defecto (pausar y reanudar) | `⌃⌥⌘T` | `Ctrl+Alt+Shift+K` | `Ctrl+Alt+Shift+K` | `Ctrl+Alt+Shift+K` (puede no funcionar) |
+| Atajo por defecto (pausar y reanudar) | `⌃⌥⌘T` | `Ctrl+Alt+Shift+K` | `Ctrl+Alt+Shift+K` | No: en Wayland no se pueden registrar atajos globales; se pausa desde la bandeja |
 | Paso de permisos en la bienvenida | Accesibilidad | No hay | No hay | Explicacion de Wayland |
 
 ### Atajo por defecto

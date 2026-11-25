@@ -259,12 +259,15 @@ fn apply_outside_settings(
     focus_watcher: focus_watcher::FocusWatcher,
 ) {
     let press_handle = handle.clone();
-    let shortcuts = Arc::new(ShortcutManager::new(
-        Box::new(TauriRegistrar::new(handle.clone())),
-        shortcut.clone(),
-        announce_to_frontend(handle.clone()),
-        Arc::new(move || tray::toggle_tracking(&press_handle)),
-    ));
+    let shortcuts = Arc::new(
+        ShortcutManager::new(
+            Box::new(TauriRegistrar::new(handle.clone())),
+            shortcut.clone(),
+            announce_to_frontend(handle.clone()),
+            Arc::new(move || tray::toggle_tracking(&press_handle)),
+        )
+        .blocked_by(shortcuts::session_blocker()),
+    );
     if let Err(error) = shortcuts.apply(&settings.shortcut) {
         eprintln!("{error}");
     }

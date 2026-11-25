@@ -40,7 +40,7 @@ import type {
   UpdateInfoDto,
 } from "@/shared/ipc";
 import { DEFAULT_PLATFORM, isWayland } from "@/shared/lib/platform";
-import { defaultShortcut } from "@/shared/lib/shortcut";
+import { defaultShortcut, SHORTCUT_REASON_WAYLAND } from "@/shared/lib/shortcut";
 
 import { buildDashboard } from "./mockDashboard";
 import {
@@ -290,7 +290,10 @@ export function installMockBackend(options: MockOptions = {}): void {
       since: tracking === "running" && current && !wayland ? current.started_at : null,
       degraded: degradedReason() !== null,
       degraded_reason: degradedReason(),
-      shortcut: { kind: "registered", shortcut: settings.shortcut },
+      // Wayland has no global shortcuts: the backend reports it instead of registering one.
+      shortcut: wayland
+        ? { kind: "unavailable", shortcut: settings.shortcut, reason: SHORTCUT_REASON_WAYLAND }
+        : { kind: "registered", shortcut: settings.shortcut },
     };
   };
 

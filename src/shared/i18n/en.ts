@@ -12,6 +12,8 @@ export const en = {
       macos: { device: "this Mac", Device: "This Mac", tray: "menu bar", Tray: "Menu bar" },
       other: { device: "this computer", Device: "This computer", tray: "system tray", Tray: "System tray" },
     },
+    /** Why a global shortcut is unavailable in a Wayland session (`shortcutReason`). */
+    waylandShortcut: "Wayland sessions do not let apps use global shortcuts",
   },
   common: {
     cancel: "Cancel",
@@ -1193,6 +1195,8 @@ export const en = {
       shortcutHint: "Works from any app. Click, then press the new keys.",
       shortcutUnavailable: (shortcut: string, reason: string) =>
         `${shortcut} is unavailable: ${reason}. Choose another combination.`,
+      shortcutWayland: (tray: string) =>
+        `Global shortcuts do not work in Wayland sessions. Pause and resume from the ${tray} menu.`,
       pressNew: "Press the new shortcut",
       current: (shortcut: string) => `Global shortcut ${shortcut}, change`,
       recording: "Press shortcut…",

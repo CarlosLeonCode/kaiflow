@@ -187,6 +187,20 @@ describe("TrackingPopoverContainer", () => {
     expect(screen.getByText("This computer is asleep.")).toBeInTheDocument();
   });
 
+  it("explains that Wayland has no global shortcuts", async () => {
+    mockBackend({
+      platform_info: () => platform("linux", "wayland"),
+      get_status: () =>
+        status({ shortcut: { kind: "unavailable", shortcut: "⌃⌥⇧K", reason: "wayland_session" } }),
+      get_report: () => report(),
+    });
+    renderWithProviders(<TrackingPopoverContainer />);
+
+    expect(await screen.findByText("Shortcut Ctrl+Alt+Shift+K is unavailable")).toBeInTheDocument();
+    expect(screen.getByText(/Wayland sessions do not let apps use global shortcuts\. You can still/)).toBeInTheDocument();
+    expect(screen.queryByText(/wayland_session/)).not.toBeInTheDocument();
+  });
+
   it("disables pause while idle or asleep", async () => {
     mockBackend({
       get_status: () => status({ state: "idle", current: null, since: null }),

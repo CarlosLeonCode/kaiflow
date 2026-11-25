@@ -1,4 +1,5 @@
 import { en, type Messages } from "@/shared/i18n/en";
+import { shortcutReason } from "@/shared/lib/shortcut";
 
 import type { AppError } from "./bindings";
 
@@ -33,7 +34,7 @@ export function describeError(error: AppError, t: Messages = en): string {
     case "invalid_pattern":
       return m.invalidPattern(error.pattern, error.reason);
     case "shortcut_unavailable":
-      return m.shortcutUnavailable(error.shortcut, error.reason);
+      return m.shortcutUnavailable(error.shortcut, shortcutReason(error.reason, t));
     case "permission_denied":
       return m.permissionDenied;
     case "focus_unavailable":

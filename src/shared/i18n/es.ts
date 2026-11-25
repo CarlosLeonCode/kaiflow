@@ -8,6 +8,7 @@ export const es: Messages = {
       macos: { device: "este Mac", Device: "Este Mac", tray: "barra de menús", Tray: "Barra de menús" },
       other: { device: "este equipo", Device: "Este equipo", tray: "bandeja del sistema", Tray: "Bandeja del sistema" },
     },
+    waylandShortcut: "Las sesiones Wayland no permiten que las apps usen atajos globales",
   },
   common: {
     cancel: "Cancelar",
@@ -1171,6 +1172,8 @@ export const es: Messages = {
       shortcut: "Atajo para pausar o reanudar",
       shortcutHint: "Funciona desde cualquier app. Haz clic y pulsa las teclas nuevas.",
       shortcutUnavailable: (shortcut, reason) => `${shortcut} no está disponible: ${reason}. Elige otra combinación.`,
+      shortcutWayland: (tray) =>
+        `Los atajos globales no funcionan en sesiones Wayland. Pausa y reanuda desde el menú de la ${tray}.`,
       pressNew: "Pulsa el nuevo atajo",
       current: (shortcut) => `Atajo global ${shortcut}, cambiar`,
       recording: "Pulsa el atajo…",

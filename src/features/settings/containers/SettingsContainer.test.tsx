@@ -289,6 +289,22 @@ describe("SettingsContainer", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("taken by another app");
   });
 
+  it("says why a Wayland session has no global shortcut instead of asking for another one", async () => {
+    mockBackend({
+      platform_info: () => platform("linux", "wayland"),
+      get_status: () =>
+        status({ shortcut: { kind: "unavailable", shortcut: "⌃⌥⇧K", reason: "wayland_session" } }),
+    });
+    renderWithProviders(<SettingsContainer />);
+
+    expect(
+      await screen.findByText(
+        "Global shortcuts do not work in Wayland sessions. Pause and resume from the system tray menu.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Choose another combination/)).toBeNull();
+  });
+
   it("shows the degraded banner with a way to open System Settings (R5.3)", async () => {
     const user = userEvent.setup();
     const { calls } = mockBackend({
