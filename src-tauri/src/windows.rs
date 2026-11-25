@@ -46,6 +46,9 @@ pub struct WindowSpec {
     pub decorations: bool,
     pub always_on_top: bool,
     pub resizable: bool,
+    /// No taskbar button and no Alt+Tab entry (Windows and Linux; macOS has no taskbar and
+    /// the app is a menu-bar agent anyway).
+    pub skip_taskbar: bool,
 }
 
 pub const POPOVER_SPEC: WindowSpec = WindowSpec {
@@ -57,6 +60,7 @@ pub const POPOVER_SPEC: WindowSpec = WindowSpec {
     decorations: false,
     always_on_top: true,
     resizable: false,
+    skip_taskbar: true,
 };
 
 pub const MAIN_SPEC: WindowSpec = WindowSpec {
@@ -68,6 +72,7 @@ pub const MAIN_SPEC: WindowSpec = WindowSpec {
     decorations: true,
     always_on_top: false,
     resizable: true,
+    skip_taskbar: false,
 };
 
 /// Smallest size at which the dashboard stays usable (sidebar + a readable content column).
@@ -82,6 +87,7 @@ pub const ONBOARDING_SPEC: WindowSpec = WindowSpec {
     decorations: true,
     always_on_top: false,
     resizable: false,
+    skip_taskbar: false,
 };
 
 /// Creates the windows hidden; `onboarding` is only created (and shown) on first run. Titles
@@ -121,6 +127,8 @@ fn build(
     } else {
         builder
     };
+    #[cfg(not(target_os = "macos"))]
+    let builder = builder.skip_taskbar(spec.skip_taskbar);
     builder
         .title(spec.title.text(m))
         .inner_size(spec.width, spec.height)
@@ -487,6 +495,14 @@ mod tests {
             assert!(!POPOVER_SPEC.decorations && POPOVER_SPEC.always_on_top);
             assert!(MAIN_SPEC.decorations && !MAIN_SPEC.always_on_top);
             assert!(ONBOARDING_SPEC.decorations && !ONBOARDING_SPEC.always_on_top);
+        }
+    }
+
+    #[test]
+    fn only_the_popover_stays_out_of_the_taskbar() {
+        const {
+            assert!(POPOVER_SPEC.skip_taskbar);
+            assert!(!MAIN_SPEC.skip_taskbar && !ONBOARDING_SPEC.skip_taskbar);
         }
     }
 
