@@ -1,6 +1,7 @@
 import { CircleHelp } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { useT } from "@/shared/i18n";
 import { useDismissedIntros, usePlatformQuery } from "@/shared/ipc";
 import { osOf } from "@/shared/lib/platform";
 import { Button } from "@/shared/ui/button";
@@ -8,16 +9,18 @@ import type { IntroSlot } from "@/shared/ui/page";
 import { SectionIntro } from "@/shared/ui/SectionIntro";
 
 import { introFor } from "../lib/intros";
-import { SECTIONS, type SectionId } from "../lib/sections";
+import type { SectionId } from "../lib/sections";
 
 function HelpButton({
   label,
+  title,
   controls,
   expanded,
   focusRequest,
   onClick,
 }: {
   label: string;
+  title: string;
   controls: string;
   expanded: boolean;
   focusRequest: number;
@@ -32,10 +35,10 @@ function HelpButton({
       ref={ref}
       variant="ghost"
       size="icon"
-      aria-label={`Help for ${label}`}
+      aria-label={label}
       aria-expanded={expanded}
       aria-controls={expanded ? controls : undefined}
-      title={`About ${label}`}
+      title={title}
       onClick={onClick}
     >
       <CircleHelp />
@@ -52,17 +55,18 @@ function HelpButton({
 export function useSectionIntro(section: SectionId): IntroSlot {
   const { ready, isDismissed, dismiss, restore } = useDismissedIntros();
   const os = osOf(usePlatformQuery().data);
+  const t = useT();
   const [focusIntro, setFocusIntro] = useState(0);
   const [focusHelp, setFocusHelp] = useState(0);
   const visible = ready && !isDismissed(section);
   const id = `section-intro-${section}`;
-  const label = SECTIONS.find((item) => item.id === section)?.label ?? section;
+  const name = t.shell.sections[section];
 
   return {
     body: visible ? (
       <SectionIntro
         id={id}
-        content={introFor(section, os)}
+        content={introFor(section, os, t)}
         focusRequest={focusIntro}
         onDismiss={() => {
           dismiss(section);
@@ -72,7 +76,8 @@ export function useSectionIntro(section: SectionId): IntroSlot {
     ) : null,
     help: ready ? (
       <HelpButton
-        label={label}
+        label={t.shell.help(name)}
+        title={t.shell.about(name)}
         controls={id}
         expanded={visible}
         focusRequest={focusHelp}

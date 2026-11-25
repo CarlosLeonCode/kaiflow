@@ -1,6 +1,7 @@
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 
+import { useT } from "@/shared/i18n";
 import type { ActivityDto } from "@/shared/ipc";
 import { tuneActivityColor } from "@/shared/lib/color";
 import { activityLabel, UNASSIGNED_ID } from "@/shared/lib/labels";
@@ -44,6 +45,8 @@ export function ActivityPanel({
   recentDays = 30,
   onShowSuggestions,
 }: Props) {
+  const t = useT();
+  const words = t.activities.panel;
   const [mode, setMode] = useState<Mode>({ kind: "idle" });
   const [pendingDelete, setPendingDelete] = useState<ActivityDto | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -67,18 +70,20 @@ export function ActivityPanel({
   const rulesOfDeleted = pendingDelete ? (ruleCounts.get(pendingDelete.id) ?? 0) : 0;
 
   return (
-    <section aria-label="Activities" className="space-y-2">
+    <section aria-label={t.shell.sections.activities} className="space-y-2">
       <div className="flex items-end justify-between px-1">
         <div>
-          <h2 className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">Activities</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">Labels for what you were doing, like Deep work or Client A.</p>
+          <h2 className="font-display text-sm leading-[1.2] font-bold text-foreground">
+            {t.shell.sections.activities}
+          </h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">{words.description}</p>
         </div>
         <Button size="sm" onClick={() => setMode({ kind: "create" })} disabled={mode.kind === "create"}>
-          <Plus aria-hidden="true" /> New activity
+          <Plus aria-hidden="true" /> {words.newActivity}
         </Button>
       </div>
 
-      <div className="divide-y divide-border rounded-lg border border-border bg-background">
+      <div className="divide-y divide-border overflow-hidden rounded-card border border-border bg-background">
         {mode.kind === "create" && (
           <ActivityForm
             editing={null}
@@ -95,19 +100,18 @@ export function ActivityPanel({
         )}
         {onlySystem && mode.kind === "idle" && (
           <EmptyState
-            className="mt-0 px-3 py-6"
-            title="No activities yet"
-            action={{ label: "Create your first activity", onClick: () => setMode({ kind: "create" }) }}
+            className="mt-0 px-4 py-6"
+            title={words.emptyTitle}
+            action={{ label: words.createFirst, onClick: () => setMode({ kind: "create" }) }}
           >
-            Create an activity for each kind of work you want to see, then add a rule so time is sorted into it. Until
-            then, all your time is Unassigned.
+            {words.emptyBody}
           </EmptyState>
         )}
-        <ul aria-label="Activity list" className="divide-y divide-border">
+        <ul aria-label={words.list} className="divide-y divide-border">
           {activities.map((activity) => {
             const system = activity.id === UNASSIGNED_ID;
             const count = ruleCounts.get(activity.id) ?? 0;
-            const label = activityLabel(activity.id, activity.name);
+            const label = activityLabel(activity.id, activity.name, t);
             if (mode.kind === "edit" && mode.id === activity.id) {
               return (
                 <li key={activity.id}>
@@ -127,7 +131,7 @@ export function ActivityPanel({
               );
             }
             return (
-              <li key={activity.id} className="group flex items-center gap-2.5 px-3 py-2">
+              <li key={activity.id} className="group flex items-center gap-2.5 px-4 py-2">
                 <span
                   aria-hidden="true"
                   className="size-3 shrink-0 rounded-full"
@@ -139,32 +143,26 @@ export function ActivityPanel({
                       {label}
                     </span>
                     {system && (
-                      <HelpTip label="Unassigned">
-                        <p>
-                          Unassigned is not an activity you create. It holds the time that no rule matches yet, so
-                          nothing is lost.
-                        </p>
-                        <p className="mt-1.5">
-                          Add a rule, or accept a suggestion, and that time moves to the right activity, past time
-                          included.
-                        </p>
+                      <HelpTip label={t.common.labels.unassigned}>
+                        <p>{words.unassignedHelp[0]}</p>
+                        <p className="mt-1.5">{words.unassignedHelp[1]}</p>
                       </HelpTip>
                     )}
                   </span>
                   <span className="block text-xs text-muted-foreground">
                     {system
                       ? unassignedMs !== null && unassignedMs > 0
-                        ? `Time no rule matches yet: ${formatDuration(unassignedMs)} in the last ${recentDays} days`
-                        : "Time no rule matches yet"
-                      : `${count === 0 ? "No rules" : `${count} ${count === 1 ? "rule" : "rules"}`} · ${productivityLabel(activity.productivity)}`}
+                        ? words.unassignedRecent(formatDuration(unassignedMs), recentDays)
+                        : words.unassignedNone
+                      : `${words.rules(count)} · ${productivityLabel(activity.productivity, t)}`}
                   </span>
                   {system && onShowSuggestions && (
                     <button
                       type="button"
                       onClick={onShowSuggestions}
-                      className="mt-0.5 text-xs font-medium text-primary underline-offset-2 hover:underline"
+                      className="mt-0.5 text-xs font-medium text-foreground underline underline-offset-2 hover:decoration-2"
                     >
-                      See suggestions
+                      {words.seeSuggestions}
                     </button>
                   )}
                 </span>
@@ -173,7 +171,7 @@ export function ActivityPanel({
                     <Button
                       variant="ghost"
                       size="icon"
-                      aria-label={`Edit ${label}`}
+                      aria-label={words.edit(label)}
                       onClick={() => setMode({ kind: "edit", id: activity.id })}
                     >
                       <Pencil />
@@ -181,7 +179,7 @@ export function ActivityPanel({
                     <Button
                       variant="ghost"
                       size="icon"
-                      aria-label={`Delete ${label}`}
+                      aria-label={words.delete(label)}
                       onClick={() => {
                         setDeleteError(null);
                         setPendingDelete(activity);
@@ -202,18 +200,17 @@ export function ActivityPanel({
         onOpenChange={(open) => {
           if (!open && !deleting) setPendingDelete(null);
         }}
-        title={`Delete "${pendingDelete?.name ?? ""}"?`}
+        title={words.deleteTitle(pendingDelete?.name ?? "")}
         description={
           <>
             <p>
-              Time already tracked in this activity moves to Unassigned.
-              {rulesOfDeleted > 0 &&
-                ` Its ${rulesOfDeleted} ${rulesOfDeleted === 1 ? "rule is" : "rules are"} deleted too.`}
+              {words.deleteMoves}
+              {rulesOfDeleted > 0 && words.deleteRules(rulesOfDeleted)}
             </p>
-            <p>The tracked time itself is kept. This cannot be undone.</p>
+            <p>{words.deleteKept}</p>
           </>
         }
-        confirmLabel="Delete activity"
+        confirmLabel={words.deleteConfirm}
         destructive
         busy={deleting}
         error={deleteError}

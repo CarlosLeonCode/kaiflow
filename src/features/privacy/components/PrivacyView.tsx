@@ -1,5 +1,6 @@
 import { CircleAlert, X } from "lucide-react";
 
+import { useLocale, useT } from "@/shared/i18n";
 import type { DeleteOpDto, OsDto, PrivacyRulesDto, RetentionImpactDto } from "@/shared/ipc";
 import type { AppOption } from "@/shared/lib/apps";
 import { platformWords } from "@/shared/lib/platform";
@@ -49,16 +50,25 @@ interface Props {
 
 /** Privacy section (presentational): what is recorded, what is kept, and how to delete it. */
 export function PrivacyView(props: Props) {
+  const t = useT();
+  const locale = useLocale();
+  const words = t.privacy;
   const { privacy, pending } = props;
-  const copy = pending ? deleteCopy(pending, props.trackingWillRestart && pending.kind === "all", props.impact) : null;
+  const copy = pending
+    ? deleteCopy(pending, t, {
+        trackingWillRestart: props.trackingWillRestart && pending.kind === "all",
+        impact: props.impact,
+        locale,
+      })
+    : null;
   return (
     <Page
-      title="Privacy"
-      subtitle={`Everything stays on ${platformWords(props.os ?? "macos").device}. Nothing is sent anywhere.`}
+      title={t.shell.sections.privacy}
+      subtitle={words.subtitle(platformWords(props.os ?? "macos", t).device)}
       intro={props.intro}
     >
       {!privacy ? (
-        <div className="max-w-2xl space-y-3" aria-label="Loading privacy">
+        <div className="max-w-2xl space-y-3" aria-label={words.loading}>
           <Skeleton className="h-20" />
           <Skeleton className="h-48" />
         </div>
@@ -70,7 +80,7 @@ export function PrivacyView(props: Props) {
                 <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
                 <AlertDescription>{props.error}</AlertDescription>
               </span>
-              <Button variant="ghost" size="icon" aria-label="Dismiss error" onClick={props.onDismiss}>
+              <Button variant="ghost" size="icon" aria-label={words.dismissError} onClick={props.onDismiss}>
                 <X />
               </Button>
             </Alert>
@@ -78,26 +88,25 @@ export function PrivacyView(props: Props) {
           {props.notice && (
             <Alert variant="neutral" className="items-center justify-between">
               <span>{props.notice}</span>
-              <Button variant="ghost" size="icon" aria-label="Dismiss" onClick={props.onDismiss}>
+              <Button variant="ghost" size="icon" aria-label={t.common.dismiss} onClick={props.onDismiss}>
                 <X />
               </Button>
             </Alert>
           )}
 
-          <Panel title="Window titles">
-            <div className="flex items-center justify-between gap-4 px-3 py-2.5">
+          <Panel title={words.titles.title}>
+            <div className="flex items-center justify-between gap-4 px-4 py-2.5">
               <div className="min-w-0">
                 <p className="font-medium">
-                  Window titles are <span data-testid="titles-state">{privacy.store_titles ? "on" : "off"}</span>
+                  {words.titles.state}{" "}
+                  <span data-testid="titles-state">{privacy.store_titles ? words.titles.on : words.titles.off}</span>
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {privacy.store_titles
-                    ? "Titles are stored with your time. Turn them off in Settings to keep only app names."
-                    : "Only app names are stored, never window titles. You can turn titles back on in Settings."}
+                  {privacy.store_titles ? words.titles.onHint : words.titles.offHint}
                 </p>
               </div>
               <Button size="sm" className="shrink-0" onClick={props.onOpenSettings}>
-                Change in Settings
+                {words.titles.change}
               </Button>
             </div>
           </Panel>
@@ -109,10 +118,10 @@ export function PrivacyView(props: Props) {
             onFailure={props.onFailure}
           />
 
-          <Panel title="Automatic cleanup" description="Applied when the app starts and once a day.">
+          <Panel title={words.cleanup.title} description={words.cleanup.description}>
             <Row
-              label="Keep data for"
-              description="Older tracked time is deleted automatically."
+              label={words.cleanup.keep}
+              description={words.cleanup.keepHint}
               controlId="privacy-retention"
             >
               <Select
@@ -121,7 +130,7 @@ export function PrivacyView(props: Props) {
                 value={retentionValue(props.retentionDays)}
                 onChange={(event) => props.onRetentionChange(event.target.value)}
               >
-                {retentionOptions(props.retentionDays).map((option) => (
+                {retentionOptions(props.retentionDays, t).map((option) => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
@@ -141,7 +150,7 @@ export function PrivacyView(props: Props) {
         }}
         title={copy?.title ?? ""}
         description={copy?.paragraphs.map((text) => <p key={text}>{text}</p>)}
-        confirmLabel={copy?.confirmLabel ?? "Delete"}
+        confirmLabel={copy?.confirmLabel ?? words.delete.confirm}
         destructive
         busy={props.deleting}
         error={props.deleteError}

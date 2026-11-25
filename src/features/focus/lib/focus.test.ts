@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { en } from "@/shared/i18n";
+
 import {
   allowedSummary,
   alertsText,
@@ -32,12 +34,12 @@ function draft(changes: Partial<FocusDraft> = {}): FocusDraft {
 
 describe("the start draft", () => {
   it("is valid with just a length: the task and the allowed set are optional", () => {
-    expect(draftProblem(draft())).toBeNull();
-    expect(draftProblem(draft({ intent: "  ", appIds: [] }))).toBeNull();
+    expect(draftProblem(draft(), en)).toBeNull();
+    expect(draftProblem(draft({ intent: "  ", appIds: [] }), en)).toBeNull();
   });
 
   it("explains what is wrong in plain words", () => {
-    expect(draftProblem(draft({ intent: "x".repeat(81) }))).toMatch(/under 80 characters/);
+    expect(draftProblem(draft({ intent: "x".repeat(81) }), en)).toMatch(/under 80 characters/);
   });
 
   it("is a focus block with something allowed and a plain timer without", () => {
@@ -48,9 +50,9 @@ describe("the start draft", () => {
 
   it("checks the custom duration", () => {
     for (const minutes of [0, -5, 721, Number.NaN, 1.5]) {
-      expect(draftProblem(draft({ duration: "custom", customMinutes: minutes }))).toMatch(/1 minute and 12 hours/);
+      expect(draftProblem(draft({ duration: "custom", customMinutes: minutes }), en)).toMatch(/1 minute and 12 hours/);
     }
-    expect(draftProblem(draft({ duration: "custom", customMinutes: 720 }))).toBeNull();
+    expect(draftProblem(draft({ duration: "custom", customMinutes: 720 }), en)).toBeNull();
   });
 
   it("starts from the presets and from a custom length", () => {
@@ -107,10 +109,10 @@ describe("the countdown", () => {
   });
 
   it("says it for assistive technology", () => {
-    expect(remainingLabel(23 * MIN)).toBe("23 minutes left");
-    expect(remainingLabel(30_000)).toBe("Under a minute left");
-    expect(remainingLabel(0)).toBe("Time is up");
-    expect(remainingLabel(90 * MIN)).toBe("1h 30m left");
+    expect(remainingLabel(23 * MIN, en)).toBe("23 minutes left");
+    expect(remainingLabel(30_000, en)).toBe("Under a minute left");
+    expect(remainingLabel(0, en)).toBe("Time is up");
+    expect(remainingLabel(90 * MIN, en)).toBe("1h 30m left");
   });
 
   it("tells how much of the block has passed, pauses excluded", () => {
@@ -125,25 +127,25 @@ describe("the countdown", () => {
 
 describe("wording", () => {
   it("summarizes what a session allows", () => {
-    expect(allowedSummary({ activity_ids: [2, 3], app_ids: ["a", "b", "c"] })).toBe("2 activities and 3 apps");
-    expect(allowedSummary({ activity_ids: [2], app_ids: [] })).toBe("1 activity");
-    expect(allowedSummary({ activity_ids: [], app_ids: ["a"] })).toBe("1 app");
-    expect(allowedSummary({ activity_ids: [], app_ids: [] })).toBe("Nothing allowed");
+    expect(allowedSummary({ activity_ids: [2, 3], app_ids: ["a", "b", "c"] }, en)).toBe("2 activities and 3 apps");
+    expect(allowedSummary({ activity_ids: [2], app_ids: [] }, en)).toBe("1 activity");
+    expect(allowedSummary({ activity_ids: [], app_ids: ["a"] }, en)).toBe("1 app");
+    expect(allowedSummary({ activity_ids: [], app_ids: [] }, en)).toBe("Nothing allowed");
   });
 
   it("labels how a session ended", () => {
-    expect(endReasonLabel("completed")).toBe("Completed");
-    expect(endReasonLabel("cancelled")).toBe("Ended early");
-    expect(endReasonLabel("recovered")).toBe("Ended while the app was closed");
+    expect(endReasonLabel("completed", en)).toBe("Completed");
+    expect(endReasonLabel("cancelled", en)).toBe("Ended early");
+    expect(endReasonLabel("recovered", en)).toBe("Ended while the app was closed");
   });
 
   it("headlines the summary, with and without tracked time", () => {
-    expect(summaryHeadline({ percent_inside: 82 })).toBe("82% of your time stayed on target");
-    expect(summaryHeadline({ percent_inside: null })).toBe("No tracked time during this session");
+    expect(summaryHeadline({ percent_inside: 82 }, en)).toBe("82% of your time stayed on target");
+    expect(summaryHeadline({ percent_inside: null }, en)).toBe("No tracked time during this session");
   });
 
   it("counts alerts and plans", () => {
-    expect([0, 1, 3].map(alertsText)).toEqual(["No alerts", "1 alert", "3 alerts"]);
+    expect([0, 1, 3].map((count) => alertsText(count, en))).toEqual(["No alerts", "1 alert", "3 alerts"]);
     expect(plannedText({ started_at: 0, planned_end: 50 * MIN })).toBe("50m");
   });
 });
@@ -159,27 +161,27 @@ describe("the end card and the cycle", () => {
   const card = (finished: FocusStepDto, next: FocusStepDto | null): FocusCardDto => ({ finished, ended_at: 0, next });
 
   it("offers a break after a work block", () => {
-    expect(endCardCopy(card(step(), step({ kind: "break", intent: "", planned_ms: 5 * MIN })))).toEqual({
+    expect(endCardCopy(card(step(), step({ kind: "break", intent: "", planned_ms: 5 * MIN })), en)).toEqual({
       title: "Focus done",
       prompt: "Take a 5-minute break?",
       startLabel: "Start break",
     });
-    expect(endCardCopy(card(step({ kind: "timer" }), step({ kind: "break", intent: "", planned_ms: 15 * MIN, long_break: true }))).prompt).toBe(
+    expect(endCardCopy(card(step({ kind: "timer" }), step({ kind: "break", intent: "", planned_ms: 15 * MIN, long_break: true })), en).prompt).toBe(
       "Take a 15-minute long break?",
     );
   });
 
   it("offers the next block after a break", () => {
-    expect(endCardCopy(card(step({ kind: "break", intent: "" }), step({ planned_ms: 50 * MIN })))).toEqual({
+    expect(endCardCopy(card(step({ kind: "break", intent: "" }), step({ planned_ms: 50 * MIN })), en)).toEqual({
       title: "Break is over",
       prompt: "Ready for another 50 minutes on “Write report”?",
       startLabel: "Start focus",
     });
-    expect(endCardCopy(card(step({ kind: "break", intent: "" }), step({ kind: "timer", intent: "" }))).startLabel).toBe("Start timer");
+    expect(endCardCopy(card(step({ kind: "break", intent: "" }), step({ kind: "timer", intent: "" })), en).startLabel).toBe("Start timer");
   });
 
   it("only says the time is up when the cycle is off", () => {
-    expect(endCardCopy(card(step({ kind: "timer" }), null))).toMatchObject({ title: "Time is up", startLabel: null });
+    expect(endCardCopy(card(step({ kind: "timer" }), null), en)).toMatchObject({ title: "Time is up", startLabel: null });
   });
 
   it("fills one dot per completed block", () => {

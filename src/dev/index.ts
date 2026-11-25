@@ -1,11 +1,24 @@
-import type { OsDto, PlatformInfoDto } from "@/shared/ipc";
+import type { MainSectionDto, OsDto, PlatformInfoDto } from "@/shared/ipc";
 
 import { installMockBackend, type DemoFocus } from "./mockBackend";
+import type { DemoProgress } from "./mockProgress";
 
 const DEMO_FOCUS: readonly DemoFocus[] = ["running", "drift", "break", "paused", "ended"];
 
 function demoFocus(value: string | null): DemoFocus | undefined {
   return DEMO_FOCUS.find((demo) => demo === value);
+}
+
+const DEMO_PROGRESS: readonly DemoProgress[] = ["done", "level"];
+
+function demoProgress(value: string | null): DemoProgress | undefined {
+  return DEMO_PROGRESS.find((demo) => demo === value);
+}
+
+const MAIN_SECTIONS: readonly MainSectionDto[] = ["today", "focus", "goals", "insights", "activities", "privacy", "settings"];
+
+function mainSection(value: string | null): MainSectionDto | undefined {
+  return MAIN_SECTIONS.find((section) => section === value);
 }
 
 const OSES: readonly OsDto[] = ["macos", "windows", "linux"];
@@ -34,11 +47,18 @@ function mockPlatform(params: URLSearchParams): PlatformInfoDto {
  *   `?focus=drift` has the drift alert already showing, `?focus=break` runs a short break,
  *   `?focus=paused` holds a paused timer and `?focus=ended` shows the end card.
  * - `?backup=failing`: the daily backup cannot write (Settings > Data error state).
- * - `?ai=on`: the Ollama provider is already switched on (Review can analyze right away);
+ * - `?progress=done`: today's ensō is full and waits to be celebrated; `?progress=level` has a
+ *   level-up (Flow) waiting instead. Without it, a newly earned seal waits.
+ * - `?progress=off`: the `progress_enabled` setting is off.
+ * - `?section=goals` (any section id): the main window was asked to open there, like the
+ *   popover's strokes chip does; it lands there once, then follows the sidebar.
+ * - `?ai=on`: the Ollama provider is already switched on (Insights can analyze a week right away);
  *   `?ai=offline` makes every analysis fail as if the network were down.
  * - `?keychain=missing`: the OS has no secure key store (keys are refused, like Linux without
  *   a Secret Service).
  * - `?activities=empty`: only the system activity and no rules (first-run preset choice).
+ * - `?language=es` (or `en`): the stored language setting, like a window opened after the user
+ *   picked one in Settings (each mocked window has its own in-memory backend).
  */
 export function installMockIpc(search: string = window.location.search): void {
   const params = new URLSearchParams(search);
@@ -49,10 +69,14 @@ export function installMockIpc(search: string = window.location.search): void {
     emptyHistory: params.get("data") === "empty",
     demoGoals: params.get("goals") === "demo",
     demoFocus: demoFocus(params.get("focus")),
+    demoProgress: demoProgress(params.get("progress")),
+    progressEnabled: params.get("progress") !== "off",
+    mainSection: mainSection(params.get("section")),
     backupFails: params.get("backup") === "failing",
     aiOn: params.get("ai") === "on" || params.get("ai") === "offline",
     aiOffline: params.get("ai") === "offline",
     keychainMissing: params.get("keychain") === "missing",
+    language: params.get("language") ?? undefined,
     announceUpdate: params.get("update") === "1",
     update: ["1", "manual"].includes(params.get("update") ?? "")
         ? { version: "0.2.0", current_version: "0.1.0", notes: "Faster history.\nFixes the idle prompt.", date: null }

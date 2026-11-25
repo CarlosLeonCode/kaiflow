@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 
+import { es } from "@/shared/i18n/es";
+
 import {
   defaultShortcut,
   formatShortcut,
+  SHORTCUT_REASON_WAYLAND,
   shortcutFromKeyEvent,
   shortcutKeys,
+  shortcutReason,
   type KeyLike,
 } from "./shortcut";
 
@@ -72,5 +76,15 @@ describe("platform conventions", () => {
     expect(defaultShortcut("windows")).toBe("⌃⌥⇧K");
     expect(defaultShortcut("linux")).toBe("⌃⌥⇧K");
     expect(formatShortcut(defaultShortcut("windows"), "windows")).toBe("Ctrl+Alt+Shift+K");
+  });
+});
+
+describe("shortcutReason", () => {
+  it("words the Wayland code and passes the OS's own reasons through", () => {
+    expect(shortcutReason(SHORTCUT_REASON_WAYLAND)).toBe("Wayland sessions do not let apps use global shortcuts");
+    expect(shortcutReason(SHORTCUT_REASON_WAYLAND, es)).toBe(
+      "Las sesiones Wayland no permiten que las apps usen atajos globales",
+    );
+    expect(shortcutReason("already in use")).toBe("already in use");
   });
 });

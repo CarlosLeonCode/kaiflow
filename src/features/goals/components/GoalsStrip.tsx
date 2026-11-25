@@ -1,5 +1,6 @@
 import { ArrowRight } from "lucide-react";
 
+import { useT } from "@/shared/i18n";
 import type { GoalStatusDto } from "@/shared/ipc";
 import { Button } from "@/shared/ui/button";
 import { EmptyState } from "@/shared/ui/EmptyState";
@@ -23,24 +24,24 @@ interface Props {
  * first goal when there are none.
  */
 export function GoalsStrip({ goals, onCreate, onOpenGoals, onMarkSeen }: Props) {
+  const t = useT();
   if (!goals) return null;
   return (
-    <section aria-label="Goals" className="rounded-lg border border-border bg-background p-4">
+    <section aria-label={t.shell.sections.goals} className="rounded-card border border-border bg-background p-5">
       <div className="mb-2 flex items-center justify-between gap-3">
-        <h2 className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">Goals</h2>
+        <h2 className="font-display text-sm leading-[1.2] font-bold text-foreground">{t.shell.sections.goals}</h2>
         {goals.length > 0 && (
           <Button variant="ghost" size="sm" onClick={onOpenGoals}>
-            All goals <ArrowRight aria-hidden="true" />
+            {t.goals.allGoals} <ArrowRight aria-hidden="true" />
           </Button>
         )}
       </div>
       {goals.length === 0 ? (
-        <EmptyState className="mt-0 py-3" title="No goals yet" action={{ label: "Create a goal", onClick: onCreate }}>
-          A goal turns your time into a target, like at least 4 hours of focused work a day or at most 30 minutes in
-          email.
+        <EmptyState className="mt-0 py-3" title={t.goals.noGoals} action={{ label: t.goals.createGoal, onClick: onCreate }}>
+          {t.goals.emptyStrip}
         </EmptyState>
       ) : (
-        <ul aria-label="Goal progress" className="divide-y divide-border">
+        <ul aria-label={t.goals.progress} className="divide-y divide-border">
           {topGoals(goals, STRIP_LIMIT).map((status) => (
             <GoalSummary key={status.goal.id} status={status} onMarkSeen={onMarkSeen} />
           ))}

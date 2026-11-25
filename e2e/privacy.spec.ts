@@ -30,12 +30,12 @@ test.describe("Privacy", () => {
   test("adds an app rule that hides its window titles", async ({ page }) => {
     await openSection(page, "Privacy");
 
-    const form = page.getByRole("form", { name: "Add app rule" });
+    const form = page.getByRole("form", { name: "Add excluded app" });
     await form.getByLabel(/App/).first().fill("com.apple.mail");
     await form.getByRole("radio", { name: "Hide titles" }).click();
     await form.getByRole("button", { name: /^Add/ }).click();
 
-    await expect(page.getByRole("list", { name: "App privacy rules" })).toContainText("com.apple.mail");
+    await expect(page.getByRole("list", { name: "Excluded app list" })).toContainText("com.apple.mail");
   });
 
   test("has no accessibility violations", async ({ page }) => {

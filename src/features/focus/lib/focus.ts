@@ -8,6 +8,7 @@ import type {
   FocusStartDto,
   FocusStepDto,
 } from "@/shared/ipc";
+import type { Messages } from "@/shared/i18n";
 import { formatDuration } from "@/shared/lib/time";
 
 /** Pure view-model helpers for focus blocks, timers and breaks (no IPC, no clock). */
@@ -22,13 +23,6 @@ export const EXTEND_MINUTES = 5;
 export const SNOOZE_MINUTES = 5;
 
 export type DurationChoice = (typeof DURATION_PRESETS)[number] | "custom";
-
-/** What each preset is good for, shown under the big number. */
-export const PRESET_HINTS: Record<(typeof DURATION_PRESETS)[number], string> = {
-  25: "Pomodoro",
-  50: "Deep work",
-  90: "Long haul",
-};
 
 export interface FocusDraft {
   intent: string;
@@ -52,11 +46,11 @@ export function draftKind(draft: Pick<FocusDraft, "activityIds" | "appIds">): Fo
 }
 
 /** What is wrong with the draft, in plain words, or `null` when it can start. */
-export function draftProblem(draft: FocusDraft): string | null {
-  if (draft.intent.trim().length > MAX_INTENT_LENGTH) return `Keep the task under ${MAX_INTENT_LENGTH} characters.`;
+export function draftProblem(draft: FocusDraft, t: Messages): string | null {
+  if (draft.intent.trim().length > MAX_INTENT_LENGTH) return t.focus.start.intentTooLong(MAX_INTENT_LENGTH);
   const minutes = draftMinutes(draft);
   if (!Number.isInteger(minutes) || minutes < MIN_MINUTES || minutes > MAX_MINUTES) {
-    return "A block lasts between 1 minute and 12 hours.";
+    return t.focus.start.badLength;
   }
   return null;
 }
@@ -102,54 +96,40 @@ export function countdownText(ms: number): string {
 }
 
 /** Spoken form of the countdown for assistive technology: `23 minutes left`. */
-export function remainingLabel(ms: number): string {
-  if (ms <= 0) return "Time is up";
+export function remainingLabel(ms: number, t: Messages): string {
+  const m = t.focus.remaining;
+  if (ms <= 0) return m.timeUp;
   const minutes = Math.ceil(ms / 60_000);
-  if (minutes <= 1) return "Under a minute left";
-  return minutes < 60 ? `${minutes} minutes left` : `${formatDuration(ms)} left`;
+  if (minutes <= 1) return m.underMinute;
+  return minutes < 60 ? m.minutes(minutes) : m.duration(formatDuration(ms));
 }
 
-export function kindLabel(kind: FocusKindDto): string {
-  switch (kind) {
-    case "focus":
-      return "Focus";
-    case "timer":
-      return "Timer";
-    case "break":
-      return "Break";
-  }
+export function kindLabel(kind: FocusKindDto, t: Messages): string {
+  return t.focus.kinds[kind];
 }
 
 /** What to call a block in a sentence, with its task when it has one. */
-export function blockTitle(step: Pick<FocusStepDto, "kind" | "intent">): string {
-  const task = step.intent.trim();
-  if (task) return task;
-  return step.kind === "break" ? "Break" : step.kind === "focus" ? "Focus block" : "Timer";
-}
-
-/** `5-minute`. */
-function minutesAdjective(ms: number): string {
-  return `${Math.round(ms / 60_000)}-minute`;
+export function blockTitle(step: Pick<FocusStepDto, "kind" | "intent">, t: Messages): string {
+  return step.intent.trim() || t.focus.blockTitles[step.kind];
 }
 
 /** The end card's wording: a headline, a question about what comes next, the primary action. */
-export function endCardCopy(card: FocusCardDto): { title: string; prompt: string; startLabel: string | null } {
+export function endCardCopy(card: FocusCardDto, t: Messages): { title: string; prompt: string; startLabel: string | null } {
+  const m = t.focus.endCard;
   const finishedBreak = card.finished.kind === "break";
-  const title = finishedBreak ? "Break is over" : card.finished.kind === "focus" ? "Focus done" : "Time is up";
+  const title = m.titles[card.finished.kind];
   const next = card.next;
   if (!next) {
-    return { title, prompt: finishedBreak ? "Ready when you are." : "Nice work. Take a moment before the next thing.", startLabel: null };
+    return { title, prompt: finishedBreak ? m.readyWhenYouAre : m.niceWork, startLabel: null };
   }
+  const minutes = Math.round(next.planned_ms / 60_000);
   if (next.kind === "break") {
-    const kind = next.long_break ? "long break" : "break";
-    return { title, prompt: `Take a ${minutesAdjective(next.planned_ms)} ${kind}?`, startLabel: "Start break" };
+    return { title, prompt: m.takeBreak(minutes, next.long_break), startLabel: m.startBreak };
   }
-  const task = next.intent.trim();
-  const what = `another ${Math.round(next.planned_ms / 60_000)} minutes`;
   return {
     title,
-    prompt: task ? `Ready for ${what} on “${task}”?` : `Ready for ${what}?`,
-    startLabel: next.kind === "focus" ? "Start focus" : "Start timer",
+    prompt: m.readyFor(minutes, next.intent.trim()),
+    startLabel: next.kind === "focus" ? m.startFocus : m.startTimer,
   };
 }
 
@@ -160,36 +140,26 @@ export function roundDots(round: number, every: number): boolean[] {
 }
 
 /** `2 activities and 3 apps`, or what applies. */
-export function allowedSummary(allowed: FocusAllowedDto): string {
-  const part = (count: number, one: string, many: string) => (count === 1 ? `1 ${one}` : `${count} ${many}`);
-  const parts = [
-    allowed.activity_ids.length > 0 ? part(allowed.activity_ids.length, "activity", "activities") : null,
-    allowed.app_ids.length > 0 ? part(allowed.app_ids.length, "app", "apps") : null,
-  ].filter((p): p is string => p !== null);
-  return parts.length === 0 ? "Nothing allowed" : parts.join(" and ");
+export function allowedSummary(allowed: FocusAllowedDto, t: Messages): string {
+  const m = t.focus.allowedSummary;
+  const activities = allowed.activity_ids.length > 0 ? m.activities(allowed.activity_ids.length) : null;
+  const apps = allowed.app_ids.length > 0 ? m.apps(allowed.app_ids.length) : null;
+  if (activities && apps) return m.both(activities, apps);
+  return activities ?? apps ?? m.nothing;
 }
 
-export function endReasonLabel(reason: FocusEndDto): string {
-  switch (reason) {
-    case "completed":
-      return "Completed";
-    case "cancelled":
-      return "Ended early";
-    case "recovered":
-      return "Ended while the app was closed";
-  }
+export function endReasonLabel(reason: FocusEndDto, t: Messages): string {
+  return t.focus.endReasons[reason];
 }
 
 /** The headline of a summary: how much of the tracked time stayed on target. */
-export function summaryHeadline(session: Pick<FocusSessionDto, "percent_inside">): string {
-  return session.percent_inside === null
-    ? "No tracked time during this session"
-    : `${session.percent_inside}% of your time stayed on target`;
+export function summaryHeadline(session: Pick<FocusSessionDto, "percent_inside">, t: Messages): string {
+  return session.percent_inside === null ? t.focus.summary.none : t.focus.summary.headline(session.percent_inside);
 }
 
 /** `3 alerts`, `1 alert`, `No alerts`. */
-export function alertsText(count: number): string {
-  return count === 0 ? "No alerts" : count === 1 ? "1 alert" : `${count} alerts`;
+export function alertsText(count: number, t: Messages): string {
+  return t.focus.alerts(count);
 }
 
 /** Planned length of a finished session, e.g. `50m`. */

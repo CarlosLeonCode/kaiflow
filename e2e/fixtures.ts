@@ -34,6 +34,16 @@ export async function openSection(page: Page, section: string): Promise<void> {
 
 /** Fails on any WCAG 2 A/AA violation of the current page and prints what broke. */
 export async function expectNoA11yViolations(page: Page): Promise<void> {
+  // One-shot entrances (a moment card popping in, a hover lift) fade colors in: let them land
+  // before contrast is measured. Looping animations never finish, so they are skipped.
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
+        .map((a) => a.finished.catch(() => undefined)),
+    ),
+  );
   const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"]).analyze();
   const summary = results.violations.map((v) => `${v.id}: ${v.help} (${v.nodes.map((n) => n.target.join(" ")).join(" | ")})`);
   expect(summary, "accessibility violations").toEqual([]);

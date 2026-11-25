@@ -293,7 +293,7 @@ describe("ActivitiesContainer", () => {
     expect(pattern).toHaveAttribute("aria-invalid", "true");
     expect(pattern.getAttribute("aria-describedby")?.split(" ")).toContain(alert.id);
     // Nothing was stored: the rule list stays empty.
-    expect(screen.getByText(/No rules yet/)).toBeInTheDocument();
+    expect(screen.getByText(/No sorting rules yet/)).toBeInTheDocument();
 
     // Fixing the pattern clears the error and saves.
     await user.clear(pattern);
@@ -346,7 +346,7 @@ describe("ActivitiesContainer", () => {
     await user.click(screen.getByRole("button", { name: "About productive, neutral and distracting" }));
     const tip = await screen.findByRole("dialog", { name: "productive, neutral and distracting" });
     expect(tip).toHaveTextContent("Distracting:");
-    expect(tip).toHaveTextContent("focus percentage in Overview and Review");
+    expect(tip).toHaveTextContent("Productive time share in Insights");
   });
 
   it("previews how much recent time a rule would cover before it is saved", async () => {
@@ -420,7 +420,7 @@ describe("ActivitiesContainer", () => {
 
     await user.click(screen.getByRole("button", { name: "Delete rule Slack" }));
     await waitFor(() => expect(calls.find((c) => c.cmd === "rules_delete")?.args).toEqual({ id: 1 }));
-    expect(await screen.findByText(/No rules yet/)).toBeInTheDocument();
+    expect(await screen.findByText(/No sorting rules yet/)).toBeInTheDocument();
   });
 
   it("shows list action failures in a dismissable banner", async () => {

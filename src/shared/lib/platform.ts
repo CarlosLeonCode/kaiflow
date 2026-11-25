@@ -1,3 +1,4 @@
+import { en, type Messages } from "@/shared/i18n/en";
 import type { OsDto, PlatformInfoDto } from "@/shared/ipc";
 
 /**
@@ -12,6 +13,14 @@ export const DEFAULT_PLATFORM: PlatformInfoDto = {
 
 export function osOf(platform: PlatformInfoDto | undefined): OsDto {
   return platform?.os ?? DEFAULT_PLATFORM.os;
+}
+
+/**
+ * macOS gives the dashboard an overlay title bar (traffic lights over the sidebar, headers as
+ * the drag area); Windows and Linux keep their native title bar.
+ */
+export function hasOverlayTitleBar(os: OsDto): boolean {
+  return os === "macos";
 }
 
 /** Linux on Wayland: the active window cannot be observed (idle, lock and sleep still work). */
@@ -31,14 +40,7 @@ export interface PlatformWords {
   Tray: string;
 }
 
-const MAC_WORDS: PlatformWords = { device: "this Mac", Device: "This Mac", tray: "menu bar", Tray: "Menu bar" };
-const PC_WORDS: PlatformWords = {
-  device: "this computer",
-  Device: "This computer",
-  tray: "system tray",
-  Tray: "System tray",
-};
-
-export function platformWords(os: OsDto): PlatformWords {
-  return os === "macos" ? MAC_WORDS : PC_WORDS;
+/** The words for `os` in the active language (`useT()`); English when not given. */
+export function platformWords(os: OsDto, t: Messages = en): PlatformWords {
+  return os === "macos" ? t.platform.words.macos : t.platform.words.other;
 }

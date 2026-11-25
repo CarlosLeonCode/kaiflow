@@ -1,3 +1,4 @@
+import type { Messages } from "@/shared/i18n";
 import type { DeleteOpDto, RangeDto, RetentionImpactDto } from "@/shared/ipc";
 import { addLocalDays } from "@/shared/lib/time";
 
@@ -54,19 +55,15 @@ const dayFormat = { year: "numeric", month: "short", day: "numeric" } as const;
  * What a purge of old data would touch, in plain words: how much goes and, when it reaches
  * into an active goal streak, a warning before the user confirms.
  */
-export function impactParagraphs(impact: RetentionImpactDto | undefined): string[] {
+export function impactParagraphs(impact: RetentionImpactDto | undefined, t: Messages, locale?: string): string[] {
   if (!impact) return [];
+  const words = t.privacy.confirm;
   const paragraphs = [
     impact.segments === 0
-      ? "Nothing is older than that right now, so nothing would be deleted."
-      : `This would delete ${impact.segments.toLocaleString()} ${impact.segments === 1 ? "segment" : "segments"}.`,
+      ? words.impactNone
+      : words.impactSegments(impact.segments.toLocaleString(locale), impact.segments === 1),
   ];
-  if (impact.streak_days_cut !== null) {
-    const days = impact.streak_days_cut;
-    paragraphs.push(
-      `Warning: this reaches into an active goal streak and would cut ${days} ${days === 1 ? "day" : "days"} of it. Streaks are counted from the data that remains, so your streak would become shorter.`,
-    );
-  }
+  if (impact.streak_days_cut !== null) paragraphs.push(words.streakWarning(impact.streak_days_cut));
   return paragraphs;
 }
 
@@ -74,51 +71,50 @@ export function impactParagraphs(impact: RetentionImpactDto | undefined): string
  * Confirmation copy for an operation: what goes, what stays, and that it cannot be undone.
  * `impact` is the dry run of a purge (`older_than_days` only).
  */
-export function deleteCopy(op: DeleteOpDto, trackingWillRestart = false, impact?: RetentionImpactDto): DeleteCopy {
-  const kept = "Activities, rules, privacy rules and settings are kept.";
+export function deleteCopy(
+  op: DeleteOpDto,
+  t: Messages,
+  options: { trackingWillRestart?: boolean; impact?: RetentionImpactDto; locale?: string } = {},
+): DeleteCopy {
+  const words = t.privacy.confirm;
+  const { trackingWillRestart = false, impact, locale } = options;
   switch (op.kind) {
     case "range": {
-      const from = new Date(op.range.from).toLocaleDateString(undefined, dayFormat);
-      const last = new Date(addLocalDays(op.range.to, -1)).toLocaleDateString(undefined, dayFormat);
-      const span = from === last ? from : `${from} to ${last}`;
+      const from = new Date(op.range.from).toLocaleDateString(locale, dayFormat);
+      const last = new Date(addLocalDays(op.range.to, -1)).toLocaleDateString(locale, dayFormat);
+      const span = from === last ? from : words.span(from, last);
       return {
-        title: "Delete this date range?",
-        paragraphs: [
-          `Every recorded segment from ${span} (both days included) is permanently deleted.`,
-          `${kept} This cannot be undone.`,
-        ],
-        confirmLabel: "Delete range",
+        title: words.rangeTitle,
+        paragraphs: [words.rangeBody(span), `${words.kept} ${words.cannotUndo}`],
+        confirmLabel: words.rangeConfirm,
       };
     }
     case "older_than_days":
       return {
-        title: `Delete everything older than ${op.days} ${op.days === 1 ? "day" : "days"}?`,
+        title: words.olderTitle(op.days),
         paragraphs: [
-          `Anything recorded more than ${op.days} ${op.days === 1 ? "day" : "days"} ago is permanently deleted. Newer data stays.`,
-          ...impactParagraphs(impact),
-          `${kept} This cannot be undone.`,
+          words.olderBody(op.days),
+          ...impactParagraphs(impact, t, locale),
+          `${words.kept} ${words.cannotUndo}`,
         ],
-        confirmLabel: "Delete older data",
+        confirmLabel: words.olderConfirm,
       };
     case "all":
       return {
-        title: "Delete all tracked data?",
+        title: words.allTitle,
         paragraphs: [
-          "Every recorded segment and every pending idle decision is permanently deleted, so Today and History start empty.",
-          trackingWillRestart
-            ? `${kept} Tracking pauses for a moment while the data is removed, then continues.`
-            : kept,
-          "This cannot be undone.",
+          words.allBody,
+          trackingWillRestart ? `${words.kept} ${words.allRestart}` : words.kept,
+          words.cannotUndo,
         ],
-        confirmLabel: "Delete everything",
+        confirmLabel: words.allConfirm,
       };
   }
 }
 
 /** `Deleted 12 segments`, or the neutral wording when the backend reports no count. */
-export function deletedMessage(op: DeleteOpDto, removed: number): string {
-  if (op.kind === "all") return "All tracked data was deleted.";
-  return removed === 0
-    ? "Nothing matched, so nothing was deleted."
-    : `Deleted ${removed} ${removed === 1 ? "segment" : "segments"}.`;
+export function deletedMessage(op: DeleteOpDto, removed: number, t: Messages): string {
+  const words = t.privacy.confirm;
+  if (op.kind === "all") return words.deletedAll;
+  return removed === 0 ? words.deletedNone : words.deleted(removed);
 }

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { en } from "@/shared/i18n";
+
 import { buildTopApps, degradedLabel, elapsedSinceFetch, toggleAction } from "./derive";
 
 const byApp = [
@@ -40,19 +42,19 @@ describe("elapsedSinceFetch", () => {
 
 describe("degradedLabel", () => {
   it("names what is missing for each platform reason", () => {
-    expect(degradedLabel("accessibility_denied")).toBe("Tracking, titles off");
-    expect(degradedLabel(null)).toBe("Tracking, titles off");
-    expect(degradedLabel("wayland_session")).toBe("Tracking, windows unavailable");
-    expect(degradedLabel("no_display")).toBe("Tracking, windows unavailable");
+    expect(degradedLabel("accessibility_denied", en)).toBe("Tracking, titles off");
+    expect(degradedLabel(null, en)).toBe("Tracking, titles off");
+    expect(degradedLabel("wayland_session", en)).toBe("Tracking, windows unavailable");
+    expect(degradedLabel("no_display", en)).toBe("Tracking, windows unavailable");
   });
 });
 
 describe("toggleAction", () => {
   it("maps each state like the tray menu", () => {
-    expect(toggleAction("running")?.command).toBe("pause");
-    expect(toggleAction("paused")?.command).toBe("resume");
-    expect(toggleAction("stopped")?.command).toBe("start");
-    expect(toggleAction("idle")).toBeNull();
-    expect(toggleAction("asleep")).toBeNull();
+    expect(toggleAction("running", en)?.command).toBe("pause");
+    expect(toggleAction("paused", en)?.command).toBe("resume");
+    expect(toggleAction("stopped", en)?.command).toBe("start");
+    expect(toggleAction("idle", en)).toBeNull();
+    expect(toggleAction("asleep", en)).toBeNull();
   });
 });

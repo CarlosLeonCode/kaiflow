@@ -16,6 +16,7 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 
 use adapters_common::activation::Activation;
+use adapters_common::diagnostics::Diagnostics;
 use adapters_common::fanout::SignalFanout;
 use crossbeam_channel::Sender;
 use windows::Win32::Foundation::{HINSTANCE, HWND, LPARAM, LRESULT, WPARAM};
@@ -46,10 +47,12 @@ thread_local! {
     static STATE: RefCell<Option<LoopState>> = const { RefCell::new(None) };
 }
 
+/// Failures are written to `diagnostics` (`diagnostics.log`): a Windows release has no console.
 pub fn spawn(
     activations: Sender<Activation>,
     power: SignalFanout,
     cache: Arc<DescriptionCache>,
+    diagnostics: Diagnostics,
 ) -> std::io::Result<JoinHandle<()>> {
     std::thread::Builder::new()
         .name("win-events".into())
@@ -61,14 +64,15 @@ pub fn spawn(
                     cache,
                 });
             });
-            if let Err(error) = run() {
+            if let Err(error) = run(&diagnostics) {
                 // Polling in the sampler keeps focus tracking alive; only lock/sleep is lost.
-                eprintln!("Windows event window unavailable: {error}");
+                diagnostics
+                    .record_failure("win-events", &format!("event window unavailable: {error}"));
             }
         })
 }
 
-fn run() -> windows::core::Result<()> {
+fn run(diagnostics: &Diagnostics) -> windows::core::Result<()> {
     // SAFETY (whole function): standard Win32 window creation and message loop on the thread
     // that owns the window and the hook; every pointer passed lives for the call.
     unsafe {
@@ -100,7 +104,10 @@ fn run() -> windows::core::Result<()> {
 
         let session = WTSRegisterSessionNotification(hwnd, NOTIFY_FOR_THIS_SESSION);
         if let Err(error) = &session {
-            eprintln!("lock/unlock notifications unavailable: {error}");
+            diagnostics.record_failure(
+                "win-events",
+                &format!("lock/unlock notifications unavailable: {error}"),
+            );
         }
 
         let hook = SetWinEventHook(
@@ -113,7 +120,10 @@ fn run() -> windows::core::Result<()> {
             WINEVENT_OUTOFCONTEXT,
         );
         if hook.0.is_null() {
-            eprintln!("foreground hook unavailable; app switches are picked up by polling");
+            diagnostics.record_failure(
+                "win-events",
+                &"foreground hook unavailable; app switches are picked up by polling",
+            );
         }
 
         let mut message = MSG::default();

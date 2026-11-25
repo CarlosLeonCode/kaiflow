@@ -1,5 +1,6 @@
 import { useId, useState, type FormEvent } from "react";
 
+import { useT, type Messages } from "@/shared/i18n";
 import type { ActivityDto, GoalDto, GoalScopeDto, PeriodDto } from "@/shared/ipc";
 import type { AppOption } from "@/shared/lib/apps";
 import { activityLabel } from "@/shared/lib/labels";
@@ -12,7 +13,6 @@ import type { Submit } from "@/features/activities/lib/submit";
 
 import {
   ALL_DAYS,
-  DAY_NAMES,
   MAX_LABEL_LENGTH,
   WEEKDAYS,
   draftOf,
@@ -25,32 +25,29 @@ import {
   type NameLookup,
 } from "../lib/goals";
 
-const KINDS: readonly SegmentedOption<GoalDraft["kind"]>[] = [
-  { value: "minimum", label: "At least" },
-  { value: "maximum", label: "No more than" },
-];
-
-const PERIODS: readonly SegmentedOption<PeriodDto>[] = [
-  { value: "daily", label: "Per day" },
-  { value: "weekly", label: "Per week" },
-  { value: "monthly", label: "Per month" },
-];
-
 type ScopeKind = GoalScopeDto["kind"];
-
-const SCOPES: readonly SegmentedOption<ScopeKind>[] = [
-  { value: "activity", label: "An activity" },
-  { value: "app", label: "An app" },
-  { value: "total", label: "All tracked time" },
-];
 
 type DaysPreset = "every" | "weekdays" | "custom";
 
-const DAYS_PRESETS: readonly SegmentedOption<DaysPreset>[] = [
-  { value: "every", label: "Every day" },
-  { value: "weekdays", label: "Weekdays" },
-  { value: "custom", label: "Pick days" },
-];
+/** Segmented options in the given order, labelled from `labels`. */
+function options<T extends string>(values: readonly T[], labels: Readonly<Record<T, string>>): SegmentedOption<T>[] {
+  return values.map((value) => ({ value, label: labels[value] }));
+}
+
+const KINDS = ["minimum", "maximum"] as const satisfies readonly GoalDraft["kind"][];
+const PERIODS = ["daily", "weekly", "monthly"] as const satisfies readonly PeriodDto[];
+const SCOPES = ["activity", "app", "total"] as const satisfies readonly ScopeKind[];
+const DAYS_PRESETS = ["every", "weekdays", "custom"] as const satisfies readonly DaysPreset[];
+
+function formOptions(t: Messages) {
+  const m = t.goals.form;
+  return {
+    kinds: options<GoalDraft["kind"]>(KINDS, m.kinds),
+    periods: options<PeriodDto>(PERIODS, m.periods),
+    scopes: options<ScopeKind>(SCOPES, m.scopes),
+    presets: options<DaysPreset>(DAYS_PRESETS, m.presets),
+  };
+}
 
 function presetOf(days: number): DaysPreset {
   return days === ALL_DAYS ? "every" : days === WEEKDAYS ? "weekdays" : "custom";
@@ -82,6 +79,9 @@ function scopeFor(kind: ScopeKind, activities: readonly ActivityDto[], apps: rea
  * form ("At least 4h of Deep work every weekday.") says exactly what will be tracked.
  */
 export function GoalForm({ editing, activities, apps, names, onSubmit, onCancel }: Props) {
+  const t = useT();
+  const m = t.goals.form;
+  const choices = formOptions(t);
   const id = useId();
   const [draft, setDraft] = useState<GoalDraft>(() =>
     editing ? draftOf(editing) : emptyDraft(scopeFor("activity", activities, apps)),
@@ -96,7 +96,7 @@ export function GoalForm({ editing, activities, apps, names, onSubmit, onCancel 
     setFailure(null);
   };
 
-  const problem = draftProblem(draft);
+  const problem = draftProblem(draft, t);
   const shown = failure ?? (touched ? problem : null);
   const errorId = `${id}-error`;
   const preview = problem
@@ -107,11 +107,12 @@ export function GoalForm({ editing, activities, apps, names, onSubmit, onCancel 
           kind: draft.kind,
           period: draft.period,
           active_days: draft.period === "daily" ? draft.days : ALL_DAYS,
-          target_ms: goalOf(draft, names).target_ms,
+          target_ms: goalOf(draft, names, t).target_ms,
         },
         names,
+        t,
       );
-  const placeholder = problem ? "" : suggestedLabel(goalOf(draft, names), names);
+  const placeholder = problem ? "" : suggestedLabel(goalOf(draft, names, t), names, t);
 
   // The app of a goal being edited may not be among the recently seen ones.
   const appChoices =
@@ -124,7 +125,7 @@ export function GoalForm({ editing, activities, apps, names, onSubmit, onCancel 
     setTouched(true);
     if (problem) return;
     setBusy(true);
-    const result = await onSubmit(goalOf(draft, names, editing?.id ?? 0, editing?.archived ?? false));
+    const result = await onSubmit(goalOf(draft, names, t, editing?.id ?? 0, editing?.archived ?? false));
     setBusy(false);
     if (result) setFailure(result.message);
   }
@@ -134,27 +135,27 @@ export function GoalForm({ editing, activities, apps, names, onSubmit, onCancel 
   return (
     <form
       onSubmit={submit}
-      aria-label={editing ? `Edit goal ${editing.label}` : "New goal"}
+      aria-label={editing ? m.editLabel(editing.label) : m.newLabel}
       className="space-y-3"
     >
       <div>
-        <span className={label}>Track</span>
+        <span className={label}>{m.track}</span>
         <Segmented
-          aria-label="What to track"
+          aria-label={m.whatToTrack}
           value={draft.scope.kind}
-          options={SCOPES}
+          options={choices.scopes}
           onChange={(kind) => change({ scope: scopeFor(kind, activities, apps) })}
         />
         {draft.scope.kind === "activity" && (
           <Select
-            aria-label="Activity"
+            aria-label={m.activity}
             className="mt-2 w-full"
             value={draft.scope.activity_id}
             onChange={(event) => change({ scope: { kind: "activity", activity_id: Number(event.target.value) } })}
           >
             {activities.map((activity) => (
               <option key={activity.id} value={activity.id}>
-                {activityLabel(activity.id, activity.name)}
+                {activityLabel(activity.id, activity.name, t)}
               </option>
             ))}
           </Select>
@@ -162,11 +163,11 @@ export function GoalForm({ editing, activities, apps, names, onSubmit, onCancel 
         {draft.scope.kind === "app" &&
           (appChoices.length === 0 ? (
             <p className="mt-2 text-xs text-muted-foreground">
-              No apps have been tracked yet. Let tracking run for a while, then pick one here.
+              {m.noApps}
             </p>
           ) : (
             <Select
-              aria-label="App"
+              aria-label={m.app}
               className="mt-2 w-full"
               value={draft.scope.app_id}
               onChange={(event) => change({ scope: { kind: "app", app_id: event.target.value } })}
@@ -182,54 +183,54 @@ export function GoalForm({ editing, activities, apps, names, onSubmit, onCancel 
 
       <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
         <div>
-          <span className={label}>Goal type</span>
-          <Segmented aria-label="Goal type" value={draft.kind} options={KINDS} onChange={(kind) => change({ kind })} />
+          <span className={label}>{m.goalType}</span>
+          <Segmented aria-label={m.goalType} value={draft.kind} options={choices.kinds} onChange={(kind) => change({ kind })} />
         </div>
         <div>
-          <span className={label}>Amount</span>
+          <span className={label}>{m.amount}</span>
           <div className="flex items-center gap-1.5">
             <Input
               type="number"
               inputMode="numeric"
               min={0}
-              aria-label="Hours"
+              aria-label={m.hours}
               className="w-16"
               value={Number.isNaN(draft.hours) ? "" : draft.hours}
               onChange={(event) => change({ hours: event.target.valueAsNumber })}
             />
-            <span className="text-xs text-muted-foreground">h</span>
+            <span className="text-xs text-muted-foreground">{m.hoursUnit}</span>
             <Input
               type="number"
               inputMode="numeric"
               min={0}
               max={59}
-              aria-label="Minutes"
+              aria-label={m.minutes}
               className="w-16"
               value={Number.isNaN(draft.minutes) ? "" : draft.minutes}
               onChange={(event) => change({ minutes: event.target.valueAsNumber })}
             />
-            <span className="text-xs text-muted-foreground">min</span>
+            <span className="text-xs text-muted-foreground">{m.minutesUnit}</span>
           </div>
         </div>
       </div>
 
       <div>
-        <span className={label}>Repeats</span>
+        <span className={label}>{m.repeats}</span>
         <Segmented
-          aria-label="Period"
+          aria-label={m.period}
           value={draft.period}
-          options={PERIODS}
+          options={choices.periods}
           onChange={(period) => change({ period })}
         />
       </div>
 
       {draft.period === "daily" && (
         <div>
-          <span className={label}>Active days</span>
+          <span className={label}>{m.activeDays}</span>
           <Segmented
-            aria-label="Active days preset"
+            aria-label={m.activeDaysPreset}
             value={preset}
-            options={DAYS_PRESETS}
+            options={choices.presets}
             onChange={(next) => {
               setPreset(next);
               if (next === "every") change({ days: ALL_DAYS });
@@ -237,8 +238,8 @@ export function GoalForm({ editing, activities, apps, names, onSubmit, onCancel 
             }}
           />
           {preset === "custom" && (
-            <div role="group" aria-label="Days of the week" className="mt-2 flex gap-1">
-              {DAY_NAMES.map((day, index) => {
+            <div role="group" aria-label={m.daysOfWeek} className="mt-2 flex gap-1">
+              {t.goals.days.map((day, index) => {
                 const on = (draft.days & (1 << index)) !== 0;
                 return (
                   <button
@@ -247,9 +248,9 @@ export function GoalForm({ editing, activities, apps, names, onSubmit, onCancel 
                     aria-pressed={on}
                     onClick={() => change({ days: draft.days ^ (1 << index) })}
                     className={cn(
-                      "h-7 w-10 rounded-md border text-xs font-medium",
+                      "h-7 w-10 rounded-full border-[1.5px] text-xs font-medium",
                       on
-                        ? "border-primary bg-primary text-primary-foreground"
+                        ? "border-mark-stroke bg-pop-sun font-bold text-on-pop"
                         : "border-border bg-background text-muted-foreground hover:bg-accent",
                     )}
                   >
@@ -260,14 +261,14 @@ export function GoalForm({ editing, activities, apps, names, onSubmit, onCancel 
             </div>
           )}
           <p className="mt-1 text-xs text-muted-foreground">
-            Rest days are not counted and never break a streak.
+            {m.restDays}
           </p>
         </div>
       )}
 
       <div>
         <label htmlFor={`${id}-name`} className={label}>
-          Name (optional)
+          {m.name}
         </label>
         <Input
           id={`${id}-name`}
@@ -284,7 +285,7 @@ export function GoalForm({ editing, activities, apps, names, onSubmit, onCancel 
         aria-live="polite"
         className="rounded-md bg-surface px-3 py-2 text-sm"
       >
-        {preview ?? "Fill in the details to see what this goal means."}
+        {preview ?? m.previewEmpty}
       </p>
 
       {shown && (
@@ -295,10 +296,10 @@ export function GoalForm({ editing, activities, apps, names, onSubmit, onCancel 
 
       <div className="flex justify-end gap-2">
         <Button type="button" size="sm" onClick={onCancel}>
-          Cancel
+          {t.common.cancel}
         </Button>
         <Button type="submit" size="sm" variant="primary" disabled={busy}>
-          {editing ? "Save goal" : "Add goal"}
+          {editing ? m.save : m.add}
         </Button>
       </div>
     </form>

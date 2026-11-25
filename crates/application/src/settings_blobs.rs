@@ -124,6 +124,20 @@ impl FocusTimerSettings {
     }
 }
 
+/// Key of the [`ProgressMoments`] blob.
+pub const KEY_PROGRESS_MOMENTS: &str = "progress_moments";
+
+/// Which progress moments (level-ups, the full daily ensō) the user already acknowledged.
+/// Not a user setting: seals keep their own `seen` flag in the ledger.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct ProgressMoments {
+    /// Highest level number acknowledged; `None` until the first look sets a baseline.
+    pub level_seen: Option<u8>,
+    /// Last local day whose full ensō was acknowledged.
+    pub day_done_seen: Option<i64>,
+}
+
 /// Most dismissed apps remembered; the oldest fall off first.
 pub const MAX_DISMISSED_APPS: usize = 500;
 

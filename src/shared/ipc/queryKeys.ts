@@ -24,6 +24,8 @@ export const queryKeys = {
   focus: ["focus"] as const,
   focusStatus: ["focus", "status"] as const,
   focusHistory: ["focus", "history"] as const,
+  /** Strokes, level, streak, seals and the moment to celebrate (one query). */
+  progress: ["progress"] as const,
   /** AI settings and the key store state. */
   aiSettings: ["ai", "settings"] as const,
   /** Every stored AI review (the history). */
@@ -37,7 +39,7 @@ export const queryKeys = {
   reports: ["report"] as const,
   report: (range: RangeDto, buckets: readonly RangeDto[] = []) =>
     ["report", range.from, range.to, buckets.map((b) => `${b.from}-${b.to}`).join(",")] as const,
-  /** One Overview dashboard; under the `report` prefix, so data changes refresh it too. */
+  /** One Insights dashboard; under the `report` prefix, so data changes refresh it too. */
   dashboard: (range: RangeDto, buckets: readonly RangeDto[], previous: RangeDto | null) =>
     [
       "report",

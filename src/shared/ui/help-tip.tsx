@@ -2,6 +2,7 @@ import { CircleHelp } from "lucide-react";
 import { Popover } from "radix-ui";
 import type { ReactNode } from "react";
 
+import { useT } from "@/shared/i18n";
 import { cn } from "@/shared/lib/utils";
 
 interface Props {
@@ -17,13 +18,14 @@ interface Props {
  * it works with the keyboard and on trackpads alike.
  */
 export function HelpTip({ label, children, className }: Props) {
+  const t = useT();
   return (
     <Popover.Root>
       <Popover.Trigger
         type="button"
-        aria-label={`About ${label}`}
+        aria-label={t.ui.about(label)}
         className={cn(
-          "inline-flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground",
+          "inline-flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
           className,
         )}
       >
@@ -36,7 +38,7 @@ export function HelpTip({ label, children, className }: Props) {
           sideOffset={6}
           collisionPadding={12}
           aria-label={label}
-          className="z-50 max-w-72 rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground shadow-lg"
+          className="z-50 max-w-72 rounded-lg border-[1.5px] border-mark-stroke bg-background px-3 py-2 text-xs text-foreground shadow-(--shadow-sticker)"
         >
           {children}
         </Popover.Content>

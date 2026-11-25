@@ -1,23 +1,26 @@
+import type { Messages } from "@/shared/i18n";
+
 /**
  * Preset activity colors. Raw values are stored; every paint goes through
  * `tuneActivityColor`, so a preset (or a custom color) stays readable in both themes.
  */
 export interface Preset {
-  name: string;
+  /** Key of its display name in `t.activities.colors`. */
+  key: keyof Messages["activities"]["colors"];
   hex: string;
 }
 
 export const PRESET_COLORS: readonly Preset[] = [
-  { name: "Blue", hex: "#3b82f6" },
-  { name: "Indigo", hex: "#6366f1" },
-  { name: "Violet", hex: "#8b5cf6" },
-  { name: "Pink", hex: "#ec4899" },
-  { name: "Red", hex: "#ef4444" },
-  { name: "Orange", hex: "#f97316" },
-  { name: "Amber", hex: "#d97706" },
-  { name: "Green", hex: "#22c55e" },
-  { name: "Teal", hex: "#14b8a6" },
-  { name: "Gray", hex: "#6b7280" },
+  { key: "blue", hex: "#3b82f6" },
+  { key: "indigo", hex: "#6366f1" },
+  { key: "violet", hex: "#8b5cf6" },
+  { key: "pink", hex: "#ec4899" },
+  { key: "red", hex: "#ef4444" },
+  { key: "orange", hex: "#f97316" },
+  { key: "amber", hex: "#d97706" },
+  { key: "green", hex: "#22c55e" },
+  { key: "teal", hex: "#14b8a6" },
+  { key: "gray", hex: "#6b7280" },
 ];
 
 export const DEFAULT_COLOR = PRESET_COLORS[0]!.hex;

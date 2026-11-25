@@ -82,14 +82,17 @@ pub fn open_in_memory() -> Result<Connection, DbError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::migrations::{backup_path, current_version};
+    use crate::migrations::{MIGRATIONS, backup_path, current_version};
 
     #[test]
     fn open_creates_directories_and_enables_pragmas() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("nested/app/kaiflow.db");
         let conn = open(&path).unwrap();
-        assert_eq!(current_version(&conn).unwrap(), 6);
+        assert_eq!(
+            current_version(&conn).unwrap(),
+            MIGRATIONS.last().unwrap().version
+        );
         let mode: String = conn
             .query_row("PRAGMA journal_mode", [], |r| r.get(0))
             .unwrap();

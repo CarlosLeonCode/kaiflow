@@ -14,7 +14,7 @@ use flate2::write::GzEncoder;
 use serde::{Deserialize, Serialize};
 
 use crate::ai::KEY_AI;
-use crate::settings_blobs::KEY_BACKUP;
+use crate::settings_blobs::{KEY_BACKUP, KEY_PROGRESS_MOMENTS};
 
 /// Value of `format` this build writes.
 pub const FORMAT: &str = "kaiflow";
@@ -39,6 +39,11 @@ pub const DEVICE_SETTINGS: [&str; 5] = [
     KEY_BACKUP,
     KEY_AI,
 ];
+
+/// Settings that describe the progress ledger rather than the user's preferences: a restore
+/// takes them from the document only together with [`BackupData::progress`], so the device
+/// keeps its own when the document carries no progress.
+pub const PROGRESS_SETTINGS: [&str; 1] = [KEY_PROGRESS_MOMENTS];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -240,6 +245,40 @@ pub struct AiReviewRecord {
     pub created_at: i64,
 }
 
+/// One row of the strokes ledger.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StrokeAwardRecord {
+    /// Makes an award count once (domain `Award::key`).
+    pub award_key: String,
+    /// Local day number the award counts toward.
+    pub day: i64,
+    /// Domain `progress::Source` name; rows with a name this version does not know are dropped.
+    pub source: String,
+    /// What was granted after the daily cap. Signed so a corrupt negative value can be
+    /// dropped instead of failing the whole document.
+    pub strokes: i64,
+    pub earned_at: i64,
+}
+
+/// A seal earned once (domain `Seal::as_str`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SealRecord {
+    pub seal: String,
+    pub earned_at: i64,
+    /// The user acknowledged it.
+    #[serde(default)]
+    pub seen: bool,
+}
+
+/// Progress (gamification): the strokes ledger and the seals earned. The acknowledged
+/// moments travel with the settings (see [`PROGRESS_SETTINGS`]).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ProgressRecord {
+    pub stroke_awards: Vec<StrokeAwardRecord>,
+    pub seals: Vec<SealRecord>,
+}
+
 /// The data a snapshot carries and a restore replaces.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -257,6 +296,10 @@ pub struct BackupData {
     pub focus_sessions: Vec<FocusSessionRecord>,
     /// Added with the AI weekly review; documents written before it simply lack the array.
     pub ai_reviews: Vec<AiReviewRecord>,
+    /// Added with progress. `None` (documents written before it) means "not carried": a
+    /// restore keeps the device's own ledger, seals and [`PROGRESS_SETTINGS`] untouched.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub progress: Option<ProgressRecord>,
 }
 
 impl BackupData {
@@ -495,6 +538,9 @@ impl Document {
                 return bad("an AI review is incomplete");
             }
         }
+        if let Some(progress) = &mut self.data.progress {
+            normalize_progress(progress)?;
+        }
         // Only one open segment can exist; documents close them, but never trust a file.
         for segment in &mut self.data.segments {
             if segment.ended_at.is_none() {
@@ -504,6 +550,51 @@ impl Document {
         }
         Ok(())
     }
+}
+
+/// Drops progress rows this version cannot store (unknown source or seal, negative strokes,
+/// possibly written by a newer app or corrupted), clamps each row to what its source is
+/// worth and each day to [`domain::DAILY_CAP`], and rejects duplicate keys.
+fn normalize_progress(progress: &mut ProgressRecord) -> Result<(), DocumentError> {
+    let bad = |m: &str| Err(DocumentError::Inconsistent(m.into()));
+    progress.stroke_awards.retain(|a| {
+        domain::StrokeSource::parse(&a.source).is_some()
+            && a.strokes >= 0
+            && !a.award_key.trim().is_empty()
+    });
+    let mut keys = std::collections::HashSet::new();
+    if !progress
+        .stroke_awards
+        .iter()
+        .all(|a| keys.insert(a.award_key.as_str()))
+    {
+        return bad("duplicate stroke award keys");
+    }
+    // Re-grant in the order they were earned, as the ledger does: a row keeps what still fits
+    // under the cap and stays (at 0) so it still counts for seals.
+    let mut order: Vec<usize> = (0..progress.stroke_awards.len()).collect();
+    order.sort_by(|&a, &b| {
+        let (a, b) = (&progress.stroke_awards[a], &progress.stroke_awards[b]);
+        (a.day, a.earned_at, &a.award_key).cmp(&(b.day, b.earned_at, &b.award_key))
+    });
+    let mut day_totals: std::collections::HashMap<i64, u32> = std::collections::HashMap::new();
+    for index in order {
+        let award = &mut progress.stroke_awards[index];
+        let worth = domain::StrokeSource::parse(&award.source).map_or(0, |s| s.strokes());
+        let asked = u32::try_from(award.strokes).unwrap_or(u32::MAX).min(worth);
+        let total = day_totals.entry(award.day).or_default();
+        let granted = domain::progress::grant(*total, asked);
+        *total += granted;
+        award.strokes = i64::from(granted);
+    }
+    progress
+        .seals
+        .retain(|s| domain::Seal::parse(&s.seal).is_some());
+    let mut seals = std::collections::HashSet::new();
+    if !progress.seals.iter().all(|s| seals.insert(s.seal.as_str())) {
+        return bad("duplicate seals");
+    }
+    Ok(())
 }
 
 /// Numbers a restore preview shows.
@@ -671,6 +762,33 @@ mod tests {
                 status: "ok".into(),
                 created_at: 8_000,
             }],
+            progress: Some(ProgressRecord {
+                stroke_awards: vec![
+                    stroke(
+                        "focus_completed:1000",
+                        19_000,
+                        "focus_completed",
+                        10,
+                        3_001_000,
+                    ),
+                    stroke("goal_met:1:19000", 19_000, "goal_met", 15, 3_002_000),
+                ],
+                seals: vec![SealRecord {
+                    seal: "first_focus".into(),
+                    earned_at: 3_001_000,
+                    seen: true,
+                }],
+            }),
+        }
+    }
+
+    fn stroke(key: &str, day: i64, source: &str, strokes: i64, at: i64) -> StrokeAwardRecord {
+        StrokeAwardRecord {
+            award_key: key.into(),
+            day,
+            source: source.into(),
+            strokes,
+            earned_at: at,
         }
     }
 
@@ -726,6 +844,7 @@ mod tests {
             "goals",
             "focus_sessions",
             "ai_reviews",
+            "progress",
         ] {
             assert!(value.get(key).is_some(), "missing `{key}`");
         }
@@ -870,6 +989,107 @@ mod tests {
                 Err(DocumentError::Inconsistent(_))
             ));
         }
+    }
+
+    #[test]
+    fn progress_round_trips_and_old_files_without_it_carry_none() {
+        let parsed = Document::parse(&doc().to_json()).unwrap();
+        assert_eq!(parsed.data.progress, data().progress);
+
+        let mut value: serde_json::Value = serde_json::from_slice(&doc().to_json()).unwrap();
+        value.as_object_mut().unwrap().remove("progress");
+        let parsed = Document::parse(&serde_json::to_vec(&value).unwrap()).unwrap();
+        assert_eq!(
+            parsed.data.progress, None,
+            "a file from before progress does not carry it, so a restore keeps the device's"
+        );
+
+        let mut none = doc();
+        none.data.progress = None;
+        let value: serde_json::Value = serde_json::from_slice(&none.to_json()).unwrap();
+        assert!(value.get("progress").is_none(), "not written as null");
+
+        let mut empty = doc();
+        empty.data.progress = Some(ProgressRecord::default());
+        let parsed = Document::parse(&empty.to_json()).unwrap();
+        assert_eq!(
+            parsed.data.progress,
+            Some(ProgressRecord::default()),
+            "an empty ledger is carried and replaces the device's"
+        );
+    }
+
+    #[test]
+    fn corrupt_progress_rows_are_dropped_and_duplicates_rejected() {
+        let mut corrupt = doc();
+        let progress = corrupt.data.progress.as_mut().unwrap();
+        progress.stroke_awards.push(stroke(
+            "from_the_future:1",
+            19_000,
+            "from_the_future",
+            5,
+            3_003_000,
+        ));
+        progress.stroke_awards.push(stroke(
+            "break_taken:9",
+            19_000,
+            "break_taken",
+            -3,
+            3_004_000,
+        ));
+        progress.seals.push(SealRecord {
+            seal: "unknown_seal".into(),
+            earned_at: 1,
+            seen: false,
+        });
+        let parsed = Document::parse(&corrupt.to_json()).unwrap();
+        assert_eq!(parsed.data.progress, data().progress);
+
+        let mut twice = doc();
+        let progress = twice.data.progress.as_mut().unwrap();
+        let copy = progress.stroke_awards[0].clone();
+        progress.stroke_awards.push(copy);
+        let mut seal_twice = doc();
+        let progress = seal_twice.data.progress.as_mut().unwrap();
+        let copy = progress.seals[0].clone();
+        progress.seals.push(copy);
+        for bad in [twice, seal_twice] {
+            assert!(matches!(
+                Document::parse(&bad.to_json()),
+                Err(DocumentError::Inconsistent(_))
+            ));
+        }
+    }
+
+    #[test]
+    fn imported_strokes_are_clamped_to_their_worth_and_the_daily_cap() {
+        let mut inflated = doc();
+        let progress = inflated.data.progress.as_mut().unwrap();
+        progress.stroke_awards = (0..12)
+            .map(|i| {
+                stroke(
+                    &format!("goal_met:{i}:19000"),
+                    19_000,
+                    "goal_met",
+                    1_000,
+                    3_000_000 + i,
+                )
+            })
+            .chain([stroke("goal_met:0:19001", 19_001, "goal_met", 1_000, 1)])
+            .collect();
+        let parsed = Document::parse(&inflated.to_json()).unwrap();
+        let awards = parsed.data.progress.unwrap().stroke_awards;
+        let day = |d: i64| -> i64 {
+            awards
+                .iter()
+                .filter(|a| a.day == d)
+                .map(|a| a.strokes)
+                .sum()
+        };
+        assert_eq!(day(19_000), i64::from(domain::DAILY_CAP));
+        assert_eq!(day(19_001), 15, "each row is worth its source at most");
+        assert_eq!(awards.len(), 13, "rows past the cap stay at 0");
+        assert_eq!(awards[11].strokes, 0, "the last one earned is the one cut");
     }
 
     #[test]

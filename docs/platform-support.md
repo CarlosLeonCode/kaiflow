@@ -35,7 +35,7 @@ equipos reales. Las listas de prueba manual estan en `docs/checklists/beta-windo
 | Suspension y reanudacion | Si | Si | Si (logind) | Si (logind) |
 | Apagado o cierre de sesion | Si | Si | Si (logind) | Si (logind) |
 | Texto junto al icono de la bandeja | Titulo del item de la barra de menus | No: solo tooltip | Etiqueta de AppIndicator | Etiqueta de AppIndicator |
-| Atajo por defecto (pausar y reanudar) | `⌃⌥⌘T` | `Ctrl+Alt+Shift+K` | `Ctrl+Alt+Shift+K` | `Ctrl+Alt+Shift+K` (puede no funcionar) |
+| Atajo por defecto (pausar y reanudar) | `⌃⌥⌘T` | `Ctrl+Alt+Shift+K` | `Ctrl+Alt+Shift+K` | No: en Wayland no se pueden registrar atajos globales; se pausa desde la bandeja |
 | Paso de permisos en la bienvenida | Accesibilidad | No hay | No hay | Explicacion de Wayland |
 
 ### Atajo por defecto
@@ -81,11 +81,22 @@ las secciones (`⌘1`..`⌘8` en macOS, `Ctrl+1`..`Ctrl+8` en el resto).
 - **Permisos**: ninguno. El estado de permiso es siempre "concedido".
 - **Bandeja**: Windows no admite texto junto al icono; el total del dia o la app actual se
   muestran en el tooltip.
-- **Limitaciones conocidas**: las apps UWP (Calculadora, Configuracion...) aparecen como
-  `applicationframehost.exe`; las ventanas de procesos con mas privilegios pueden no revelar
+- **Apps UWP** (Calculadora, Configuracion, Fotos...): su ventana principal pertenece a
+  `ApplicationFrameHost.exe`, asi que se usa el proceso de la ventana hija que pertenece a otro
+  proceso (`EnumChildWindows`), que es la app. Si la app esta suspendida y aun no tiene esa
+  ventana hija, se registra `applicationframehost.exe` como antes.
+- **Limitaciones conocidas**: las ventanas de procesos con mas privilegios pueden no revelar
   su ejecutable y en ese caso no se registran.
 
 ## Linux
+
+### Instalacion
+
+- El `.deb` instala sus dependencias con `apt` y es la opcion mas sencilla en Ubuntu y Debian.
+- La AppImage necesita FUSE 2 (`libfuse2`). Ubuntu 24.04 ya no lo trae instalado y la AppImage
+  no abre: instalar `libfuse2t64` (`sudo apt install libfuse2t64`) o usar el `.deb`.
+
+### Modos
 
 El modo se decide una vez al iniciar:
 

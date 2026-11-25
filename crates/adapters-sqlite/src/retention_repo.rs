@@ -7,6 +7,8 @@ use rusqlite::Connection;
 use crate::db::{lock, port_err};
 
 /// Deletion of tracked data (R10.4). Open segments are never removed by range or age.
+/// Progress (`stroke_awards`, `seals`) is never removed by range or age either: all-time
+/// levels are built from it. Only [`RetentionRepository::delete_all`] clears it.
 pub struct SqliteRetentionRepository {
     conn: Mutex<Connection>,
 }
@@ -90,6 +92,10 @@ impl RetentionRepository for SqliteRetentionRepository {
             .map_err(port_err)?;
         // Reviews summarize the deleted time (and may quote titles): they go too.
         tx.execute("DELETE FROM ai_reviews", []).map_err(port_err)?;
+        // The user asked to erase everything: progress goes too.
+        tx.execute("DELETE FROM stroke_awards", [])
+            .map_err(port_err)?;
+        tx.execute("DELETE FROM seals", []).map_err(port_err)?;
         tx.commit().map_err(port_err)?;
         // VACUUM cannot run inside a transaction. It rewrites the file so deleted rows do not
         // linger in free pages; the checkpoint then drops them from the WAL as well.
@@ -280,5 +286,30 @@ mod tests {
         seed_reviews(&path);
         r.delete_all().unwrap();
         assert_eq!(count(&path, "ai_reviews"), 0);
+    }
+
+    fn seed_progress(path: &std::path::Path) {
+        open(path)
+            .unwrap()
+            .execute_batch(
+                "INSERT INTO stroke_awards(award_key, day, source, strokes, earned_at)
+                   VALUES ('focus_completed:1', 0, 'focus_completed', 10, 15),
+                          ('goal_met:1:0', 0, 'goal_met', 15, 16);
+                 INSERT INTO seals(seal, earned_at) VALUES ('first_focus', 15);",
+            )
+            .unwrap();
+    }
+
+    #[test]
+    fn progress_survives_purges_and_goes_with_delete_all() {
+        let (_d, path, _w, r) = fixture();
+        seed_progress(&path);
+        r.delete_range(UtcMs(0), UtcMs(1_000)).unwrap();
+        r.purge_older_than(UtcMs(1_000_000)).unwrap();
+        assert_eq!(count(&path, "stroke_awards"), 2, "levels are all-time");
+        assert_eq!(count(&path, "seals"), 1);
+        r.delete_all().unwrap();
+        assert_eq!(count(&path, "stroke_awards"), 0);
+        assert_eq!(count(&path, "seals"), 0);
     }
 }

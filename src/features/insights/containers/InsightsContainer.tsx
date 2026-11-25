@@ -1,0 +1,135 @@
+import { useMemo, useState } from "react";
+
+import { useSectionIntro } from "@/features/shell/hooks/useSectionIntro";
+import { useNow } from "@/features/tracking/hooks/useNow";
+import {
+  errorMessage,
+  useDashboardQuery,
+  useExportJsonMutation,
+  useMarkGoalSeenMutation,
+  useSettingsQuery,
+} from "@/shared/ipc";
+import { useLocale, useT } from "@/shared/i18n";
+import { useIsDark } from "@/shared/lib/theme";
+
+import { WeekReviewContainer } from "@/features/review/containers/WeekReviewContainer";
+
+import { InsightsView } from "../components/InsightsView";
+import {
+  bucketNoun,
+  bucketsFor,
+  canGoNext,
+  DEFAULT_WEEK_START,
+  periodLabel,
+  periodRange,
+  previousRange,
+  shiftAnchor,
+  weeksAgoOf,
+  type Period,
+} from "../lib/periods";
+import {
+  activityRows,
+  appRows,
+  averages,
+  bucketBars,
+  busiest,
+  titleRows,
+  trendPoints,
+  trendView,
+} from "../lib/summary";
+
+interface Props {
+  /** Takes the user to Activities (the next step of an empty period). */
+  onOpenActivities?: () => void;
+  /** Takes the user to Settings (to set up the optional AI analysis of a week). */
+  onOpenSettings?: () => void;
+}
+
+/**
+ * Wires Insights to the backend with one `get_dashboard` call per view. The frontend owns
+ * the calendar: it computes local day, week and month boundaries (DST-safe) and sends UTC
+ * ranges, the buckets to stack and the previous period; the backend folds everything in one
+ * pass (design section 8). The Week view also shows the weekly review of the same week (focus
+ * sessions, note, AI analysis), which the backend keys by weeks back from the current week.
+ */
+export function InsightsContainer({ onOpenActivities, onOpenSettings = () => {} }: Props = {}) {
+  const t = useT();
+  const locale = useLocale();
+  const intro = useSectionIntro("insights");
+  const now = useNow(60_000);
+  const dark = useIsDark();
+  const [period, setPeriod] = useState<Period>("week");
+  const [anchor, setAnchor] = useState(() => Date.now());
+
+  const settings = useSettingsQuery();
+  const weekStart = settings.data?.week_start ?? DEFAULT_WEEK_START;
+  const markSeen = useMarkGoalSeenMutation();
+
+  const range = useMemo(() => periodRange(period, anchor, weekStart), [period, anchor, weekStart]);
+  const previous = useMemo(() => previousRange(period, range, weekStart), [period, range, weekStart]);
+  const buckets = useMemo(() => bucketsFor(period, range), [period, range]);
+
+  const dashboard = useDashboardQuery(range, buckets, previous);
+  const data = dashboard.data;
+
+  const exportJson = useExportJsonMutation();
+  const [exportedTo, setExportedTo] = useState<string | null>(null);
+
+  const bars = useMemo(() => (data ? bucketBars(period, data, t, locale) : []), [period, data, t, locale]);
+  const totalMs = data?.total_ms ?? 0;
+  const current = range.from <= now && now < range.to;
+  const weeksAgo = period === "week" ? weeksAgoOf(range.from, now, weekStart) : null;
+
+  function clearExport() {
+    setExportedTo(null);
+    exportJson.reset();
+  }
+
+  function move(delta: number) {
+    setAnchor(shiftAnchor(period, range, delta, weekStart));
+    clearExport();
+  }
+
+  return (
+    <InsightsView
+      intro={intro}
+      period={period}
+      onPeriodChange={(next) => {
+        setPeriod(next);
+        clearExport();
+      }}
+      label={periodLabel(period, range, locale)}
+      canGoNext={canGoNext(period, range, now, weekStart)}
+      isCurrent={current}
+      onPrevious={() => move(-1)}
+      onNext={() => move(1)}
+      onOpenActivities={onOpenActivities}
+      onToday={() => {
+        setAnchor(Date.now());
+        clearExport();
+      }}
+      loading={dashboard.isPending}
+      error={dashboard.error ? errorMessage(dashboard.error, t) : null}
+      dark={dark}
+      weekStart={weekStart}
+      onMarkGoalSeen={(goalId) => markSeen.mutate(goalId)}
+      data={data}
+      trend={trendView(period, data?.trend ?? { kind: "no_comparison" }, t)}
+      averages={averages(bars)}
+      busiest={busiest(bars)}
+      bucket={bucketNoun(period)}
+      bars={bars}
+      // Buckets that have not started yet would only draw a misleading flat line at zero.
+      trendPoints={trendPoints(bars.filter((bar) => bar.range.from <= now))}
+      activities={activityRows(data?.by_activity ?? [], totalMs, t)}
+      apps={appRows(data?.by_app ?? [], totalMs, t)}
+      titles={titleRows(data?.top_titles ?? [], totalMs, t)}
+      exporting={exportJson.isPending}
+      exportedTo={exportedTo}
+      exportError={exportJson.error ? errorMessage(exportJson.error, t) : null}
+      onExport={() => exportJson.mutate(range, { onSuccess: (path) => setExportedTo(path) })}
+      onDismissExport={() => setExportedTo(null)}
+      weekReview={weeksAgo !== null ? <WeekReviewContainer weeksAgo={weeksAgo} onOpenSettings={onOpenSettings} /> : undefined}
+    />
+  );
+}

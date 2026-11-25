@@ -1,7 +1,9 @@
-import { ChevronLeft, Moon } from "lucide-react";
+import { ChevronLeft, Ellipsis, Moon } from "lucide-react";
 import { useState } from "react";
 
+import { useLocale, useT } from "@/shared/i18n";
 import type { ActivityDto, IdleGapDto, IdleResolutionDto } from "@/shared/ipc";
+import { activityLabel } from "@/shared/lib/labels";
 import { formatDuration, formatTimeOfDay } from "@/shared/lib/time";
 import { Button } from "@/shared/ui/button";
 
@@ -15,93 +17,100 @@ interface Props {
   onResolve: (resolution: IdleResolutionDto) => void;
 }
 
-/** Idle-return card (R1.6): discard, give the time to the previous app, or to an activity. */
+/**
+ * Idle-return card (R1.6), one line: discard, keep the time for the previous app, or give it to
+ * an activity. The exact range sits in the heading's tooltip; unanswered gaps still expire.
+ */
 export function IdlePromptCard({ gap, moreCount, activities, busy, error, onResolve }: Props) {
+  const t = useT();
+  const m = t.idlePrompt;
+  const locale = useLocale();
   const [choosing, setChoosing] = useState(false);
   const previous = gap.prev_focus;
+  const range = `${formatTimeOfDay(gap.started_at, locale)} – ${formatTimeOfDay(gap.ended_at, locale)}`;
 
   return (
-    <section
-      aria-label="You were away"
-      className="rounded-lg border border-border bg-background p-3"
-    >
-      <div className="flex items-start gap-2.5">
-        <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-          <Moon className="size-3.5" aria-hidden="true" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <h2 className="font-medium">
-            You were away for <span className="tabular">{formatDuration(gap.ended_at - gap.started_at)}</span>
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            <span className="tabular">
-              {formatTimeOfDay(gap.started_at)} – {formatTimeOfDay(gap.ended_at)}
-            </span>
+    <section aria-label={m.label} className="rounded-2xl border-[1.5px] border-mark-stroke bg-background px-3 py-2.5 shadow-(--shadow-sticker-sm)">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="flex min-w-0 items-center gap-1.5 font-display font-bold" title={range}>
+          <Moon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span className="tabular shrink-0">{m.away(formatDuration(gap.ended_at - gap.started_at))}</span>
+          {previous && <span className="truncate font-sans font-normal text-muted-foreground">· {previous.app_name}</span>}
+          {moreCount > 0 && (
+            <>
+              <span aria-hidden="true" className="shrink-0 rounded-full bg-muted px-1.5 font-sans text-2xs font-normal text-muted-foreground">
+                +{moreCount}
+              </span>
+              <span className="sr-only">{m.moreWaiting(moreCount)}</span>
+            </>
+          )}
+        </h2>
+        {!choosing && (
+          <div className="flex gap-1.5">
+            <Button size="sm" variant="secondary" disabled={busy} onClick={() => onResolve({ kind: "discard" })}>
+              {m.discard}
+            </Button>
             {previous && (
-              <>
-                {" · last in "}
-                <span className="font-medium text-foreground">{previous.app_name}</span>
-              </>
+              <Button
+                size="sm"
+                variant="primary"
+                disabled={busy}
+                title={m.keepTitle(previous.app_name)}
+                onClick={() => onResolve({ kind: "assign_previous" })}
+              >
+                {m.keep}
+              </Button>
             )}
-          </p>
-        </div>
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={busy}
+              aria-label={m.assignActivity}
+              title={m.assignActivity}
+              onClick={() => setChoosing(true)}
+            >
+              <Ellipsis aria-hidden="true" />
+            </Button>
+          </div>
+        )}
       </div>
 
-      {choosing ? (
+      {choosing && (
         <div className="mt-3">
           <div className="mb-1 flex items-center gap-1">
             <Button
               size="icon"
               variant="ghost"
-              aria-label="Back to idle options"
+              aria-label={m.back}
               onClick={() => setChoosing(false)}
             >
               <ChevronLeft aria-hidden="true" />
             </Button>
-            <p className="text-xs text-muted-foreground">Assign this time to an activity</p>
+            <p className="text-xs text-muted-foreground">{m.assignTitle}</p>
           </div>
           {activities.length === 0 ? (
-            <p className="px-1 py-2 text-xs text-muted-foreground">No activities yet.</p>
+            <p className="px-1 py-2 text-xs text-muted-foreground">{m.noActivities}</p>
           ) : (
-            <ul className="max-h-36 space-y-0.5 overflow-y-auto" aria-label="Activities">
+            <ul className="max-h-36 space-y-0.5 overflow-y-auto" aria-label={m.activities}>
               {activities.map((activity) => (
                 <li key={activity.id}>
                   <button
                     type="button"
                     disabled={busy}
                     onClick={() => onResolve({ kind: "assign_activity", activity_id: activity.id })}
-                    className="flex h-7 w-full items-center gap-2 rounded-md px-2 text-left hover:bg-accent disabled:opacity-50"
+                    className="flex h-7 w-full items-center gap-2 rounded-lg px-2 text-left hover:bg-accent disabled:opacity-50"
                   >
                     <span
                       aria-hidden="true"
                       className="size-2.5 shrink-0 rounded-full"
                       style={{ backgroundColor: activity.color }}
                     />
-                    <span className="truncate">{activity.name}</span>
+                    <span className="truncate">{activityLabel(activity.id, activity.name, t)}</span>
                   </button>
                 </li>
               ))}
             </ul>
           )}
-        </div>
-      ) : (
-        <div className="mt-3 flex flex-wrap gap-2">
-          <Button size="sm" variant="secondary" disabled={busy} onClick={() => onResolve({ kind: "discard" })}>
-            Discard
-          </Button>
-          {previous && (
-            <Button
-              size="sm"
-              variant="primary"
-              disabled={busy}
-              onClick={() => onResolve({ kind: "assign_previous" })}
-            >
-              Assign to previous app
-            </Button>
-          )}
-          <Button size="sm" variant="secondary" disabled={busy} onClick={() => setChoosing(true)}>
-            Assign to activity…
-          </Button>
         </div>
       )}
 
@@ -110,11 +119,6 @@ export function IdlePromptCard({ gap, moreCount, activities, busy, error, onReso
           {error}
         </p>
       )}
-      <p className="mt-2 text-2xs text-muted-foreground">
-        If you do nothing, the time is discarded at{" "}
-        <span className="tabular">{formatTimeOfDay(gap.expires_at)}</span>.
-        {moreCount > 0 && ` ${moreCount} more waiting.`}
-      </p>
     </section>
   );
 }

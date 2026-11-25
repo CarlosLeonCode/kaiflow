@@ -23,6 +23,7 @@ use crate::ipc::dto::{
     SettingsDto, SettingsPatchDto, ShortcutStatusDto, SuggestionDto, TimelineItemDto, TitleReadDto,
     TrackingStateDto, TrackingStatusDto,
 };
+use crate::ipc::progress_dto::{MomentDto, ProgressDto};
 
 impl AppState {
     fn shortcut_status(&self) -> ShortcutStatusDto {
@@ -171,6 +172,7 @@ impl AppState {
             settings.idle_prompt_timeout_secs,
             settings.idle_auto_discard_below_secs,
         );
+        self.language.set(&settings.language);
         // A session left running by the replaced data is gone; the restored ones are closed.
         let _ = self.focus.reload(None, self.now());
         if let Some(applier) = self.applier() {
@@ -178,6 +180,7 @@ impl AppState {
             // Goals and the week start came with the restored data.
             applier.refresh_goals();
             applier.refresh_focus();
+            applier.refresh_language();
         }
     }
 
@@ -326,6 +329,20 @@ impl AppState {
     pub fn focus_summary_dismiss(&self, id: i64) -> Result<FocusStatusDto, AppError> {
         self.focus.dismiss_summary(id)?;
         self.focus_status()
+    }
+
+    /// Progress as of now, with the moment to celebrate. Reported whether or not the user
+    /// switched progress off: the UI decides what to hide.
+    pub fn get_progress(&self) -> Result<ProgressDto, AppError> {
+        let enabled = self.commands.get_settings()?.progress_enabled;
+        let snapshot = self.progress.snapshot(self.now())?;
+        let moment = self.progress.moment_for(&snapshot)?;
+        Ok(ProgressDto::new(enabled, snapshot, moment))
+    }
+
+    pub fn dismiss_moment(&self, moment: MomentDto) -> Result<ProgressDto, AppError> {
+        self.progress.dismiss(moment.into())?;
+        self.get_progress()
     }
 
     fn refresh_focus_views(&self) {
@@ -484,7 +501,10 @@ impl AppState {
         let tray_changed = patch.tray_display.is_some();
         let week_changed = patch.week_start.is_some();
         let drift_changed = patch.focus_drift_after_secs.is_some() || patch.focus_timer.is_some();
+        let language_changed = patch.language.is_some();
         let settings = self.commands.update_settings(&patch.into())?;
+        // Before the applier runs, so the tray rewords itself in the new language.
+        self.language.set(&settings.language);
         if titles_changed {
             self.engine.request(Command::ReloadPrivacy)?;
         }
@@ -513,6 +533,9 @@ impl AppState {
             }
             if drift_changed {
                 applier.refresh_focus();
+            }
+            if language_changed {
+                applier.refresh_language();
             }
         }
         match first_error {
@@ -651,6 +674,7 @@ mod tests {
                 display_session: None,
             },
             no_ai(),
+            application::language::UiLanguage::default(),
         )
         .unwrap();
         Rig {
@@ -1077,6 +1101,9 @@ mod tests {
         fn refresh_tray_text(&self) {
             self.calls.lock().unwrap().push("tray".into());
         }
+        fn refresh_language(&self) {
+            self.calls.lock().unwrap().push("language".into());
+        }
     }
 
     #[test]
@@ -1139,6 +1166,46 @@ mod tests {
             TrayDisplayDto::CurrentApp
         );
         assert_eq!(*applier.calls.lock().unwrap(), vec!["tray".to_string()]);
+        rig.state.shutdown();
+    }
+
+    #[test]
+    fn a_language_change_reaches_the_live_handle_and_rewords_the_shell() {
+        use application::language::{Language, LanguageSetting};
+        let rig = rig();
+        let applier = Arc::new(RecordingApplier::default());
+        rig.state.set_applier(applier.clone());
+        // No OS locale in tests: `system` resolves to English.
+        assert_eq!(rig.state.language.setting(), LanguageSetting::System);
+        assert_eq!(rig.state.language.current(), Language::En);
+
+        rig.state
+            .settings_update(SettingsPatchDto {
+                language: Some("es".into()),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(rig.state.language.current(), Language::Es);
+        assert_eq!(*applier.calls.lock().unwrap(), vec!["language".to_string()]);
+
+        // Other settings leave the language and the shell text alone.
+        rig.state
+            .settings_update(SettingsPatchDto {
+                theme: Some("dark".into()),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(rig.state.language.current(), Language::Es);
+        assert_eq!(applier.calls.lock().unwrap().len(), 1);
+
+        rig.state
+            .settings_update(SettingsPatchDto {
+                language: Some("system".into()),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(rig.state.language.current(), Language::En);
+        assert_eq!(applier.calls.lock().unwrap().len(), 2);
         rig.state.shutdown();
     }
 
@@ -1222,6 +1289,7 @@ mod tests {
                 ..Providers::placeholders()
             },
             no_ai(),
+            application::language::UiLanguage::default(),
         )
         .unwrap();
         assert_eq!(state.get_status().unwrap().degraded_reason, None);
@@ -1261,6 +1329,7 @@ mod tests {
                 ..Providers::placeholders()
             },
             no_ai(),
+            application::language::UiLanguage::default(),
         )
         .unwrap();
         let info = state.platform_info();
@@ -1585,6 +1654,70 @@ mod tests {
         rig.state.shutdown();
     }
 
+    #[test]
+    fn progress_reports_the_moment_and_dismissing_it_answers_with_the_fresh_view() {
+        use crate::ipc::progress_dto::{LevelNameDto, SealDto};
+        use application::progress::ClosedBlock;
+        use domain::{FocusEnd, FocusKind};
+        let rig = rig();
+        let fresh = rig.state.get_progress().unwrap();
+        assert!(fresh.enabled);
+        assert_eq!((fresh.today.strokes, fresh.today.cap), (0, 100));
+        assert!(!fresh.today.done && fresh.today.entries.is_empty());
+        assert_eq!(
+            (fresh.level.number, fresh.level.name),
+            (1, LevelNameDto::Start)
+        );
+        assert_eq!(fresh.level.next_name, Some(LevelNameDto::Steady));
+        assert_eq!(fresh.streak.last7, vec![false; 7]);
+        assert_eq!(fresh.seals.len(), 6);
+        assert_eq!(fresh.seals[0].id, SealDto::FirstFocus);
+        assert!(
+            fresh
+                .seals
+                .iter()
+                .all(|s| !s.earned && s.earned_at.is_none())
+        );
+        assert_eq!(fresh.moment, None);
+
+        let now = rig.state.now();
+        let block = ClosedBlock {
+            started: now.plus_ms(-25 * 60_000),
+            kind: FocusKind::Focus,
+            end: FocusEnd::Completed,
+            ended_at: now,
+            percent_inside: Some(90),
+        };
+        rig.state.progress.on_block_closed(&block, now).unwrap();
+        let earned = rig.state.get_progress().unwrap();
+        assert_eq!(earned.today.strokes, 15);
+        assert_eq!(earned.today.entries.len(), 2);
+        assert!(earned.streak.last7[6]);
+        assert_eq!(
+            earned.moment,
+            Some(MomentDto::Seal {
+                seal: SealDto::FirstFocus
+            })
+        );
+        let dismissed = rig.state.dismiss_moment(earned.moment.unwrap()).unwrap();
+        assert_eq!(dismissed.moment, None);
+        assert!(dismissed.seals[0].earned && dismissed.seals[0].seen);
+
+        // Switching progress off only changes the flag; the strokes stay.
+        let off = rig
+            .state
+            .settings_update(SettingsPatchDto {
+                progress_enabled: Some(false),
+                ..SettingsPatchDto::default()
+            })
+            .unwrap();
+        assert!(!off.progress_enabled);
+        let hidden = rig.state.get_progress().unwrap();
+        assert!(!hidden.enabled);
+        assert_eq!(hidden.today.strokes, 15);
+        rig.state.shutdown();
+    }
+
     fn focus_request(rig: &Rig, minutes: u32) -> FocusStartDto {
         let first = rig.state.activities_list().unwrap().remove(0);
         FocusStartDto {
@@ -1701,6 +1834,7 @@ mod tests {
                     ..Providers::placeholders()
                 },
                 no_ai(),
+                application::language::UiLanguage::default(),
             )
             .unwrap();
             state
@@ -1750,6 +1884,7 @@ mod tests {
                 AppState::default_shortcut(),
                 Providers::placeholders(),
                 no_ai(),
+                application::language::UiLanguage::default(),
             )
             .unwrap()
         };

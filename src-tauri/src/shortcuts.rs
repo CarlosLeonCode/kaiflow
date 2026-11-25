@@ -13,6 +13,24 @@ use crate::error::AppError;
 use crate::ipc::dto::ShortcutStatusDto;
 use crate::ipc::events::{SharedShortcut, ShortcutStatusChanged};
 
+/// `Unavailable` reason when the session cannot have global shortcuts at all: Wayland does
+/// not let an app grab keys outside its own windows, so a registration would "succeed" and
+/// never fire. A machine code, worded by the UI (`shortcutReason` in `shared/lib/shortcut`),
+/// equal to the matching degraded reason.
+pub const WAYLAND_SESSION: &str = "wayland_session";
+
+/// Why this session cannot register global shortcuts, if it cannot.
+pub fn session_blocker() -> Option<&'static str> {
+    #[cfg(target_os = "linux")]
+    if adapters_linux::session::is_wayland_session(
+        std::env::var("WAYLAND_DISPLAY").ok().as_deref(),
+        std::env::var("XDG_SESSION_TYPE").ok().as_deref(),
+    ) {
+        return Some(WAYLAND_SESSION);
+    }
+    None
+}
+
 /// Handler run when the registered combination is pressed.
 pub type OnPress = Arc<dyn Fn() + Send + Sync>;
 
@@ -53,6 +71,8 @@ pub struct ShortcutManager {
     announce: Box<dyn Fn(ShortcutStatusDto) + Send + Sync>,
     on_press: OnPress,
     registered: Mutex<Option<String>>,
+    /// Set when the session cannot have global shortcuts (see [`session_blocker`]).
+    blocked: Option<&'static str>,
 }
 
 impl ShortcutManager {
@@ -68,7 +88,15 @@ impl ShortcutManager {
             announce,
             on_press,
             registered: Mutex::new(None),
+            blocked: None,
         }
+    }
+
+    /// A session where global shortcuts cannot work: nothing is registered and every shortcut
+    /// is reported `Unavailable` with `reason`.
+    pub fn blocked_by(mut self, reason: Option<&'static str>) -> Self {
+        self.blocked = reason;
+        self
     }
 
     /// Replaces the registered shortcut. On failure the state is `Unavailable` and the error
@@ -82,7 +110,11 @@ impl ShortcutManager {
             self.registrar.unregister(&previous);
         }
         let accelerator = to_accelerator(shortcut);
-        match self.registrar.register(&accelerator, self.on_press.clone()) {
+        let result = match self.blocked {
+            Some(reason) => Err(reason.to_owned()),
+            None => self.registrar.register(&accelerator, self.on_press.clone()),
+        };
+        match result {
             Ok(()) => {
                 *registered = Some(accelerator);
                 self.publish(ShortcutStatusDto::Registered {
@@ -307,6 +339,43 @@ mod tests {
             &*rig.status.lock().unwrap(),
             ShortcutStatusDto::Registered { .. }
         ));
+    }
+
+    #[test]
+    fn a_session_without_global_shortcuts_registers_nothing_and_says_why() {
+        let rig = rig();
+        let manager = ShortcutManager::new(
+            Box::new(rig.registrar.clone()),
+            rig.status.clone(),
+            Box::new(|_| {}),
+            Arc::new(|| {}),
+        )
+        .blocked_by(Some(WAYLAND_SESSION));
+        let err = manager.apply("⌃⌥⇧K").unwrap_err();
+        assert_eq!(
+            err,
+            AppError::ShortcutUnavailable {
+                shortcut: "⌃⌥⇧K".into(),
+                reason: WAYLAND_SESSION.into(),
+            }
+        );
+        assert_eq!(
+            *rig.status.lock().unwrap(),
+            ShortcutStatusDto::Unavailable {
+                shortcut: "⌃⌥⇧K".into(),
+                reason: WAYLAND_SESSION.into(),
+            }
+        );
+        assert!(rig.registrar.registered.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn only_linux_wayland_sessions_block_global_shortcuts() {
+        // The test process is not a Wayland session on macOS or Windows; on Linux it depends
+        // on the environment, so only the other platforms are asserted.
+        if !cfg!(target_os = "linux") {
+            assert_eq!(session_blocker(), None);
+        }
     }
 
     #[test]

@@ -4,7 +4,9 @@
 //!
 //! Privacy (AGENTS.md invariant 4): nothing here can carry a window title. Every recorded
 //! value is either a bundle id / application id, a `&'static str` chosen by the adapter
-//! (attribute names, error labels), a numeric OS error code, a boolean or a timestamp.
+//! (attribute names, error labels), a numeric OS error code, a boolean, a timestamp or the
+//! text of an error from a step that could not start (OS, D-Bus, X11, database or Tauri
+//! errors, which never contain a window title; see [`Diagnostics::record_failure`]).
 //! [`SystemSignal::Focus`] (which contains titles) is never logged.
 
 use std::collections::BTreeMap;
@@ -12,6 +14,7 @@ use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use application::ports::SystemSignal;
 use crossbeam_channel::{Sender, unbounded};
@@ -23,6 +26,8 @@ pub const DIAGNOSTICS_FILE: &str = "diagnostics.log";
 pub const MAX_FILE_BYTES: u64 = 128 * 1024;
 /// Applications whose last title read is remembered (oldest entries are dropped).
 const MAX_APPS: usize = 64;
+/// Longest error text kept in one log line.
+const MAX_ERROR_CHARS: usize = 512;
 
 /// Outcome of one attempt to read the focused window title. Only static strings and codes:
 /// a title can never be stored in it.
@@ -186,6 +191,16 @@ impl Diagnostics {
         self.append(now, &format!("note app={} {what}", sanitize(app_id)));
     }
 
+    /// A step that could not start or stopped working outside the tracking loop: an OS
+    /// listener, the startup, the global shortcut, the login item. `source` names the step and
+    /// `error` is the error's own text, never anything that holds a window title. The line is
+    /// also printed to stderr for development; in a Windows release build only the log is seen.
+    pub fn record_failure(&self, source: &'static str, error: &dyn std::fmt::Display) {
+        let line = failure_line(source, &error.to_string());
+        eprintln!("{line}");
+        self.append(now(), &line);
+    }
+
     /// Logs power, lock, idle and permission signals; focus signals (titles) are skipped.
     pub fn record_signal(&self, source: &'static str, signal: &SystemSignal, now: UtcMs) {
         if let Some(text) = signal_text(signal) {
@@ -315,6 +330,24 @@ pub fn signal_text(signal: &SystemSignal) -> Option<String> {
         SystemSignal::PermissionChanged(PermissionState::Granted) => "permission=granted".into(),
         SystemSignal::PermissionChanged(PermissionState::Denied) => "permission=denied".into(),
     })
+}
+
+/// `error source=<source> <text>`, on one line and bounded.
+fn failure_line(source: &str, error: &str) -> String {
+    let text: String = error
+        .chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .take(MAX_ERROR_CHARS)
+        .collect();
+    format!("error source={source} {}", text.trim())
+}
+
+/// The system clock, for failures logged outside the sampler (which passes its own time).
+fn now() -> UtcMs {
+    let ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX));
+    UtcMs(ms)
 }
 
 fn rotated(path: &Path) -> PathBuf {
@@ -470,6 +503,19 @@ mod tests {
             snapshot.title_reads[0].app_id,
             format!("app{}", MAX_APPS + 9)
         );
+    }
+
+    #[test]
+    fn failures_are_logged_on_one_bounded_line() {
+        let dir = tempfile::tempdir().unwrap();
+        let d = Diagnostics::in_dir(dir.path());
+        d.record_failure("startup", &"database: disk I/O error\nat open");
+        d.record_failure("shortcut", &"x".repeat(2_000));
+        let log = read(dir.path());
+        assert_eq!(log.lines().count(), 2, "{log}");
+        assert!(log.contains("error source=startup database: disk I/O error at open"));
+        let long = log.lines().nth(1).unwrap();
+        assert!(long.ends_with(&format!("error source=shortcut {}", "x".repeat(512))));
     }
 
     #[test]

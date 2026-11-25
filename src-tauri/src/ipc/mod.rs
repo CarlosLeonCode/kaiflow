@@ -5,14 +5,15 @@ pub mod ai_dto;
 pub mod commands;
 pub mod dto;
 pub mod events;
+pub mod progress_dto;
 
 use tauri::Wry;
 use tauri_specta::{Builder, collect_commands, collect_events};
 
 use self::events::{
     BackupFinished, CurrentSegmentChanged, DataChanged, FocusChanged, FocusEnded, GoalCrossed,
-    IdleGapPending, IdleGapResolved, PermissionChanged, ShortcutStatusChanged, StorageFailed,
-    TrackingStatusChanged, UpdateAvailable,
+    IdleGapPending, IdleGapResolved, MainSectionRequested, PermissionChanged,
+    ShortcutStatusChanged, StorageFailed, TrackingStatusChanged, UpdateAvailable,
 };
 
 /// Where the generated bindings live, relative to `src-tauri/` (design section 8).
@@ -56,6 +57,7 @@ pub fn builder() -> Builder<Wry> {
             commands::permission_open_settings,
             commands::app_restart,
             commands::open_main_window,
+            commands::take_main_section,
             commands::close_onboarding,
             commands::hide_popover,
             commands::prepare_delete,
@@ -87,6 +89,8 @@ pub fn builder() -> Builder<Wry> {
             commands::focus_allow_app,
             commands::focus_history,
             commands::focus_summary_dismiss,
+            commands::get_progress,
+            commands::dismiss_moment,
             commands::ai_settings_get,
             commands::ai_settings_update,
             commands::ai_set_key,
@@ -109,6 +113,7 @@ pub fn builder() -> Builder<Wry> {
         .events(collect_events![
             TrackingStatusChanged,
             CurrentSegmentChanged,
+            MainSectionRequested,
             IdleGapPending,
             IdleGapResolved,
             PermissionChanged,

@@ -1,4 +1,5 @@
 import { useSectionIntro } from "@/features/shell/hooks/useSectionIntro";
+import { useT } from "@/shared/i18n";
 import {
   IpcError,
   useOpenAccessibilitySettingsMutation,
@@ -8,8 +9,8 @@ import {
   useUpdateSettingsMutation,
   errorMessage,
 } from "@/shared/ipc";
-import { DEFAULT_PLATFORM } from "@/shared/lib/platform";
-import { formatShortcut } from "@/shared/lib/shortcut";
+import { DEFAULT_PLATFORM, platformWords } from "@/shared/lib/platform";
+import { formatShortcut, SHORTCUT_REASON_WAYLAND } from "@/shared/lib/shortcut";
 
 import { DataPanelContainer } from "@/features/data/containers/DataPanelContainer";
 import { AiSettingsPanelContainer } from "@/features/review/containers/AiSettingsPanelContainer";
@@ -18,12 +19,9 @@ import { UpdatesPanelContainer } from "@/features/updates/containers/UpdateConta
 import { SettingsView } from "../components/SettingsView";
 import { DiagnosticsPanelContainer } from "./DiagnosticsPanelContainer";
 
-function shortcutMessage(shortcut: string, reason: string): string {
-  return `${shortcut} is unavailable: ${reason}. Choose another combination.`;
-}
-
 /** Wires Settings to the backend. A taken shortcut becomes a field error, not a toast. */
 export function SettingsContainer() {
+  const t = useT();
   const intro = useSectionIntro("settings");
   const settings = useSettingsQuery();
   const status = useStatusQuery();
@@ -31,7 +29,9 @@ export function SettingsContainer() {
   const openSettings = useOpenAccessibilitySettingsMutation();
   const platform = usePlatformQuery().data ?? DEFAULT_PLATFORM;
   const describe = (shortcut: string, reason: string) =>
-    shortcutMessage(formatShortcut(shortcut, platform.os), reason);
+    reason === SHORTCUT_REASON_WAYLAND
+      ? t.settings.tracking.shortcutWayland(platformWords(platform.os, t).tray)
+      : t.settings.tracking.shortcutUnavailable(formatShortcut(shortcut, platform.os), reason);
 
   const failure = update.error;
   const shortcutFailure =
@@ -43,8 +43,8 @@ export function SettingsContainer() {
       ? describe(unavailable.shortcut, unavailable.reason)
       : null;
 
-  const otherError = failure && !shortcutFailure ? errorMessage(failure) : null;
-  const loadError = settings.isError ? `Could not load settings: ${errorMessage(settings.error)}` : null;
+  const otherError = failure && !shortcutFailure ? errorMessage(failure, t) : null;
+  const loadError = settings.isError ? t.settings.loadError(errorMessage(settings.error, t)) : null;
 
   return (
     <SettingsView

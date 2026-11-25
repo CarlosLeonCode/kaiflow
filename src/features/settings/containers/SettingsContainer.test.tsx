@@ -2,7 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
-import { mergePatch, mockBackend, platform, renderWithProviders, settings, status } from "@/test/ipc";
+import { aiSettings, mergePatch, mockBackend, platform, renderWithProviders, settings, status } from "@/test/ipc";
 
 import { SettingsContainer } from "./SettingsContainer";
 
@@ -129,6 +129,25 @@ describe("SettingsContainer", () => {
 
     await waitFor(() => expect(lastUpdate(calls)).toMatchObject({ theme: "dark", autostart: null }));
     await waitFor(() => expect(document.documentElement.classList.contains("dark")).toBe(true));
+  });
+
+  it("saves the language and switches the interface right away", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockBackend({
+      get_status: () => status(),
+      settings_update: (args) => mergePatch(args.patch),
+    });
+    renderWithProviders(<SettingsContainer />);
+
+    const language = await screen.findByRole("combobox", { name: "Language" });
+    expect(language).toHaveValue("system");
+    expect(within(language).getAllByRole("option").map((o) => o.textContent)).toEqual(["System", "English", "Español"]);
+
+    await user.selectOptions(language, "Español");
+
+    await waitFor(() => expect(lastUpdate(calls)).toMatchObject({ language: "es", theme: null }));
+    expect(await screen.findByRole("combobox", { name: "Idioma" })).toHaveValue("es");
+    expect(screen.getByRole("radio", { name: "Oscuro" })).toBeInTheDocument();
   });
 
   it("saves the idle threshold in seconds (R3.1)", async () => {
@@ -270,6 +289,22 @@ describe("SettingsContainer", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("taken by another app");
   });
 
+  it("says why a Wayland session has no global shortcut instead of asking for another one", async () => {
+    mockBackend({
+      platform_info: () => platform("linux", "wayland"),
+      get_status: () =>
+        status({ shortcut: { kind: "unavailable", shortcut: "⌃⌥⇧K", reason: "wayland_session" } }),
+    });
+    renderWithProviders(<SettingsContainer />);
+
+    expect(
+      await screen.findByText(
+        "Global shortcuts do not work in Wayland sessions. Pause and resume from the system tray menu.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Choose another combination/)).toBeNull();
+  });
+
   it("shows the degraded banner with a way to open System Settings (R5.3)", async () => {
     const user = userEvent.setup();
     const { calls } = mockBackend({
@@ -297,5 +332,57 @@ describe("SettingsContainer", () => {
     await user.click(await screen.findByRole("switch", { name: "Open at login" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("disk full");
+  });
+
+  it("renders every panel in Spanish when the language setting is Español", async () => {
+    mockBackend({
+      get_status: () => status(),
+      settings_get: () => settings({ language: "es", idle_threshold_secs: 3600 }),
+      ai_settings_get: () => aiSettings(),
+      diagnostics_get: () => ({ accessibility_trusted: true, title_reads: [], report: "" }),
+    });
+    renderWithProviders(<SettingsContainer />);
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Ajustes" })).toBeInTheDocument();
+    expect(screen.getByText("Los cambios se aplican al instante.")).toBeInTheDocument();
+    for (const panel of ["Apariencia", "Calendario", "Barra de menús", "Inactividad", "Sesiones de enfoque", "Registro", "Privacidad", "Datos", "Acerca de"]) {
+      expect(screen.getByRole("region", { name: panel })).toBeInTheDocument();
+    }
+    expect(screen.getByRole("combobox", { name: "La semana empieza el" })).toHaveDisplayValue("Lunes");
+    expect(screen.getByRole("combobox", { name: "Mostrar junto al icono" })).toHaveDisplayValue("Total de hoy (3h 12m)");
+    expect(screen.getByRole("combobox", { name: "Inactivo después de" })).toHaveDisplayValue("1 hora");
+    expect(screen.getByRole("combobox", { name: "No preguntar por las pausas cortas" })).toHaveDisplayValue("Menos de 2 min");
+    expect(screen.getByRole("switch", { name: "Abrir al iniciar sesión" })).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "Registrar títulos de ventana" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Atajo global ⌃⌥⌘T, cambiar" })).toBeInTheDocument();
+    expect(await screen.findByRole("switch", { name: "Copia de seguridad diaria" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "Análisis con IA" })).toBeInTheDocument();
+    expect(await screen.findByRole("combobox", { name: "Proveedor" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "Diagnóstico" })).toHaveTextContent("Accesibilidad concedida");
+    expect(screen.queryByText(/Changes apply|Week starts|Idle after|Daily backup/)).toBeNull();
+  });
+
+  it("turns progress off and on from its own panel", async () => {
+    const user = userEvent.setup();
+    let stored = settings();
+    const { calls } = mockBackend({
+      get_status: () => status(),
+      settings_get: () => stored,
+      settings_update: (args) => {
+        stored = mergePatch(args.patch, stored);
+        return stored;
+      },
+    });
+    renderWithProviders(<SettingsContainer />);
+
+    const panel = await screen.findByRole("region", { name: "Progress" });
+    const toggle = within(panel).getByRole("switch", { name: "Strokes, levels and seals" });
+    expect(toggle).toBeChecked();
+    expect(toggle).toHaveAccessibleDescription(/keeps counting quietly in the background. Nothing leaves your device/);
+    await user.click(toggle);
+    await waitFor(() => expect(lastUpdate(calls)).toMatchObject({ progress_enabled: false }));
+    await waitFor(() => expect(toggle).not.toBeChecked());
+    await user.click(toggle);
+    await waitFor(() => expect(lastUpdate(calls)).toMatchObject({ progress_enabled: true }));
   });
 });

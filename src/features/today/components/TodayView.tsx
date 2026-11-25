@@ -1,9 +1,11 @@
 import type { ReactNode } from "react";
 import { CircleAlert } from "lucide-react";
 
+import { useLocale, useT } from "@/shared/i18n";
 import type { RangeDto, TimelineItemDto, TrackingStateDto } from "@/shared/ipc";
 import { formatClock, formatDuration } from "@/shared/lib/time";
 import { Alert, AlertDescription } from "@/shared/ui/alert";
+import { BIG_NUMBER, Card } from "@/shared/ui/card";
 import { EmptyState } from "@/shared/ui/EmptyState";
 import { Page, type IntroSlot } from "@/shared/ui/page";
 import { Skeleton } from "@/shared/ui/skeleton";
@@ -37,28 +39,19 @@ interface Props {
   items: readonly TimelineItemDto[];
   apps: readonly AppRow[];
   activities: readonly ActivityRow[];
-  /** Focused time (live), excludes idle and discarded time (R7.2). */
+  /** Active time (live): time at the computer, excludes idle and discarded time (R7.2). */
   totalMs: number;
   awayMs: number;
   /** Short breaks the app discarded without asking today. */
   autoDiscardedGaps?: number;
 }
 
-function dateLabel(range: RangeDto): string {
-  return new Date(range.from).toLocaleDateString(undefined, {
+function dateLabel(range: RangeDto, locale: string): string {
+  return new Date(range.from).toLocaleDateString(locale, {
     weekday: "long",
     month: "long",
     day: "numeric",
   });
-}
-
-function Card({ title, children, label }: { title: string; children: React.ReactNode; label?: string }) {
-  return (
-    <section aria-label={label ?? title} className="rounded-lg border border-border bg-background p-4">
-      <h2 className="mb-2 text-2xs font-medium uppercase tracking-wide text-muted-foreground">{title}</h2>
-      {children}
-    </section>
-  );
 }
 
 /** Today dashboard (presentational): totals, SVG timeline, by app and by activity. */
@@ -82,16 +75,18 @@ export function TodayView({
   awayMs,
   autoDiscardedGaps = 0,
 }: Props) {
+  const t = useT();
+  const locale = useLocale();
   const empty = !loading && !error && items.length === 0 && totalMs === 0;
   const window = timelineWindow(items, range, now);
-  const blocks = layoutTimeline(items, window, now);
+  const blocks = layoutTimeline(items, window, now, t);
   const presence = totalMs + awayMs;
-  const focusedPct = presence > 0 ? (totalMs / presence) * 100 : 0;
+  const activePct = presence > 0 ? (totalMs / presence) * 100 : 0;
 
   return (
     <Page
-      title="Today"
-      subtitle={dateLabel(range)}
+      title={t.shell.sections.today}
+      subtitle={dateLabel(range, locale)}
       intro={intro}
       actions={
         state && (
@@ -100,7 +95,7 @@ export function TodayView({
               aria-hidden="true"
               className={`size-1.5 rounded-full ${state === "running" ? "bg-success" : "bg-muted-foreground/50"}`}
             />
-            {stateLabel(state)}
+            {stateLabel(state, t)}
           </span>
         )
       }
@@ -108,10 +103,10 @@ export function TodayView({
       {error ? (
         <Alert variant="warning" role="alert">
           <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-          <AlertDescription>Could not load today: {error}</AlertDescription>
+          <AlertDescription>{t.today.loadError(error)}</AlertDescription>
         </Alert>
       ) : loading ? (
-        <div className="space-y-4" aria-label="Loading today">
+        <div className="space-y-4" aria-label={t.today.loading}>
           <Skeleton className="h-24" />
           <Skeleton className="h-32" />
           <Skeleton className="h-40" />
@@ -121,48 +116,46 @@ export function TodayView({
           <div className="empty:hidden mb-4">{focus}</div>
           {hasGoals && <div className="mb-4">{goals}</div>}
           <EmptyState
-            title="Nothing tracked yet today"
+            title={t.today.empty.title}
             action={
               state === "running"
-                ? onOpenActivities && { label: "Set up activities", onClick: onOpenActivities }
+                ? onOpenActivities && { label: t.today.empty.setUpActivities, onClick: onOpenActivities }
                 : emptyAction
             }
           >
-            {state === "running"
-              ? "Tracking is on: keep working and your day fills in here. Meanwhile, set up activities so your time is sorted for you."
-              : "Tracking is not running. Start it and your day will appear here."}
+            {state === "running" ? t.today.empty.running : t.today.empty.stopped}
           </EmptyState>
         </>
       ) : (
         <div className="space-y-4">
           {focus}
           {goals}
-          <Card title="Focused time" label="Focused and away time">
+          <Card title={t.today.activeTime} hint={t.today.activeHint} label={t.today.activeAndAway} tone="paper">
             <div className="flex flex-wrap items-end gap-x-10 gap-y-3">
               <p
                 data-testid="today-total"
-                className="tabular text-display font-semibold tracking-tight"
-                aria-label={`Focused time ${formatDuration(totalMs)}`}
+                className={BIG_NUMBER}
+                aria-label={t.today.activeTotal(formatDuration(totalMs))}
               >
                 {formatClock(totalMs)}
               </p>
               <div className="min-w-48 flex-1 pb-1.5">
                 <div
                   role="img"
-                  aria-label={`Focused ${formatDuration(totalMs)}, away ${formatDuration(awayMs)}`}
-                  className="flex h-1.5 overflow-hidden rounded-full bg-muted"
+                  aria-label={t.today.activeBar(formatDuration(totalMs), formatDuration(awayMs))}
+                  className="flex h-3 overflow-hidden rounded-full border-[1.5px] border-mark-stroke bg-background"
                 >
-                  <div className="h-full bg-primary" style={{ width: `${focusedPct}%` }} />
+                  <div className="h-full bg-pop-mint" style={{ width: `${activePct}%` }} />
                 </div>
                 <dl className="mt-2 flex gap-6 text-xs">
                   <div className="flex items-center gap-1.5">
-                    <span aria-hidden="true" className="size-2 rounded-full bg-primary" />
-                    <dt className="text-muted-foreground">Focused</dt>
+                    <span aria-hidden="true" className="size-2.5 rounded-full border-[1.5px] border-mark-stroke bg-pop-mint" />
+                    <dt className="text-muted-foreground">{t.today.active}</dt>
                     <dd className="tabular font-medium">{formatDuration(totalMs)}</dd>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <span aria-hidden="true" className="size-2 rounded-full bg-muted-foreground/40" />
-                    <dt className="text-muted-foreground">Away</dt>
+                    <span aria-hidden="true" className="size-2.5 rounded-full border-[1.5px] border-mark-stroke bg-background" />
+                    <dt className="text-muted-foreground">{t.today.away}</dt>
                     <dd className="tabular font-medium">{formatDuration(awayMs)}</dd>
                   </div>
                 </dl>
@@ -170,23 +163,20 @@ export function TodayView({
             </div>
             {autoDiscardedGaps > 0 && (
               <p data-testid="auto-discarded-hint" className="mt-3 text-xs text-muted-foreground">
-                {autoDiscardedGaps === 1
-                  ? "1 short break discarded today"
-                  : `${autoDiscardedGaps} short breaks discarded today`}
-                . Change this in Settings, Idle.
+                {t.today.autoDiscarded(autoDiscardedGaps)}
               </p>
             )}
           </Card>
 
-          <Card title="Timeline">
+          <Card title={t.today.timeline}>
             <DayTimeline window={window} blocks={blocks} now={now} dark={dark} />
           </Card>
 
           <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-            <Card title="By app">
+            <Card title={t.today.byApp}>
               <AppList rows={apps} />
             </Card>
-            <Card title="By activity">
+            <Card title={t.today.byActivity}>
               <ActivityList rows={activities} dark={dark} />
             </Card>
           </div>

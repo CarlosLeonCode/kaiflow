@@ -2,12 +2,14 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
-import { mockBackend, renderWithProviders, report, status } from "@/test/ipc";
+import type { SettingsDto } from "@/shared/ipc";
+import { mockBackend, renderWithProviders, report, settings, status } from "@/test/ipc";
 
 import { PopoverApp } from "./PopoverApp";
 
-function backend() {
+function backend(overrides: Partial<SettingsDto> = {}) {
   return mockBackend({
+    settings_get: () => settings(overrides),
     get_status: () => status(),
     get_report: () => report(),
     list_pending_idle_gaps: () => [],
@@ -41,5 +43,17 @@ describe("PopoverApp", () => {
     window.removeEventListener("keydown", handled, { capture: true });
 
     expect(calls.some((c) => c.cmd === "hide_popover")).toBe(false);
+  });
+
+  it("shows the popover in Spanish when the language setting is Español", async () => {
+    backend({ language: "es" });
+    renderWithProviders(<PopoverApp />);
+
+    expect(await screen.findByRole("status", { name: "Estado: Registrando" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Hoy" })).toBeInTheDocument();
+    expect(screen.getByText("Ahora")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Pausar registro/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Abrir panel/ })).toBeInTheDocument();
+    expect(await screen.findByText("Aún no hay actividad registrada hoy.")).toBeInTheDocument();
   });
 });

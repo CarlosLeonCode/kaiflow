@@ -18,6 +18,36 @@ async function highlightNow(page: Page): Promise<{ current: string[]; animating:
 }
 
 test.describe("main window shell", () => {
+  test("the sidebar groups the seven sections under Daily, Look back and Setup", async ({ page }) => {
+    await openWindow(page, "main");
+    const groups: [string, string[]][] = [
+      ["Daily", ["Today", "Focus", "Goals"]],
+      ["Look back", ["Insights"]],
+      ["Setup", ["Activities", "Privacy", "Settings"]],
+    ];
+    for (const [group, sections] of groups) {
+      const buttons = nav(page).getByRole("group", { name: group }).getByRole("button");
+      await expect(buttons).toHaveCount(sections.length);
+      for (const [index, name] of sections.entries()) {
+        await expect(buttons.nth(index)).toHaveText(new RegExp(`^${name}`));
+      }
+    }
+    await expectNoA11yViolations(page);
+  });
+
+  test("only macOS reserves a title strip and drag regions for its overlay title bar", async ({ page }) => {
+    await openWindow(page, "main");
+    await expect(page.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
+    await expect(page.locator("header[data-tauri-drag-region]")).toHaveCount(1);
+    await expect(page.getByTestId("title-bar-strip")).toHaveCount(1);
+
+    // Windows and Linux draw a native title bar: no empty strip, and the header does not drag.
+    await openWindow(page, "main", "?os=windows");
+    await expect(page.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
+    await expect(page.getByTestId("title-bar-strip")).toHaveCount(0);
+    await expect(page.locator("[data-tauri-drag-region]")).toHaveCount(0);
+  });
+
   test("a dismissed section intro stays dismissed and does not affect other sections", async ({ page }) => {
     await openWindow(page, "main");
     const todayIntro = page.getByRole("complementary", { name: "About Your day so far" });
@@ -34,7 +64,7 @@ test.describe("main window shell", () => {
 
   test("the help button reopens a dismissed intro in every section", async ({ page }) => {
     await openWindow(page, "main");
-    for (const name of ["Today", "Overview", "Goals", "Focus", "Review", "Activities", "Privacy", "Settings"]) {
+    for (const name of ["Today", "Focus", "Goals", "Insights", "Activities", "Privacy", "Settings"]) {
       await nav(page).getByRole("button", { name: new RegExp(`^${name}`) }).click();
       const main = page.getByRole("main");
       const intro = main.getByRole("complementary", { name: /^About / });
@@ -69,8 +99,9 @@ test.describe("main window shell", () => {
     await openWindow(page, "main");
     const steps: [() => Promise<void>, string][] = [
       [() => nav(page).getByRole("button", { name: /^Activities/ }).click(), "Activities"],
-      [() => nav(page).getByRole("button", { name: /^Overview/ }).click(), "Overview"],
-      [() => page.keyboard.press("Meta+6"), "Activities"],
+      [() => nav(page).getByRole("button", { name: /^Insights/ }).click(), "Insights"],
+      [() => page.keyboard.press("Meta+5"), "Activities"],
+      [() => page.keyboard.press("Meta+4"), "Insights"],
       [() => page.keyboard.press("Meta+1"), "Today"],
     ];
 

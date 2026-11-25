@@ -51,6 +51,15 @@ pub fn identity_from_exe(path: &str, description: Option<&str>) -> Option<AppIde
     Some(AppIdentity { bundle_id, name })
 }
 
+/// Executable that hosts the frames of UWP/Store apps (Settings, Calculator, Photos). The
+/// foreground window of such an app belongs to it; the app itself owns a child window.
+pub const FRAME_HOST_EXE: &str = "ApplicationFrameHost.exe";
+
+/// Whether `path` is the UWP frame host, whose windows must be attributed to the app inside.
+pub fn is_frame_host(path: &str) -> bool {
+    exe_file_name(path).is_some_and(|name| name.eq_ignore_ascii_case(FRAME_HOST_EXE))
+}
+
 /// Text from a UTF-16 buffer filled by Win32: stops at the first NUL, replaces invalid
 /// surrogates, trims, and maps an empty result to `None`.
 pub fn text_from_utf16(buffer: &[u16]) -> Option<String> {
@@ -138,6 +147,19 @@ mod tests {
         assert_eq!(identity.bundle_id, "code.exe");
         assert_eq!(identity.name, "Visual Studio Code");
         assert_eq!(identity_from_exe("", None), None);
+    }
+
+    #[test]
+    fn the_uwp_frame_host_is_recognized_in_any_case() {
+        assert!(is_frame_host(
+            r"C:\Windows\System32\ApplicationFrameHost.exe"
+        ));
+        assert!(is_frame_host(
+            r"C:\WINDOWS\system32\applicationframehost.EXE"
+        ));
+        assert!(!is_frame_host(CODE));
+        assert!(!is_frame_host(r"C:\x\ApplicationFrameHost.exe.bak"));
+        assert!(!is_frame_host(""));
     }
 
     #[test]

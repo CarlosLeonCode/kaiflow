@@ -21,6 +21,7 @@ import type {
   FocusStatusDto,
   GoalDto,
   IdleResolutionDto,
+  MainSectionDto,
   PermissionStateDto,
   PlatformInfoDto,
   ProductivityDto,
@@ -39,7 +40,7 @@ import type {
   UpdateInfoDto,
 } from "@/shared/ipc";
 import { DEFAULT_PLATFORM, isWayland } from "@/shared/lib/platform";
-import { defaultShortcut } from "@/shared/lib/shortcut";
+import { defaultShortcut, SHORTCUT_REASON_WAYLAND } from "@/shared/lib/shortcut";
 
 import { buildDashboard } from "./mockDashboard";
 import {
@@ -68,6 +69,7 @@ import {
   type MockStep,
 } from "./mockFocus";
 import { matchPreset, mockPresets } from "./mockPresets";
+import { createMockProgress, type DemoProgress } from "./mockProgress";
 import { createMockReview } from "./mockReview";
 import { buildSeed, type MockData, type MockSegment } from "./seed";
 
@@ -89,7 +91,7 @@ export interface MockOptions {
   announceUpdate?: boolean;
   /** Start with only the system activity and no rules (first-run preset choice). */
   emptyActivities?: boolean;
-  /** Start without any tracked time (empty states of Today and Overview). */
+  /** Start without any tracked time (empty states of Today and Insights). */
   emptyHistory?: boolean;
   /** Start with a handful of goals (progress bars, an exceeded limit, streaks). */
   demoGoals?: boolean;
@@ -104,10 +106,24 @@ export interface MockOptions {
   keychainMissing?: boolean;
   /** Every AI analysis fails as if the network were down. */
   aiOffline?: boolean;
-  /** Start with the Ollama provider switched on, so Review can run without opening Settings. */
+  /** Start with the Ollama provider switched on, so the Insights week analysis can run without opening Settings. */
   aiOn?: boolean;
   /** The automatic backup has failed (Settings > Data shows the error, "Back up now" fails). */
   backupFails?: boolean;
+  /** The stored `language` setting (`system` by default), for windows opened in another language. */
+  language?: string;
+  /**
+   * Progress scenario: by default a new seal waits to be celebrated; `done` has today's ensō
+   * full and `level` a level-up not acknowledged yet.
+   */
+  demoProgress?: DemoProgress;
+  /** The stored `progress_enabled` setting (on by default). */
+  progressEnabled?: boolean;
+  /**
+   * A section another window asked the main window to show (`take_main_section` answers it
+   * once). Each mocked window has its own backend, so the popover's request is seeded here.
+   */
+  mainSection?: MainSectionDto;
   now?: () => number;
 }
 
@@ -159,6 +175,7 @@ export function installMockBackend(options: MockOptions = {}): void {
   const dismissedSuggestions = new Set<string>();
   const platform = options.platform ?? DEFAULT_PLATFORM;
   const wayland = isWayland(platform);
+  let pendingSection: MainSectionDto | null = options.mainSection ?? null;
   // Only macOS has a permission to revoke; Wayland reports it missing like the Linux adapter.
   let permission: PermissionStateDto = wayland
     ? "denied"
@@ -175,6 +192,7 @@ export function installMockBackend(options: MockOptions = {}): void {
     idle_auto_discard_below_secs: 120,
     retention_days: null,
     theme: "system",
+    language: options.language ?? "system",
     autostart: false,
     shortcut: defaultShortcut(platform.os),
     onboarding_completed: true,
@@ -191,6 +209,7 @@ export function installMockBackend(options: MockOptions = {}): void {
       heads_up: false,
     },
     ui: { dismissed_intros: [] },
+    progress_enabled: options.progressEnabled ?? true,
   };
   const goals: MockGoal[] = [];
   const goalEvents: MockGoalEvent[] = [];
@@ -271,7 +290,10 @@ export function installMockBackend(options: MockOptions = {}): void {
       since: tracking === "running" && current && !wayland ? current.started_at : null,
       degraded: degradedReason() !== null,
       degraded_reason: degradedReason(),
-      shortcut: { kind: "registered", shortcut: settings.shortcut },
+      // Wayland has no global shortcuts: the backend reports it instead of registering one.
+      shortcut: wayland
+        ? { kind: "unavailable", shortcut: settings.shortcut, reason: SHORTCUT_REASON_WAYLAND }
+        : { kind: "registered", shortcut: settings.shortcut },
     };
   };
 
@@ -616,8 +638,11 @@ export function installMockBackend(options: MockOptions = {}): void {
   // E2E tests read how many calls could have reached an AI provider.
   (globalThis as { __mockAiTraffic?: () => number }).__mockAiTraffic = review.trafficCount;
 
+  const progress = createMockProgress({ clock, enabled: () => settings.progress_enabled }, options.demoProgress);
+
   const handlers: Record<string, (args: Record<string, unknown>) => unknown> = {
     ...review.handlers,
+    ...progress.handlers,
     get_status: () => status(),
     start: () => {
       const focus = lastFocus();
@@ -828,7 +853,16 @@ export function installMockBackend(options: MockOptions = {}): void {
       return null;
     },
     app_restart: () => null,
-    open_main_window: () => null,
+    open_main_window: (args) => {
+      // Only this window's backend: a real main window would take it on the event.
+      pendingSection = (args.section as MainSectionDto | null) ?? null;
+      return null;
+    },
+    take_main_section: () => {
+      const section = pendingSection;
+      pendingSection = null;
+      return section;
+    },
     close_onboarding: () => null,
     hide_popover: () => null,
     prepare_delete: () => issueToken(),

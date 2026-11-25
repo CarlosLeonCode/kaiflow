@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { LANGUAGE_NAMES, useLanguage, useT } from "@/shared/i18n";
 import {
   errorMessage,
   useAiReviewsQuery,
@@ -15,10 +16,7 @@ import {
 } from "@/shared/ipc";
 
 import { AiPanel } from "../components/AiPanel";
-import { activeProvider } from "../lib/review";
-
-/** The language the analysis is written in: the one the interface uses. */
-const LANGUAGE = "English";
+import { activeProvider, providerLabel } from "../lib/review";
 
 interface Props {
   weeksAgo: number;
@@ -33,6 +31,10 @@ interface Props {
  * reaches the provider. Nothing here runs by itself.
  */
 export function AiPanelContainer({ weeksAgo, weekReviews, onOpenSettings }: Props) {
+  const t = useT();
+  // The analysis is written in the language the interface uses. The backend takes the
+  // language's own name ("English", "Español") and puts it in the instructions as is.
+  const language = LANGUAGE_NAMES[useLanguage()];
   const settings = useAiSettingsQuery();
   const history = useAiReviewsQuery();
   const previewReview = usePreviewReviewMutation();
@@ -50,7 +52,7 @@ export function AiPanelContainer({ weeksAgo, weekReviews, onOpenSettings }: Prop
   const [token, setToken] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const labels = Object.fromEntries((settings.data?.providers ?? []).map((p) => [p.provider, p.label]));
+  const labels = Object.fromEntries((settings.data?.providers ?? []).map((p) => [p.provider, providerLabel(p, t)]));
 
   return (
     <AiPanel
@@ -62,14 +64,14 @@ export function AiPanelContainer({ weeksAgo, weekReviews, onOpenSettings }: Prop
       preview={preview}
       previewing={previewReview.isPending}
       running={run.isPending}
-      error={error ?? (settings.isError ? `Could not load AI settings: ${errorMessage(settings.error)}` : null)}
+      error={error ?? (settings.isError ? t.review.ai.loadError(errorMessage(settings.error, t)) : null)}
       weekReviews={weekReviews}
       history={history.data ?? []}
       onPreview={() => {
         setError(null);
         previewReview.mutate(
-          { weeksAgo, includeTitles, language: LANGUAGE },
-          { onSuccess: setPreview, onError: (e) => setError(errorMessage(e)) },
+          { weeksAgo, includeTitles, language },
+          { onSuccess: setPreview, onError: (e) => setError(errorMessage(e, t)) },
         );
       }}
       onSend={() => {
@@ -80,26 +82,26 @@ export function AiPanelContainer({ weeksAgo, weekReviews, onOpenSettings }: Prop
           // The preview is spent either way: a retry builds a fresh one.
           onError: (e) => {
             setPreview(null);
-            setError(errorMessage(e));
+            setError(errorMessage(e, t));
           },
         });
       }}
       onCancelPreview={() => setPreview(null)}
       onCancelRun={() => cancel.mutate()}
       onOpenSettings={onOpenSettings}
-      onDeleteReview={(id) => remove.mutate(id, { onError: (e) => setError(errorMessage(e)) })}
+      onDeleteReview={(id) => remove.mutate(id, { onError: (e) => setError(errorMessage(e, t)) })}
       confirmDeleteAll={token !== null}
       deleting={removeAll.isPending}
       deleteError={deleteError}
       onAskDeleteAll={() => {
         setDeleteError(null);
-        prepareAll.mutate(undefined, { onSuccess: setToken, onError: (e) => setError(errorMessage(e)) });
+        prepareAll.mutate(undefined, { onSuccess: setToken, onError: (e) => setError(errorMessage(e, t)) });
       }}
       onConfirmDeleteAll={() => {
         if (token === null) return;
         removeAll.mutate(token, {
           onSuccess: () => setToken(null),
-          onError: (e) => setDeleteError(errorMessage(e)),
+          onError: (e) => setDeleteError(errorMessage(e, t)),
         });
       }}
       onCancelDeleteAll={() => {

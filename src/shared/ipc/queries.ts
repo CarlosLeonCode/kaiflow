@@ -12,6 +12,8 @@ import type {
   FocusStatusDto,
   GoalDto,
   IdleResolutionDto,
+  MainSectionDto,
+  MomentDto,
   ProductivityDto,
   RangeDto,
   RuleInputDto,
@@ -41,7 +43,7 @@ export function useReportQuery(range: RangeDto, buckets: readonly RangeDto[] = [
 }
 
 /**
- * Everything the Overview shows for a range in one call: totals, breakdowns, stacked buckets,
+ * Everything Insights shows for a range in one call: totals, breakdowns, stacked buckets,
  * heatmap, trend against `previous` and the focus ratio.
  */
 export function useDashboardQuery(range: RangeDto, buckets: readonly RangeDto[], previous: RangeDto | null) {
@@ -167,8 +169,9 @@ export function useTrackingCommandMutation() {
   });
 }
 
+/** Opens the main window on `section`, or where it was left with `null`. */
 export function useOpenMainWindowMutation() {
-  return useMutation({ mutationFn: () => unwrap(commands.openMainWindow()) });
+  return useMutation({ mutationFn: (section: MainSectionDto | null) => unwrap(commands.openMainWindow(section)) });
 }
 
 export function useOpenAccessibilitySettingsMutation() {
@@ -184,6 +187,7 @@ export function settingsPatch(changes: Partial<SettingsPatchDto>): SettingsPatch
     idle_auto_discard_below_secs: null,
     retention: null,
     theme: null,
+    language: null,
     autostart: null,
     shortcut: null,
     onboarding_completed: null,
@@ -192,6 +196,7 @@ export function settingsPatch(changes: Partial<SettingsPatchDto>): SettingsPatch
     focus_drift_after_secs: null,
     focus_timer: null,
     ui: null,
+    progress_enabled: null,
     ...changes,
   };
 }
@@ -211,8 +216,10 @@ export function useUpdateSettingsMutation() {
       void client.invalidateQueries({ queryKey: queryKeys.status });
       // The privacy page mirrors `store_titles` and the retention policy.
       void client.invalidateQueries({ queryKey: queryKeys.privacy });
-      // The first day of the week moves weekly goals and the Overview periods.
+      // The first day of the week moves weekly goals and the Insights periods.
       void client.invalidateQueries({ queryKey: queryKeys.goals });
+      // Progress reports `progress_enabled`, and the local day moves with the settings.
+      void client.invalidateQueries({ queryKey: queryKeys.progress });
     },
     onError: () => {
       void client.invalidateQueries({ queryKey: queryKeys.settings });
@@ -511,7 +518,7 @@ export function useGoalsQuery() {
 }
 
 /**
- * Progress and streak of every active goal: what Today, the popover and Overview show.
+ * Progress and streak of every active goal: what Today, the popover and Insights show.
  * Refreshed by backend events like every other query; the time of the open segment is added
  * on screen (`withLiveTime`), so no polling is needed.
  */
@@ -557,6 +564,26 @@ export function useFocusStatusQuery() {
   return useQuery({
     queryKey: queryKeys.focusStatus,
     queryFn: () => unwrap(commands.focusStatus()),
+  });
+}
+
+/**
+ * Today's strokes, the level, the streak, the seals and the one moment to celebrate. Refreshed
+ * when a block ends, a goal is crossed, data changes or the settings change.
+ */
+export function useProgressQuery() {
+  return useQuery({
+    queryKey: queryKeys.progress,
+    queryFn: () => unwrap(commands.getProgress()),
+  });
+}
+
+/** The user dismissed the moment: the answer is the fresh progress (maybe with the next moment). */
+export function useDismissMomentMutation() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (moment: MomentDto) => unwrap(commands.dismissMoment(moment)),
+    onSuccess: (progress) => client.setQueryData(queryKeys.progress, progress),
   });
 }
 

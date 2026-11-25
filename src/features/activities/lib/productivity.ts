@@ -1,27 +1,19 @@
+import type { Messages } from "@/shared/i18n";
 import type { ProductivityDto } from "@/shared/ipc";
+import type { SegmentedOption } from "@/shared/ui/segmented";
 
-/** Options of the productivity selector, in display order. */
-export const PRODUCTIVITY_OPTIONS: readonly { value: ProductivityDto; label: string }[] = [
-  { value: "productive", label: "Productive" },
-  { value: "neutral", label: "Neutral" },
-  { value: "distracting", label: "Distracting" },
-];
+/** Productivity choices, in display order. */
+export const PRODUCTIVITY_VALUES: readonly ProductivityDto[] = ["productive", "neutral", "distracting"];
 
-/** Plain-language meaning of each choice, with role-agnostic examples. */
-export const PRODUCTIVITY_MEANING: Record<ProductivityDto, string> = {
-  productive: "Work that moves things forward, like writing, design, analysis or a client project.",
-  neutral: "Necessary but not focused work, like email, admin or quick calls.",
-  distracting: "Time you would rather spend less on, like social media or videos.",
-};
-
-/** Where the choice is used, so nobody has to guess why it matters. */
-export const PRODUCTIVITY_USE =
-  "It sets the focus percentage in Overview and Review. Goals and Focus sessions use the activities themselves, so a clear set of activities helps there too.";
+/** Options of the productivity selector, labelled in the active language. */
+export function productivityOptions(t: Messages): SegmentedOption<ProductivityDto>[] {
+  return PRODUCTIVITY_VALUES.map((value) => ({ value, label: t.activities.productivity.options[value] }));
+}
 
 export const DEFAULT_PRODUCTIVITY: ProductivityDto = "neutral";
 
-export function productivityLabel(value: ProductivityDto): string {
-  return PRODUCTIVITY_OPTIONS.find((option) => option.value === value)?.label ?? "Neutral";
+export function productivityLabel(value: ProductivityDto, t: Messages): string {
+  return t.activities.productivity.options[value];
 }
 
 /** Values the create/edit form hands to the container. */

@@ -10,6 +10,7 @@ import {
   useUpdateSettingsMutation,
 } from "@/shared/ipc";
 
+import { useT } from "@/shared/i18n";
 import { DEFAULT_PLATFORM } from "@/shared/lib/platform";
 
 import { OnboardingView } from "../components/OnboardingView";
@@ -31,6 +32,7 @@ export function OnboardingContainer() {
   const restart = useRestartAppMutation();
   const finish = useFinishOnboardingMutation();
   const platformQuery = usePlatformQuery();
+  const t = useT();
   const platform = platformQuery.data ?? (platformQuery.isError ? DEFAULT_PLATFORM : undefined);
 
   // Remember that access was missing at some point: a later grant may need a restart (R5.4).
@@ -38,7 +40,7 @@ export function OnboardingContainer() {
 
   const failure = [update.error, openSettings.error, restart.error, finish.error].find(Boolean);
 
-  if (!platform) return <main aria-busy="true" aria-label="Loading" className="h-full bg-background" />;
+  if (!platform) return <main aria-busy="true" aria-label={t.onboarding.loading} className="h-full bg-background" />;
 
   return (
     <OnboardingView
@@ -48,7 +50,7 @@ export function OnboardingContainer() {
       permission={permission.data}
       offerRestart={shouldOfferRestart(sawDenied, permission.data, platform)}
       busy={finish.isPending}
-      error={failure ? errorMessage(failure) : null}
+      error={failure ? errorMessage(failure, t) : null}
       onTitlesChange={(store_titles) => update.mutate({ store_titles })}
       onOpenAccessibilitySettings={() => openSettings.mutate()}
       onRestart={() => restart.mutate()}

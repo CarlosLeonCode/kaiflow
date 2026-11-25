@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
+import { useLocale, useT, type Messages } from "@/shared/i18n";
 import { formatDuration } from "@/shared/lib/time";
 
 const COLS = 24;
@@ -11,14 +12,14 @@ const HEIGHT = ROWS * CELL;
 /** Every Nth hour gets an axis label (the 24-hour number, which stays one short token in every locale). */
 const LABEL_STEP = 3;
 
-/** Local weekday names, Monday first (1 Jan 2024 was a Monday). */
-export function weekdayName(weekday: number, style: "short" | "long"): string {
-  return new Date(2024, 0, 1 + weekday).toLocaleDateString(undefined, { weekday: style });
+/** Weekday names in `locale`, Monday first (1 Jan 2024 was a Monday). */
+export function weekdayName(weekday: number, style: "short" | "long", locale?: string): string {
+  return new Date(2024, 0, 1 + weekday).toLocaleDateString(locale, { weekday: style });
 }
 
-/** Local hour of the day (`9 AM`, `09`), following the user's locale. */
-export function hourName(hour: number): string {
-  return new Date(2024, 0, 1, hour).toLocaleTimeString(undefined, { hour: "numeric" });
+/** Hour of the day in `locale` (`9 AM`, `9`). */
+export function hourName(hour: number, locale?: string): string {
+  return new Date(2024, 0, 1, hour).toLocaleTimeString(locale, { hour: "numeric" });
 }
 
 interface Props {
@@ -30,9 +31,9 @@ interface Props {
   weekStart?: number;
 }
 
-function cellLabel(weekday: number, hour: number, ms: number): string {
-  const when = `${weekdayName(weekday, "long")}, ${hourName(hour)}`;
-  return ms > 0 ? `${when}: ${formatDuration(ms)}` : `${when}: nothing tracked`;
+function cellLabel(weekday: number, hour: number, ms: number, t: Messages, locale: string): string {
+  const when = `${weekdayName(weekday, "long", locale)}, ${hourName(hour, locale)}`;
+  return `${when}: ${ms > 0 ? formatDuration(ms) : t.charts.nothingTracked}`;
 }
 
 /** Fill of one cell: the muted surface when empty, otherwise the accent mixed in by share of the busiest cell. */
@@ -40,7 +41,7 @@ function fillFor(ms: number, max: number): string {
   if (ms <= 0 || max <= 0) return "var(--muted)";
   const share = Math.pow(ms / max, 0.7);
   const percent = Math.round(22 + 78 * share);
-  return `color-mix(in oklab, var(--primary) ${percent}%, var(--muted))`;
+  return `color-mix(in oklab, var(--mark-stroke) ${percent}%, var(--muted))`;
 }
 
 /**
@@ -50,6 +51,8 @@ function fillFor(ms: number, max: number): string {
  * same numbers for screen readers.
  */
 export function Heatmap({ cells, label, weekStart = 0 }: Props) {
+  const t = useT();
+  const locale = useLocale();
   const [active, setActive] = useState<{ row: number; col: number } | null>(null);
   const [focused, setFocused] = useState<{ row: number; col: number } | null>(null);
   const refs = useRef<(SVGRectElement | null)[]>([]);
@@ -107,7 +110,7 @@ export function Heatmap({ cells, label, weekStart = 0 }: Props) {
         >
           {Array.from({ length: ROWS }, (_, weekday) => (
             <span key={weekday} className="flex items-center">
-              {weekdayName(weekdayOf(weekday), "short")}
+              {weekdayName(weekdayOf(weekday), "short", locale)}
             </span>
           ))}
         </div>
@@ -134,13 +137,13 @@ export function Heatmap({ cells, label, weekStart = 0 }: Props) {
                     }}
                     role="gridcell"
                     aria-colindex={col + 1}
-                    aria-label={cellLabel(weekdayOf(row), col, ms)}
+                    aria-label={cellLabel(weekdayOf(row), col, ms, t, locale)}
                     tabIndex={isStop ? 0 : -1}
                     x={col * CELL + INSET}
                     y={row * CELL + INSET}
                     width={CELL - 2 * INSET}
                     height={CELL - 2 * INSET}
-                    rx={1.5}
+                    rx={3}
                     vectorEffect="non-scaling-stroke"
                     style={{
                       fill: fillFor(ms, max),
@@ -182,12 +185,12 @@ export function Heatmap({ cells, label, weekStart = 0 }: Props) {
         {readout ? (
           <>
             <span className="font-medium text-foreground">
-              {weekdayName(weekdayOf(readout.row), "long")}, {hourName(readout.col)}
+              {weekdayName(weekdayOf(readout.row), "long", locale)}, {hourName(readout.col, locale)}
             </span>
-            <span> · {readout.ms > 0 ? formatDuration(readout.ms) : "nothing tracked"}</span>
+            <span> · {readout.ms > 0 ? formatDuration(readout.ms) : t.charts.nothingTracked}</span>
           </>
         ) : (
-          "Hover or focus a cell for details."
+          t.charts.heatmap.hint
         )}
       </p>
 
@@ -195,9 +198,9 @@ export function Heatmap({ cells, label, weekStart = 0 }: Props) {
         <caption>{label}</caption>
         <thead>
           <tr>
-            <th scope="col">Weekday</th>
-            <th scope="col">Hour</th>
-            <th scope="col">Tracked time</th>
+            <th scope="col">{t.charts.heatmap.weekday}</th>
+            <th scope="col">{t.charts.heatmap.hour}</th>
+            <th scope="col">{t.charts.trackedTime}</th>
           </tr>
         </thead>
         <tbody>
@@ -206,8 +209,8 @@ export function Heatmap({ cells, label, weekStart = 0 }: Props) {
               const ms = valueAt(row, col);
               return ms > 0 ? (
                 <tr key={`${row}-${col}`}>
-                  <th scope="row">{weekdayName(weekdayOf(row), "long")}</th>
-                  <td>{hourName(col)}</td>
+                  <th scope="row">{weekdayName(weekdayOf(row), "long", locale)}</th>
+                  <td>{hourName(col, locale)}</td>
                   <td>{formatDuration(ms)}</td>
                 </tr>
               ) : null;

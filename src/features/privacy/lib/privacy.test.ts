@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { en, es } from "@/shared/i18n";
 import { HOUR } from "@/shared/lib/time";
 
 import { bundleIdProblem, privacyRows } from "./apps";
@@ -44,8 +45,8 @@ describe("rangeFromDays (America/New_York)", () => {
   it("describes a single day and a span", () => {
     const one = rangeFromDays("2026-03-08", "2026-03-08")!;
     const span = rangeFromDays("2026-03-01", "2026-03-08")!;
-    expect(deleteCopy({ kind: "range", range: one }).paragraphs[0]).not.toContain(" to ");
-    expect(deleteCopy({ kind: "range", range: span }).paragraphs[0]).toContain(" to ");
+    expect(deleteCopy({ kind: "range", range: one }, en).paragraphs[0]).not.toContain(" to ");
+    expect(deleteCopy({ kind: "range", range: span }, en).paragraphs[0]).toContain(" to ");
   });
 });
 
@@ -67,47 +68,54 @@ describe("deleteCopy", () => {
       { kind: "older_than_days", days: 30 },
       { kind: "all" },
     ] as const) {
-      const text = deleteCopy(op).paragraphs.join(" ");
+      const text = deleteCopy(op, en).paragraphs.join(" ");
       expect(text).toContain("cannot be undone");
       expect(text.toLowerCase()).toMatch(/settings|activities/);
     }
   });
 
   it("uses singular and plural and mentions the tracking pause for delete-all", () => {
-    expect(deleteCopy({ kind: "older_than_days", days: 1 }).title).toBe("Delete everything older than 1 day?");
-    expect(deleteCopy({ kind: "older_than_days", days: 90 }).title).toContain("90 days");
-    expect(deleteCopy({ kind: "all" }, true).paragraphs.join(" ")).toContain("Tracking pauses");
-    expect(deleteCopy({ kind: "all" }, false).paragraphs.join(" ")).not.toContain("Tracking pauses");
+    expect(deleteCopy({ kind: "older_than_days", days: 1 }, en).title).toBe("Delete everything older than 1 day?");
+    expect(deleteCopy({ kind: "older_than_days", days: 90 }, en).title).toContain("90 days");
+    expect(deleteCopy({ kind: "all" }, en, { trackingWillRestart: true }).paragraphs.join(" ")).toContain("Tracking pauses");
+    expect(deleteCopy({ kind: "all" }, en, { trackingWillRestart: false }).paragraphs.join(" ")).not.toContain("Tracking pauses");
   });
 
   it("adds the purge impact and the streak warning to the older-data copy only", () => {
     const op = { kind: "older_than_days", days: 10 } as const;
-    expect(impactParagraphs(undefined)).toEqual([]);
-    expect(impactParagraphs({ segments: 1, streak_days_cut: null })).toEqual(["This would delete 1 segment."]);
-    expect(impactParagraphs({ segments: 0, streak_days_cut: null })[0]).toContain("nothing would be deleted");
+    expect(impactParagraphs(undefined, en)).toEqual([]);
+    expect(impactParagraphs({ segments: 1, streak_days_cut: null }, en)).toEqual(["This would delete 1 segment."]);
+    expect(impactParagraphs({ segments: 0, streak_days_cut: null }, en)[0]).toContain("nothing would be deleted");
 
-    const plain = deleteCopy(op, false, { segments: 5, streak_days_cut: null }).paragraphs.join(" ");
+    const plain = deleteCopy(op, en, { impact: { segments: 5, streak_days_cut: null } }).paragraphs.join(" ");
     expect(plain).toContain("This would delete 5 segments.");
     expect(plain).not.toContain("streak");
 
-    const warned = deleteCopy(op, false, { segments: 5, streak_days_cut: 1 }).paragraphs.join(" ");
+    const warned = deleteCopy(op, en, { impact: { segments: 5, streak_days_cut: 1 } }).paragraphs.join(" ");
     expect(warned).toContain("Warning: this reaches into an active goal streak and would cut 1 day of it.");
     // Other operations ignore the dry run.
-    expect(deleteCopy({ kind: "all" }, false, { segments: 5, streak_days_cut: 9 }).paragraphs.join(" ")).not.toContain("streak");
+    expect(deleteCopy({ kind: "all" }, en, { impact: { segments: 5, streak_days_cut: 9 } }).paragraphs.join(" ")).not.toContain("streak");
   });
 
   it("reports the outcome", () => {
-    expect(deletedMessage({ kind: "all" }, 0)).toBe("All tracked data was deleted.");
-    expect(deletedMessage({ kind: "older_than_days", days: 3 }, 1)).toBe("Deleted 1 segment.");
-    expect(deletedMessage({ kind: "older_than_days", days: 3 }, 12)).toBe("Deleted 12 segments.");
-    expect(deletedMessage({ kind: "older_than_days", days: 3 }, 0)).toContain("Nothing matched");
+    expect(deletedMessage({ kind: "all" }, 0, en)).toBe("All tracked data was deleted.");
+    expect(deletedMessage({ kind: "older_than_days", days: 3 }, 1, en)).toBe("Deleted 1 segment.");
+    expect(deletedMessage({ kind: "older_than_days", days: 3 }, 12, en)).toBe("Deleted 12 segments.");
+    expect(deletedMessage({ kind: "older_than_days", days: 3 }, 0, en)).toContain("Nothing matched");
+  });
+
+  it("speaks Spanish, with singular and plural", () => {
+    expect(deleteCopy({ kind: "older_than_days", days: 1 }, es).title).toBe("¿Eliminar todo lo anterior a 1 día?");
+    expect(impactParagraphs({ segments: 1, streak_days_cut: null }, es)).toEqual(["Se eliminaría 1 segmento."]);
+    expect(deletedMessage({ kind: "older_than_days", days: 3 }, 2, es)).toBe("Se eliminaron 2 segmentos.");
+    expect(deleteCopy({ kind: "all" }, es).paragraphs.join(" ")).toContain("No se puede deshacer.");
   });
 });
 
 describe("retention", () => {
   it("offers presets plus an unusual current value, sorted", () => {
-    expect(retentionOptions(null).map((o) => o.value)).toEqual(["forever", "30", "90", "180", "365"]);
-    expect(retentionOptions(45).map((o) => o.value)).toEqual(["forever", "30", "45", "90", "180", "365"]);
+    expect(retentionOptions(null, en).map((o) => o.value)).toEqual(["forever", "30", "90", "180", "365"]);
+    expect(retentionOptions(45, en).map((o) => o.value)).toEqual(["forever", "30", "45", "90", "180", "365"]);
   });
 
   it("maps between the setting and the select", () => {
@@ -132,9 +140,9 @@ describe("privacy rows", () => {
   });
 
   it("validates bundle ids loosely", () => {
-    expect(bundleIdProblem("")).not.toBeNull();
-    expect(bundleIdProblem("Slack")).not.toBeNull();
-    expect(bundleIdProblem("com bad.id")).not.toBeNull();
-    expect(bundleIdProblem(" com.tinyspeck.slackmacgap ")).toBeNull();
+    expect(bundleIdProblem("", en)).not.toBeNull();
+    expect(bundleIdProblem("Slack", en)).not.toBeNull();
+    expect(bundleIdProblem("com bad.id", en)).not.toBeNull();
+    expect(bundleIdProblem(" com.tinyspeck.slackmacgap ", en)).toBeNull();
   });
 });

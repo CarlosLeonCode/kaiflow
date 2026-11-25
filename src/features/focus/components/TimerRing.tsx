@@ -17,14 +17,14 @@ interface Props {
 
 /**
  * Circular progress of a block: a quiet track and an arc that fills clockwise from the top.
- * Accent blue while working, calm green during a break. The arc eases between the one-second
+ * Ink while working, mint during a break. The arc eases between the one-second
  * updates unless the user asked for reduced motion.
  */
 export function TimerRing({ progress, kind, paused = false, size, stroke = 6, children }: Props) {
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
   const clamped = Math.min(1, Math.max(0, progress));
-  const color = kind === "break" ? "var(--success)" : "var(--primary)";
+  const color = kind === "break" ? "var(--pop-mint)" : "var(--mark-stroke)";
   return (
     <div className="relative shrink-0" style={{ width: size, height: size }}>
       <svg
@@ -35,7 +35,7 @@ export function TimerRing({ progress, kind, paused = false, size, stroke = 6, ch
         aria-hidden="true"
         focusable="false"
       >
-        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="var(--muted)" strokeWidth={stroke} />
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="color-mix(in oklab, var(--mark-stroke) 14%, transparent)" strokeWidth={stroke} />
         <circle
           data-testid="timer-ring-progress"
           cx={size / 2}

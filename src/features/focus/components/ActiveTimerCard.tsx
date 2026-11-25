@@ -1,5 +1,6 @@
 import { Pause, Play } from "lucide-react";
 
+import { useT } from "@/shared/i18n";
 import type { FocusActiveDto, FocusCycleDto } from "@/shared/ipc";
 import { cn } from "@/shared/lib/utils";
 import { Button } from "@/shared/ui/button";
@@ -25,17 +26,23 @@ interface Props {
   onBackToIt: () => void;
 }
 
+/** The task of a block, trimmed (`""` when it has none). */
+function task(session: FocusActiveDto): string {
+  return session.intent.trim();
+}
+
 /** Mode chip: a colored dot (accent for work, green for a break) and the mode name. */
 function ModeLabel({ session }: { session: FocusActiveDto }) {
+  const t = useT();
   const paused = session.paused_at !== null;
   return (
     <p className="flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
       <span
         aria-hidden="true"
-        className={cn("size-1.5 rounded-full", session.kind === "break" ? "bg-success" : "bg-primary", paused && "opacity-40")}
+        className={cn("size-1.5 rounded-full", session.kind === "break" ? "bg-pop-mint" : "bg-mark-stroke", paused && "opacity-40")}
       />
-      {kindLabel(session.kind)}
-      {paused && <span className="font-medium normal-case tracking-normal">· Paused</span>}
+      {kindLabel(session.kind, t)}
+      {paused && <span className="font-medium normal-case tracking-normal">· {t.focus.paused}</span>}
     </p>
   );
 }
@@ -58,18 +65,21 @@ export function ActiveTimerCard({
   onAllowApp,
   onBackToIt,
 }: Props) {
+  const t = useT();
   const left = remainingMs(session, now);
+  const spoken = remainingLabel(left, t);
+  const title = task(session) || (session.kind === "break" ? t.focus.stepAway : t.focus.untitled);
   const done = progress(session, now);
   const paused = session.paused_at !== null;
-  const task = session.intent.trim();
+  const hasTask = task(session) !== "";
   const countdown = (
     <p
       role="timer"
       data-testid="focus-countdown"
-      aria-label={paused ? `Paused, ${remainingLabel(left).toLowerCase()}` : remainingLabel(left)}
+      aria-label={paused ? t.focus.pausedTimer(spoken) : spoken}
       className={cn(
         "tabular tracking-tight",
-        compact ? "text-xl font-semibold" : "text-display font-light",
+        compact ? "font-display text-xl font-extrabold" : "font-display text-display font-extrabold tracking-[-0.03em]",
         // Opacity, not a color class: tailwind-merge would take `text-display` for a color.
         paused && "opacity-60",
       )}
@@ -83,25 +93,25 @@ export function ActiveTimerCard({
         // Distinct keys: swapping in place would animate the colors through an unreadable mix.
         <Button key="resume" size={compact ? "sm" : "md"} variant="primary" disabled={busy} onClick={onResume} className={cn(compact && "flex-1")}>
           <Play aria-hidden="true" />
-          Resume
+          {t.focus.resume}
         </Button>
       ) : (
         <Button key="pause" size={compact ? "sm" : "md"} disabled={busy} onClick={onPause} className={cn(compact && "flex-1")}>
           <Pause aria-hidden="true" />
-          Pause
+          {t.focus.pause}
         </Button>
       )}
       <Button size={compact ? "sm" : "md"} disabled={busy} onClick={() => onExtend(EXTEND_MINUTES)} className={cn(compact && "flex-1")}>
-        +{EXTEND_MINUTES} min
+        {t.focus.extend(EXTEND_MINUTES)}
       </Button>
       <Button size={compact ? "sm" : "md"} variant="ghost" disabled={busy} onClick={onEnd} className={cn(compact && "flex-1")}>
-        End
+        {t.focus.end}
       </Button>
     </div>
   );
   const observedNote = session.kind === "focus" && !paused && session.current === null && (
     <p className={cn("text-xs text-muted-foreground", compact ? "mt-2" : "mt-3 text-center")}>
-      Nothing is being tracked right now, so drift alerts are paused. The countdown keeps going.
+      {t.focus.notObserved}
     </p>
   );
   const drift = session.alerting && (
@@ -122,15 +132,15 @@ export function ActiveTimerCard({
 
   if (compact) {
     return (
-      <section aria-label="Active timer" className="rounded-xl border border-border bg-surface p-3">
+      <section aria-label={t.focus.activeTimer} className="rounded-2xl bg-paper-surface p-3">
         <div className="flex items-center gap-4">
           <TimerRing progress={done} kind={session.kind} paused={paused} size={96} stroke={5}>
             {countdown}
           </TimerRing>
           <div className="min-w-0 flex-1 space-y-1.5">
             <ModeLabel session={session} />
-            <p className={cn("truncate font-medium", !task && "text-muted-foreground")} title={task || undefined}>
-              {task || (session.kind === "break" ? "Step away for a moment" : "Untitled block")}
+            <p className={cn("truncate font-medium", !hasTask && "text-muted-foreground")} title={hasTask ? title : undefined}>
+              {title}
             </p>
             <RoundDots cycle={cycle} />
           </div>
@@ -143,24 +153,24 @@ export function ActiveTimerCard({
   }
 
   return (
-    <section aria-label="Active timer" className="rounded-xl border border-border bg-surface px-6 py-6">
+    <section aria-label={t.focus.activeTimer} className="rounded-card bg-paper-surface px-6 py-7">
       <div className="flex flex-col items-center text-center">
         <TimerRing progress={done} kind={session.kind} paused={paused} size={208} stroke={8}>
           <ModeLabel session={session} />
           {countdown}
-          <p className="text-xs text-muted-foreground tabular">of {Math.round(session.planned_ms / 60_000)} min</p>
+          <p className="text-xs text-muted-foreground tabular">{t.focus.ofMinutes(Math.round(session.planned_ms / 60_000))}</p>
         </TimerRing>
         <p
-          className={cn("mt-4 max-w-full truncate text-lg font-semibold", !task && "text-muted-foreground font-medium")}
-          title={task || undefined}
+          className={cn("mt-4 max-w-full truncate font-display text-xl leading-[1.15] font-extrabold tracking-[-0.02em]", !hasTask && "text-muted-foreground font-bold")}
+          title={hasTask ? title : undefined}
         >
-          {task || (session.kind === "break" ? "Step away for a moment" : "Untitled block")}
+          {title}
         </p>
         <RoundDots cycle={cycle} className="mt-2" />
         {session.kind === "focus" && (
           <p className="mt-2 text-xs text-muted-foreground">
-            Allowed: {allowedSummary(session.allowed)}
-            {session.drift_alerts > 0 && ` · ${session.drift_alerts === 1 ? "1 alert" : `${session.drift_alerts} alerts`} so far`}
+            {t.focus.allowed(allowedSummary(session.allowed, t))}
+            {session.drift_alerts > 0 && ` · ${t.focus.alertsSoFar(session.drift_alerts)}`}
           </p>
         )}
       </div>

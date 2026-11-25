@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 import { cn } from "@/shared/lib/utils";
 
-/** Section card used by Settings and the onboarding steps: title, optional hint, rows. */
+/** Section card used by Settings and the onboarding steps: display title, optional hint, rows. */
 export function Panel({
   title,
   description,
@@ -17,10 +17,10 @@ export function Panel({
   return (
     <section aria-label={title} className={cn("space-y-2", className)}>
       <div className="px-1">
-        <h2 className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">{title}</h2>
+        <h2 className="font-display text-sm leading-[1.2] font-bold text-foreground">{title}</h2>
         {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
       </div>
-      <div className="divide-y divide-border rounded-lg border border-border bg-background">
+      <div className="divide-y divide-border overflow-hidden rounded-card border border-border bg-background">
         {children}
       </div>
     </section>
@@ -47,7 +47,7 @@ export function Row({
   const hintId = `${controlId}-hint`;
   const errorId = `${controlId}-error`;
   return (
-    <div className="px-3 py-2.5">
+    <div className="px-4 py-2.5">
       <div className="flex items-center justify-between gap-4">
         <div className="min-w-0">
           <label htmlFor={controlId} className="block font-medium">

@@ -1,3 +1,4 @@
+import { useT } from "@/shared/i18n";
 import type { FocusDto, OsDto, TrackingStateDto } from "@/shared/ipc";
 import { formatDuration } from "@/shared/lib/time";
 
@@ -12,20 +13,21 @@ interface Props {
 }
 
 export function CurrentActivity({ state, current, elapsedMs, os = "macos" }: Props) {
+  const t = useT();
   return (
-    <section aria-label="Current activity" className="mx-4 rounded-lg border border-border bg-surface px-3 py-2.5">
-      <p className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">Now</p>
+    <section aria-label={t.tracking.currentActivity} className="mx-4 rounded-2xl bg-paper-surface px-3.5 py-3">
+      <p className="text-xs font-medium text-muted-foreground">{t.tracking.now}</p>
       {current ? (
         <div className="mt-1 flex items-baseline gap-3">
           <div className="min-w-0 flex-1">
-            <p className="truncate font-medium" title={current.app_name}>
+            <p className="truncate font-display font-bold" title={current.app_name}>
               {current.app_name}
             </p>
             <p
               className="truncate text-xs text-muted-foreground"
               title={current.window_title ?? undefined}
             >
-              {current.window_title ?? "No window title"}
+              {current.window_title ?? t.common.labels.noTitle}
             </p>
           </div>
           {elapsedMs !== null && (
@@ -33,7 +35,7 @@ export function CurrentActivity({ state, current, elapsedMs, os = "macos" }: Pro
           )}
         </div>
       ) : (
-        <p className="mt-1 text-muted-foreground">{emptyActivityText(state, os)}</p>
+        <p className="mt-1 text-muted-foreground">{emptyActivityText(state, t, os)}</p>
       )}
     </section>
   );

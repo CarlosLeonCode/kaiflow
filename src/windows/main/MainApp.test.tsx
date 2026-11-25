@@ -1,12 +1,23 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { emit } from "@tauri-apps/api/event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { aiSettings, dashboard, mockBackend, renderWithProviders, report, review, settings, status } from "@/test/ipc";
+import {
+  aiSettings,
+  dashboard,
+  mockBackend,
+  renderWithProviders,
+  report,
+  review,
+  settings,
+  status,
+  type Handlers,
+} from "@/test/ipc";
 
 import { MainApp } from "./MainApp";
 
-function backend() {
+function backend(extra: Handlers = {}) {
   return mockBackend({
     get_status: () => status(),
     get_report: () => report(),
@@ -21,36 +32,46 @@ function backend() {
     ai_settings_get: () => aiSettings(),
     ai_reviews_list: () => [],
     privacy_list: () => ({ store_titles: true, excluded_apps: [], redacted_apps: [] }),
+    ...extra,
   });
 }
 
 describe("MainApp shell", () => {
-  it("opens on Today with the eight sections in the sidebar", async () => {
+  it("opens on Today with the seven sections in three labelled groups", async () => {
     backend();
     renderWithProviders(<MainApp />);
 
     const nav = screen.getByRole("navigation", { name: "Sections" });
     expect(within(nav).getAllByRole("button").map((b) => b.textContent?.replace(/⌘\d/, ""))).toEqual([
       "Today",
-      "Overview",
-      "Goals",
       "Focus",
-      "Review",
+      "Goals",
+      "Insights",
       "Activities",
       "Privacy",
       "Settings",
     ]);
+    const groups: [string, string[]][] = [
+      ["Daily", ["Today", "Focus", "Goals"]],
+      ["Look back", ["Insights"]],
+      ["Setup", ["Activities", "Privacy", "Settings"]],
+    ];
+    expect(within(nav).getAllByRole("group")).toHaveLength(groups.length);
+    for (const [group, sections] of groups) {
+      const list = within(nav).getByRole("group", { name: group });
+      expect(within(list).getAllByRole("button").map((b) => b.textContent?.replace(/⌘\d/, ""))).toEqual(sections);
+    }
     expect(within(nav).getByRole("button", { name: /Today/ })).toHaveAttribute("aria-current", "page");
     expect(await screen.findByRole("heading", { name: "Today" })).toBeInTheDocument();
   });
 
-  it("opens Overview with ⌘2", async () => {
+  it("opens Insights with ⌘4", async () => {
     const user = userEvent.setup();
     backend();
     renderWithProviders(<MainApp />);
 
-    await user.keyboard("{Meta>}2{/Meta}");
-    expect(await screen.findByRole("heading", { level: 1, name: "Overview" })).toBeInTheDocument();
+    await user.keyboard("{Meta>}4{/Meta}");
+    expect(await screen.findByRole("heading", { level: 1, name: "Insights" })).toBeInTheDocument();
   });
 
   it("switches sections by click", async () => {
@@ -64,20 +85,20 @@ describe("MainApp shell", () => {
     expect(within(screen.getByRole("navigation")).getByRole("button", { name: /Settings/ })).toHaveAttribute("aria-current", "page");
   });
 
-  it("switches sections with ⌘1..⌘8 and reserves ⌘K", async () => {
+  it("switches sections with ⌘1..⌘7 and reserves ⌘K", async () => {
     const user = userEvent.setup();
     backend();
     renderWithProviders(<MainApp />);
 
+    await user.keyboard("{Meta>}2{/Meta}");
+    expect(await screen.findByRole("heading", { level: 1, name: "Focus" })).toBeInTheDocument();
     await user.keyboard("{Meta>}3{/Meta}");
     expect(await screen.findByRole("heading", { level: 1, name: "Goals" })).toBeInTheDocument();
-    await user.keyboard("{Meta>}4{/Meta}");
-    expect(await screen.findByRole("heading", { level: 1, name: "Focus" })).toBeInTheDocument();
     await user.keyboard("{Meta>}5{/Meta}");
-    expect(await screen.findByRole("heading", { level: 1, name: "Review" })).toBeInTheDocument();
-    await user.keyboard("{Meta>}6{/Meta}");
     expect(await screen.findByRole("heading", { level: 1, name: "Activities" })).toBeInTheDocument();
-    await user.keyboard("{Meta>}8{/Meta}");
+    await user.keyboard("{Meta>}6{/Meta}");
+    expect(await screen.findByRole("heading", { level: 1, name: "Privacy" })).toBeInTheDocument();
+    await user.keyboard("{Meta>}7{/Meta}");
     expect(await screen.findByRole("heading", { name: "Settings" })).toBeInTheDocument();
     await user.keyboard("{Meta>}k{/Meta}");
     expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument();
@@ -94,8 +115,8 @@ describe("MainApp shell", () => {
 
     const steps: [() => Promise<void>, string][] = [
       [() => user.click(within(nav).getByRole("button", { name: /Activities/ })), "Activities"],
-      [() => user.click(within(nav).getByRole("button", { name: /Overview/ })), "Overview"],
-      [() => user.keyboard("{Meta>}6{/Meta}"), "Activities"],
+      [() => user.click(within(nav).getByRole("button", { name: /Insights/ })), "Insights"],
+      [() => user.keyboard("{Meta>}5{/Meta}"), "Activities"],
       [() => user.keyboard("{Meta>}1{/Meta}"), "Today"],
     ];
     for (const [act, name] of steps) {
@@ -111,12 +132,12 @@ describe("MainApp shell", () => {
     }
   });
 
-  it("renders Overview, Goals, Activities and Privacy", async () => {
+  it("renders Insights, Goals, Activities and Privacy", async () => {
     const user = userEvent.setup();
     backend();
     renderWithProviders(<MainApp />);
 
-    for (const name of ["Overview", "Goals", "Review", "Activities", "Privacy"]) {
+    for (const name of ["Insights", "Goals", "Activities", "Privacy"]) {
       await user.click(screen.getByRole("button", { name: new RegExp(name) }));
       expect(await screen.findByRole("heading", { level: 1, name })).toBeInTheDocument();
     }
@@ -153,7 +174,7 @@ describe("MainApp shell", () => {
     backend();
     renderWithProviders(<MainApp />);
     const nav = screen.getByRole("navigation");
-    for (const name of ["Today", "Overview", "Goals", "Focus", "Review", "Activities", "Privacy", "Settings"]) {
+    for (const name of ["Today", "Focus", "Goals", "Insights", "Activities", "Privacy", "Settings"]) {
       await user.click(within(nav).getByRole("button", { name: new RegExp(`^${name}`) }));
       expect(await screen.findByRole("button", { name: `Help for ${name}` })).toBeInTheDocument();
     }
@@ -164,5 +185,51 @@ describe("MainApp shell", () => {
     renderWithProviders(<MainApp />);
 
     await waitFor(() => expect(screen.getByText("Tracking")).toBeInTheDocument());
+  });
+
+  describe("opened on a section by another window", () => {
+    const scrolled = vi.fn();
+    beforeEach(() => {
+      scrolled.mockClear();
+      Element.prototype.scrollIntoView = scrolled;
+    });
+
+    it("lands on Goals with the progress panel in view, then follows later requests once", async () => {
+      const user = userEvent.setup();
+      let pending: string | null = "goals";
+      const { calls } = backend({
+        take_main_section: () => {
+          const section = pending;
+          pending = null;
+          return section;
+        },
+      });
+      renderWithProviders(<MainApp />);
+
+      expect(await screen.findByRole("heading", { level: 1, name: "Goals" })).toBeInTheDocument();
+      await screen.findByRole("region", { name: "Progress" });
+      await waitFor(() => expect(scrolled).toHaveBeenCalled());
+
+      pending = "settings";
+      await act(async () => {
+        await emit("main-section-requested", { section: "settings" });
+      });
+      expect(await screen.findByRole("heading", { level: 1, name: "Settings" })).toBeInTheDocument();
+      expect(calls.filter((c) => c.cmd === "take_main_section").length).toBeGreaterThanOrEqual(2);
+
+      // The sidebar still rules afterwards, and Goals opened by hand does not scroll.
+      scrolled.mockClear();
+      await user.click(within(screen.getByRole("navigation")).getByRole("button", { name: /^Goals/ }));
+      await screen.findByRole("region", { name: "Progress" });
+      expect(scrolled).not.toHaveBeenCalled();
+    });
+
+    it("stays on Today when nothing was requested", async () => {
+      backend();
+      renderWithProviders(<MainApp />);
+
+      expect(await screen.findByRole("heading", { level: 1, name: "Today" })).toBeInTheDocument();
+      await waitFor(() => expect(scrolled).not.toHaveBeenCalled());
+    });
   });
 });

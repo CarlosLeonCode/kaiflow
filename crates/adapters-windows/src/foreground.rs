@@ -5,7 +5,7 @@ use std::ffi::c_void;
 use std::sync::{Mutex, PoisonError};
 
 use adapters_common::activation::Activation;
-use windows::Win32::Foundation::{CloseHandle, HWND};
+use windows::Win32::Foundation::{CloseHandle, HWND, LPARAM};
 use windows::Win32::Storage::FileSystem::{
     GetFileVersionInfoSizeW, GetFileVersionInfoW, VerQueryValueW,
 };
@@ -13,11 +13,14 @@ use windows::Win32::System::Threading::{
     OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetForegroundWindow, GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId,
+    EnumChildWindows, GetForegroundWindow, GetWindowTextLengthW, GetWindowTextW,
+    GetWindowThreadProcessId,
 };
-use windows::core::{PCWSTR, PWSTR, w};
+use windows::core::{BOOL, PCWSTR, PWSTR, w};
 
-use crate::naming::{MAX_DESCRIPTIONS, description_keys, identity_from_exe, text_from_utf16};
+use crate::naming::{
+    MAX_DESCRIPTIONS, description_keys, identity_from_exe, is_frame_host, text_from_utf16,
+};
 
 /// Longest image path read (the documented maximum for extended-length paths).
 const MAX_IMAGE_PATH: usize = 32_768;
@@ -68,13 +71,18 @@ pub fn foreground_activation(cache: &DescriptionCache) -> Option<Activation> {
 }
 
 pub fn activation_for(hwnd: HWND, cache: &DescriptionCache) -> Option<Activation> {
-    let mut pid = 0_u32;
-    // SAFETY: `pid` outlives the call; an invalid window simply yields pid 0.
-    unsafe { GetWindowThreadProcessId(hwnd, Some(&mut pid)) };
-    if pid == 0 {
-        return None;
+    let mut pid = window_process(hwnd)?;
+    let mut path = process_image(pid)?;
+    // UWP/Store apps: the frame window belongs to ApplicationFrameHost.exe and the app owns a
+    // child window. Without one (the app is suspended or still starting) the frame host is
+    // recorded, as before. The title still comes from the frame window, which carries it.
+    if is_frame_host(&path)
+        && let Some(app_pid) = hosted_app_process(hwnd, pid)
+        && let Some(app_path) = process_image(app_pid)
+    {
+        pid = app_pid;
+        path = app_path;
     }
-    let path = process_image(pid)?;
     let description = cache.describe(&path);
     let identity = identity_from_exe(&path, description.as_deref())?;
     Some(Activation {
@@ -82,6 +90,51 @@ pub fn activation_for(hwnd: HWND, cache: &DescriptionCache) -> Option<Activation
         identity,
         window: Some(hwnd_to_id(hwnd)),
     })
+}
+
+/// Process that owns `hwnd`; `None` for an invalid window.
+fn window_process(hwnd: HWND) -> Option<u32> {
+    let mut pid = 0_u32;
+    // SAFETY: `pid` outlives the call; an invalid window simply yields pid 0.
+    unsafe { GetWindowThreadProcessId(hwnd, Some(&mut pid)) };
+    (pid != 0).then_some(pid)
+}
+
+/// The process of the first child window of the UWP frame `frame` that `host_pid` (the
+/// frame host) does not own: the app shown inside the frame.
+fn hosted_app_process(frame: HWND, host_pid: u32) -> Option<u32> {
+    struct Search {
+        host_pid: u32,
+        found: Option<u32>,
+    }
+
+    unsafe extern "system" fn visit(child: HWND, data: LPARAM) -> BOOL {
+        // SAFETY: `data` is the `Search` below, alive and exclusively ours for the whole
+        // (synchronous) enumeration.
+        let search = unsafe { &mut *(data.0 as *mut Search) };
+        match window_process(child) {
+            Some(pid) if pid != search.host_pid => {
+                search.found = Some(pid);
+                BOOL(0)
+            }
+            _ => BOOL(1),
+        }
+    }
+
+    let mut search = Search {
+        host_pid,
+        found: None,
+    };
+    // SAFETY: the callback only runs during this call and `search` outlives it. The return
+    // value only says whether the enumeration stopped early, which `found` already tells.
+    let _ = unsafe {
+        EnumChildWindows(
+            Some(frame),
+            Some(visit),
+            LPARAM(&mut search as *mut Search as isize),
+        )
+    };
+    search.found
 }
 
 /// Full Win32 path of the process image. `PROCESS_QUERY_LIMITED_INFORMATION` also works for

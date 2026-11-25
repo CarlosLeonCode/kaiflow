@@ -1,18 +1,13 @@
 import { useId, useState, type FormEvent } from "react";
 
+import { useT } from "@/shared/i18n";
 import type { ActivityDto } from "@/shared/ipc";
 import { Button } from "@/shared/ui/button";
 import { HelpTip } from "@/shared/ui/help-tip";
 import { Input } from "@/shared/ui/input";
 import { Segmented } from "@/shared/ui/segmented";
 
-import {
-  DEFAULT_PRODUCTIVITY,
-  PRODUCTIVITY_MEANING,
-  PRODUCTIVITY_OPTIONS,
-  PRODUCTIVITY_USE,
-  type ActivityFormValue,
-} from "../lib/productivity";
+import { DEFAULT_PRODUCTIVITY, productivityOptions, type ActivityFormValue } from "../lib/productivity";
 import { MAX_NAME_LENGTH, nameProblem, nameProblemMessage } from "../lib/rules";
 import type { Submit } from "../lib/submit";
 import { ColorPicker } from "./ColorPicker";
@@ -29,6 +24,10 @@ interface Props {
 
 /** Name + color form used for both creating and renaming (Enter saves, Escape cancels). */
 export function ActivityForm({ editing, existing, initialColor, dark, onSubmit, onCancel }: Props) {
+  const t = useT();
+  const words = t.activities.form;
+  const productivity_ = t.activities.productivity;
+  const options = productivityOptions(t);
   const id = useId();
   const [name, setName] = useState(editing?.name ?? "");
   const [color, setColor] = useState(editing?.color ?? initialColor);
@@ -38,7 +37,7 @@ export function ActivityForm({ editing, existing, initialColor, dark, onSubmit, 
   const [busy, setBusy] = useState(false);
 
   const problem = nameProblem(name, existing, editing?.id ?? null);
-  const shown = failure ?? (touched && problem ? nameProblemMessage(problem) : null);
+  const shown = failure ?? (touched && problem ? nameProblemMessage(problem, t) : null);
   const errorId = `${id}-error`;
 
   async function submit(event: FormEvent) {
@@ -60,12 +59,12 @@ export function ActivityForm({ editing, existing, initialColor, dark, onSubmit, 
           onCancel();
         }
       }}
-      aria-label={editing ? `Edit activity ${editing.name}` : "New activity"}
-      className="space-y-2.5 px-3 py-3"
+      aria-label={editing ? words.editLabel(editing.name) : words.newLabel}
+      className="space-y-2.5 px-4 py-3"
     >
       <div>
         <label htmlFor={`${id}-name`} className="mb-1 block text-xs font-medium text-muted-foreground">
-          Name
+          {words.name}
         </label>
         <Input
           id={`${id}-name`}
@@ -79,7 +78,7 @@ export function ActivityForm({ editing, existing, initialColor, dark, onSubmit, 
           onBlur={() => setTouched(true)}
           aria-invalid={shown ? true : undefined}
           aria-describedby={shown ? errorId : undefined}
-          placeholder="For example, Deep work"
+          placeholder={words.namePlaceholder}
           className="w-full"
         />
         {shown && (
@@ -89,42 +88,42 @@ export function ActivityForm({ editing, existing, initialColor, dark, onSubmit, 
         )}
       </div>
       <div>
-        <span className="mb-1 block text-xs font-medium text-muted-foreground">Color</span>
+        <span className="mb-1 block text-xs font-medium text-muted-foreground">{words.color}</span>
         <ColorPicker value={color} onChange={setColor} dark={dark} idPrefix={id} />
       </div>
       <div>
         <span className="mb-1 flex items-center gap-1">
           <span id={`${id}-productivity`} className="text-xs font-medium text-muted-foreground">
-            Counts as
+            {words.countsAs}
           </span>
-          <HelpTip label="productive, neutral and distracting">
+          <HelpTip label={productivity_.helpLabel}>
             <dl className="space-y-1">
-              {PRODUCTIVITY_OPTIONS.map((option) => (
+              {options.map((option) => (
                 <div key={option.value}>
                   <dt className="inline font-medium">{option.label}: </dt>
-                  <dd className="inline">{PRODUCTIVITY_MEANING[option.value]}</dd>
+                  <dd className="inline">{productivity_.meaning[option.value]}</dd>
                 </div>
               ))}
             </dl>
-            <p className="mt-1.5 text-muted-foreground">{PRODUCTIVITY_USE}</p>
+            <p className="mt-1.5 text-muted-foreground">{productivity_.use}</p>
           </HelpTip>
         </span>
         <Segmented
-          aria-label="Productivity"
+          aria-label={productivity_.label}
           value={productivity}
-          options={PRODUCTIVITY_OPTIONS}
+          options={options}
           onChange={setProductivity}
         />
         <p className="mt-1 text-xs text-muted-foreground">
-          {PRODUCTIVITY_MEANING[productivity]} Leave it on Neutral if you are unsure.
+          {productivity_.meaning[productivity]} {productivity_.unsure}
         </p>
       </div>
       <div className="flex justify-end gap-2">
         <Button type="button" size="sm" onClick={onCancel}>
-          Cancel
+          {t.common.cancel}
         </Button>
         <Button type="submit" size="sm" variant="primary" disabled={busy}>
-          {editing ? "Save" : "Add activity"}
+          {editing ? words.save : words.add}
         </Button>
       </div>
     </form>

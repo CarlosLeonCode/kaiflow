@@ -2,6 +2,8 @@ import type { ReactNode } from "react";
 
 import { cn } from "@/shared/lib/utils";
 
+import { useDragRegion } from "./title-bar";
+
 /**
  * A section's explanation: the dismissible intro shown above the content and the "?" button in
  * the header that brings it back (see `useSectionIntro`).
@@ -11,7 +13,10 @@ export interface IntroSlot {
   help: ReactNode;
 }
 
-/** A dashboard section: sticky title row (also draggable) above a scrolling body. */
+/**
+ * A dashboard section: sticky title row above a scrolling body. The title row is the window's
+ * drag area only with an overlay title bar (macOS, see `OverlayTitleBarContext`).
+ */
 export function Page({
   title,
   subtitle,
@@ -28,18 +33,19 @@ export function Page({
   children: ReactNode;
   className?: string;
 }) {
+  const drag = useDragRegion();
   return (
     <div className="flex h-full min-w-0 flex-col">
       <header
-        data-tauri-drag-region
+        {...drag}
         className="flex h-14 shrink-0 items-end justify-between gap-4 border-b border-border px-6 pb-2.5"
       >
-        <div className="min-w-0" data-tauri-drag-region>
-          <h1 className="truncate text-lg font-semibold leading-6" data-tauri-drag-region>
+        <div className="min-w-0" {...drag}>
+          <h1 className="truncate font-display text-xl leading-6 font-extrabold tracking-[-0.025em]" {...drag}>
             {title}
           </h1>
           {subtitle && (
-            <p className="truncate text-xs text-muted-foreground" data-tauri-drag-region>
+            <p className="truncate text-xs text-muted-foreground" {...drag}>
               {subtitle}
             </p>
           )}

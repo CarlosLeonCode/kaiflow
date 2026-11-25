@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use adapters_common::activation::Activation;
+use adapters_common::diagnostics::Diagnostics;
 use adapters_common::fanout::SignalFanout;
 use adapters_common::sampler::SamplerEnv;
 use application::ports::{DegradedReason, PermissionProvider};
@@ -83,14 +84,15 @@ pub struct LinuxPlatform {
 }
 
 impl LinuxPlatform {
-    /// Probes the session once and starts the listener threads that apply to it.
-    pub fn start() -> Self {
+    /// Probes the session once and starts the listener threads that apply to it. What cannot
+    /// start is logged to `diagnostics` (`diagnostics.log`).
+    pub fn start(diagnostics: &Diagnostics) -> Self {
         let wayland = is_wayland_session(
             std::env::var("WAYLAND_DISPLAY").ok().as_deref(),
             std::env::var("XDG_SESSION_TYPE").ok().as_deref(),
         );
         let x11 = X11::connect()
-            .map_err(|error| eprintln!("no X11 display: {error}"))
+            .map_err(|error| diagnostics.record_failure("x11", &format!("no X11 display: {error}")))
             .ok();
         let probe = match &x11 {
             None => probe_from(false, false, false),
@@ -100,20 +102,24 @@ impl LinuxPlatform {
 
         let power = SignalFanout::new();
         #[cfg(feature = "logind")]
-        if let Err(error) = crate::dbus::spawn_logind_listener(power.clone()) {
-            eprintln!("could not start the logind listener: {error}");
+        if let Err(error) = crate::dbus::spawn_logind_listener(power.clone(), diagnostics.clone()) {
+            diagnostics.record_failure("logind", &format!("could not start the listener: {error}"));
         }
 
         let (tx, activations) = bounded(ACTIVATION_QUEUE);
         let env = match (mode, x11) {
             (DisplayMode::X11, Some(x11)) => {
-                if let Err(error) = spawn_listener(tx) {
-                    eprintln!("could not start the X11 listener: {error}");
+                if let Err(error) = spawn_listener(tx, diagnostics.clone()) {
+                    diagnostics
+                        .record_failure("x11", &format!("could not start the listener: {error}"));
                 }
                 LinuxEnv::X11(Arc::new(x11))
             }
             _ => {
-                eprintln!("window tracking unavailable ({mode:?}); only idle time is observed");
+                diagnostics.record_failure(
+                    "session",
+                    &format!("window tracking unavailable ({mode:?}); only idle time is observed"),
+                );
                 LinuxEnv::Degraded(Arc::new(IdleSource::connect()))
             }
         };
@@ -203,7 +209,7 @@ mod tests {
         assert!(env.trusted());
         assert!(env.seconds_since_input() >= 0.0);
         let _ = env.poll_frontmost();
-        let platform = LinuxPlatform::start();
+        let platform = LinuxPlatform::start(&Diagnostics::in_memory());
         let _ = platform.frontmost();
     }
 }

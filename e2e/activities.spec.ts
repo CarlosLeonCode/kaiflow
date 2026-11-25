@@ -156,13 +156,13 @@ test.describe("Activities", () => {
     await guide.getByLabel("Name").fill("Deep work");
     await guide.getByRole("button", { name: "Add activity" }).click();
 
-    await expect(guide.getByRole("heading", { name: "Step 2 of 3: Add rules" })).toBeFocused();
+    await expect(guide.getByRole("heading", { name: "Step 2 of 3: Add sorting rules" })).toBeFocused();
     await expect(guide).toContainText("By window title:");
     await guide.getByRole("button", { name: "Add a rule" }).click();
     await expect(page.getByRole("form", { name: "Add rule" }).getByRole("radio", { name: "App" })).toBeFocused();
 
     await guide.getByRole("button", { name: "Next: Mark how each activity counts" }).click();
-    await expect(guide).toContainText("focus percentage in Overview and Review");
+    await expect(guide).toContainText("Productive time share in Insights");
     await guide.getByRole("radiogroup", { name: "How Deep work counts" }).getByRole("radio", { name: "Productive" }).click();
     await expect(
       page.getByRole("list", { name: "Activity list" }).getByRole("listitem").filter({ hasText: "Deep work" }),
@@ -197,7 +197,7 @@ test.describe("Activities", () => {
     // Xcode was already in the history, so Coding got a rule for it.
     await expect(list.getByRole("listitem").filter({ hasText: "Coding" })).toContainText("1 rule");
     // The guide moves on to rules.
-    await expect(page.getByRole("heading", { name: "Step 2 of 3: Add rules" })).toBeFocused();
+    await expect(page.getByRole("heading", { name: "Step 2 of 3: Add sorting rules" })).toBeFocused();
   });
 
   test("accepts a suggestion: the rule is created and past time is reclassified", async ({ page }) => {
@@ -233,7 +233,7 @@ test.describe("Activities", () => {
       await openFreshActivities(page);
       await expect(page.getByRole("list", { name: "Ways to start" })).toBeVisible();
       await expectNoA11yViolations(page);
-      await page.getByRole("button", { name: "Next: Add rules" }).click();
+      await page.getByRole("button", { name: "Next: Add sorting rules" }).click();
       await expectNoA11yViolations(page);
     }
   });

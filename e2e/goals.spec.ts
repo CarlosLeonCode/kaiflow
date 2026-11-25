@@ -92,7 +92,7 @@ test.describe("Goals", () => {
   });
 });
 
-test.describe("Goals on Today, the popover and Overview", () => {
+test.describe("Goals on Today, the popover and Insights", () => {
   test("Today invites the user to create a goal and jumps to Goals", async ({ page }) => {
     await openSection(page, "Today");
 
@@ -138,13 +138,18 @@ test.describe("Goals on Today, the popover and Overview", () => {
     await expect(page.getByRole("region", { name: "Goals" })).toHaveCount(0);
   });
 
-  test("Overview lists the goals of the period", async ({ page }) => {
+  test("Insights lists the goals of the period", async ({ page }) => {
     await openWindow(page, "main", DEMO);
-    await page.getByRole("navigation").getByRole("button", { name: /^Overview/ }).click();
+    await page.getByRole("navigation").getByRole("button", { name: /^Insights/ }).click();
 
-    const card = page.getByRole("region", { name: "Goals" });
+    const card = page.getByRole("region", { name: "Goals", exact: true });
     await expect(card.getByRole("listitem")).toHaveCount(4);
     await expect(card).toContainText("Weekly development");
+
+    // The Week view (the default) also shows how each goal fared, day by day for daily goals.
+    const week = page.getByRole("list", { name: "Goals this week" });
+    await expect(week.getByRole("listitem")).toHaveCount(4);
+    await expect(week).toContainText(/Streak \d+ · best \d+/);
     await expectNoA11yViolations(page);
   });
 
@@ -163,7 +168,7 @@ test.describe("Week start", () => {
     await openSection(page, "Settings");
     await page.getByRole("combobox", { name: "Week starts on" }).selectOption("Sunday");
 
-    await page.getByRole("navigation").getByRole("button", { name: /^Overview/ }).click();
+    await page.getByRole("navigation").getByRole("button", { name: /^Insights/ }).click();
     await expect(page.getByRole("heading", { level: 2, name: /Mar 15/ })).toBeVisible();
     const grid = page.getByRole("grid", { name: "Tracked time by weekday and hour" });
     await expect(grid.getByRole("row").first().getByRole("gridcell").first()).toHaveAttribute("aria-label", /^Sunday/);

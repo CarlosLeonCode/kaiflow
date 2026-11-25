@@ -1,6 +1,7 @@
 import { Check } from "lucide-react";
 import { RadioGroup } from "radix-ui";
 
+import { useT } from "@/shared/i18n";
 import { tuneActivityColor } from "@/shared/lib/color";
 import { cn } from "@/shared/lib/utils";
 
@@ -20,13 +21,15 @@ interface Props {
  * the charts show.
  */
 export function ColorPicker({ value, onChange, dark, idPrefix }: Props) {
+  const t = useT();
+  const words = t.activities.form;
   const custom = presetFor(value) === undefined;
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       <RadioGroup.Root
         value={custom ? "" : (presetFor(value)?.hex ?? "")}
         onValueChange={onChange}
-        aria-label="Color"
+        aria-label={words.color}
         orientation="horizontal"
         className="flex flex-wrap gap-1.5"
       >
@@ -34,8 +37,8 @@ export function ColorPicker({ value, onChange, dark, idPrefix }: Props) {
           <RadioGroup.Item
             key={preset.hex}
             value={preset.hex}
-            aria-label={preset.name}
-            title={preset.name}
+            aria-label={t.activities.colors[preset.key]}
+            title={t.activities.colors[preset.key]}
             className="flex size-5 items-center justify-center rounded-full text-white outline-offset-2 dark:text-black/80"
             style={{ backgroundColor: tuneActivityColor(preset.hex, dark) }}
           >
@@ -51,9 +54,9 @@ export function ColorPicker({ value, onChange, dark, idPrefix }: Props) {
           "relative flex size-5 cursor-default items-center justify-center overflow-hidden rounded-full border border-dashed border-muted-foreground/60",
           custom && "border-solid border-foreground",
         )}
-        title="Custom color"
+        title={words.customColor}
       >
-        <span className="sr-only">Custom color</span>
+        <span className="sr-only">{words.customColor}</span>
         <input
           id={`${idPrefix}-custom-color`}
           type="color"

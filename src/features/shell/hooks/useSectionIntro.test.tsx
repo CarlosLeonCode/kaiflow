@@ -2,11 +2,12 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
+import { en, es } from "@/shared/i18n";
 import type { SettingsDto, SettingsPatchDto } from "@/shared/ipc";
 import { Page } from "@/shared/ui/page";
 import { mergePatch, mockBackend, renderWithProviders, settings } from "@/test/ipc";
 
-import { INTROS } from "../lib/intros";
+import { introFor } from "../lib/intros";
 import { SECTIONS, type SectionId } from "../lib/sections";
 import { useSectionIntro } from "./useSectionIntro";
 
@@ -37,14 +38,24 @@ function lastSavedIntros(calls: { cmd: string; args: Record<string, unknown> }[]
 }
 
 describe("useSectionIntro", () => {
-  it("every section has the same three short lines and a concrete example", () => {
-    for (const { id } of SECTIONS) {
-      const copy = INTROS[id];
-      for (const line of [copy.what, copy.can, copy.example]) {
-        expect(line.length, `${id}: ${line}`).toBeGreaterThan(10);
-        expect(line.length, `${id}: ${line}`).toBeLessThanOrEqual(130);
+  it("every section has the same three short lines and a concrete example, in every language", () => {
+    for (const t of [en, es]) {
+      for (const os of ["macos", "windows"] as const) {
+        for (const { id } of SECTIONS) {
+          const copy = introFor(id, os, t);
+          for (const line of [copy.what, copy.can, copy.example]) {
+            expect(line.length, `${id}: ${line}`).toBeGreaterThan(10);
+            expect(line.length, `${id}: ${line}`).toBeLessThanOrEqual(130);
+          }
+        }
       }
     }
+  });
+
+  it("words the Today intro for where the app icon lives", () => {
+    expect(introFor("today", "macos", en).can).toContain("from the menu bar");
+    expect(introFor("today", "linux", en).can).toContain("from the system tray");
+    expect(introFor("today", "windows", es).can).toContain("desde la bandeja del sistema");
   });
 
   it("shows what, what you can do and an example, and dismissing persists the choice", async () => {
@@ -52,13 +63,13 @@ describe("useSectionIntro", () => {
     const { calls } = backend();
     renderWithProviders(<Section section="today" />);
 
-    const intro = await screen.findByRole("complementary", { name: `About ${INTROS.today.title}` });
+    const intro = await screen.findByRole("complementary", { name: `About ${en.shell.intros.today.title}` });
     expect(within(intro).getByText("What this is")).toBeInTheDocument();
     expect(within(intro).getByText("What you can do here")).toBeInTheDocument();
     expect(within(intro).getByText("Example")).toBeInTheDocument();
-    expect(intro).toHaveTextContent(INTROS.today.example);
+    expect(intro).toHaveTextContent(en.shell.intros.today.example);
 
-    await user.click(within(intro).getByRole("button", { name: `Dismiss introduction to ${INTROS.today.title}` }));
+    await user.click(within(intro).getByRole("button", { name: `Dismiss introduction to ${en.shell.intros.today.title}` }));
     await waitFor(() => expect(lastSavedIntros(calls)).toEqual(["today"]));
     expect(screen.queryByRole("complementary")).not.toBeInTheDocument();
     // Focus lands on the help button, which can bring the intro back.
@@ -75,7 +86,7 @@ describe("useSectionIntro", () => {
     expect(screen.queryByRole("complementary")).not.toBeInTheDocument();
 
     await user.click(help);
-    const intro = await screen.findByRole("complementary", { name: `About ${INTROS.goals.title}` });
+    const intro = await screen.findByRole("complementary", { name: `About ${en.shell.intros.goals.title}` });
     expect(intro).toHaveFocus();
     expect(help).toHaveAttribute("aria-expanded", "true");
     expect(help).toHaveAttribute("aria-controls", intro.id);
@@ -88,7 +99,7 @@ describe("useSectionIntro", () => {
     const { calls } = backend();
     renderWithProviders(<Section section="privacy" />);
 
-    const intro = await screen.findByRole("complementary", { name: `About ${INTROS.privacy.title}` });
+    const intro = await screen.findByRole("complementary", { name: `About ${en.shell.intros.privacy.title}` });
     await user.click(screen.getByRole("button", { name: "Help for Privacy" }));
     expect(intro).toHaveFocus();
     expect(calls.some((c) => c.cmd === "settings_update")).toBe(false);
@@ -109,7 +120,7 @@ describe("useSectionIntro", () => {
     renderWithProviders(<Section section="privacy" />);
 
     await user.click(
-      await screen.findByRole("button", { name: `Dismiss introduction to ${INTROS.privacy.title}` }),
+      await screen.findByRole("button", { name: `Dismiss introduction to ${en.shell.intros.privacy.title}` }),
     );
     await waitFor(() => expect(lastSavedIntros(calls)).toEqual(["today", "privacy"]));
   });

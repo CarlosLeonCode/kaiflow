@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 
 import "@/index.css";
+import { systemLanguage } from "@/shared/i18n";
 import { applyTheme } from "@/shared/lib/theme";
 
 import { AppProviders } from "./AppProviders";
@@ -19,9 +20,13 @@ async function installMockBackendIfRequested(): Promise<void> {
   }
 }
 
-/** Entry helper shared by every window: theme first (no flash), then providers + page. */
+/**
+ * Entry helper shared by every window: theme and language first (no flash), then providers
+ * (which include the `I18nProvider`) + page.
+ */
 export function mountWindow(page: ReactNode): void {
   applyTheme("system");
+  document.documentElement.lang = systemLanguage();
   const root = document.getElementById("root");
   if (!root) throw new Error("Missing #root element");
   void installMockBackendIfRequested().then(() => {

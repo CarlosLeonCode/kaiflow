@@ -199,6 +199,10 @@ equivalent; rely on the `windows-latest` CI job.
 
 - English for code, comments, UI copy and docs. The landing page also has a Spanish locale
   (`website/src/i18n/es.ts`) in neutral, professional Spanish.
+- UI copy lives in `src/shared/i18n/en.ts` (source of truth) with its Spanish translation in
+  `es.ts` (neutral, professional, "tú"; typed as `Messages`, so a missing key fails `tsc`).
+  Components read it with `useT()` and format dates/numbers with `useLocale()`; they never
+  hardcode user-facing strings (areas not converted yet still do, until they are).
 - Conventional Commits (`feat(scope): ...`). One reviewable unit per commit, tests included.
 - Further reading: [docs/forking.md](docs/forking.md),
   [docs/platform-support.md](docs/platform-support.md), [docs/release.md](docs/release.md),

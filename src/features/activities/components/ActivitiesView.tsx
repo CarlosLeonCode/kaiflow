@@ -1,5 +1,6 @@
 import { CircleAlert } from "lucide-react";
 
+import { useT } from "@/shared/i18n";
 import type { ActivityDto, PresetDto, RuleDto, RuleInputDto, RuleSpecDto, SuggestionDto } from "@/shared/ipc";
 import type { AppOption } from "@/shared/lib/apps";
 import { Alert, AlertDescription } from "@/shared/ui/alert";
@@ -57,17 +58,18 @@ interface Props {
 
 /** Activities section (presentational): the guide, activities on the left, ordered rules on the right. */
 export function ActivitiesView(props: Props) {
+  const t = useT();
   const { loading, error, activities, suggestions, notice, guide } = props;
   const showSuggestions = suggestions.length > 0 ? () => focusFirstControl(SUGGESTIONS_ID) : undefined;
 
   return (
     <Page
-      title="Activities"
-      subtitle="Sort your time into the kinds of work you do."
+      title={t.shell.sections.activities}
+      subtitle={t.activities.subtitle}
       intro={props.intro}
       actions={
         <Button size="sm" variant="ghost" aria-expanded={guide !== null} onClick={props.onOpenGuide}>
-          How this works
+          {t.activities.howItWorks}
         </Button>
       }
     >
@@ -78,7 +80,7 @@ export function ActivitiesView(props: Props) {
             <AlertDescription>{error}</AlertDescription>
           </span>
           <button type="button" onClick={props.onDismissError} className="shrink-0 underline underline-offset-2">
-            Dismiss
+            {t.common.dismiss}
           </button>
         </Alert>
       )}
@@ -86,7 +88,7 @@ export function ActivitiesView(props: Props) {
         <Alert className="mb-4 items-start justify-between">
           <AlertDescription>{notice}</AlertDescription>
           <button type="button" onClick={props.onDismissNotice} className="shrink-0 underline underline-offset-2">
-            Dismiss
+            {t.common.dismiss}
           </button>
         </Alert>
       )}
@@ -115,7 +117,7 @@ export function ActivitiesView(props: Props) {
         />
       )}
       {loading ? (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]" aria-label="Loading activities">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]" aria-label={t.activities.loading}>
           <Skeleton className="h-48" />
           <Skeleton className="h-64" />
         </div>

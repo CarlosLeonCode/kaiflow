@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-dismiss-moment"
+description = "Enables the dismiss_moment command without any pre-configured scope."
+commands.allow = ["dismiss_moment"]
+
+[[permission]]
+identifier = "deny-dismiss-moment"
+description = "Denies the dismiss_moment command without any pre-configured scope."
+commands.deny = ["dismiss_moment"]

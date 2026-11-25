@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
 
+import { useT } from "@/shared/i18n";
 import type { ActivityDto, RuleSpecDto } from "@/shared/ipc";
 import type { AppOption } from "@/shared/lib/apps";
 import { activityLabel } from "@/shared/lib/labels";
@@ -14,15 +15,8 @@ import type { Submit } from "../lib/submit";
 import { containsPattern, type TitleMatchMode } from "../lib/titleMatch";
 import { RulePreview, type RulePreviewState } from "./RulePreview";
 
-const KINDS: readonly SegmentedOption<RuleKind>[] = [
-  { value: "app", label: "App" },
-  { value: "title_pattern", label: "Window title" },
-];
-
-const MATCH_MODES: readonly SegmentedOption<TitleMatchMode>[] = [
-  { value: "contains", label: "Contains text" },
-  { value: "pattern", label: "Pattern (advanced)" },
-];
+const KINDS: readonly RuleKind[] = ["app", "title_pattern"];
+const MATCH_MODES: readonly TitleMatchMode[] = ["contains", "pattern"];
 
 /** Id of the rule form, so the guided setup can bring it into view. */
 export const RULE_FORM_ID = "add-rule-form";
@@ -45,6 +39,10 @@ interface Props {
  * cover. A pattern the backend rejects is shown under the field and nothing is saved (R9.4).
  */
 export function RuleForm({ activities, apps, onSubmit, onDraftChange, preview, previewDays = 7 }: Props) {
+  const t = useT();
+  const words = t.activities.ruleForm;
+  const kinds: SegmentedOption<RuleKind>[] = KINDS.map((value) => ({ value, label: words.kinds[value] }));
+  const modes: SegmentedOption<TitleMatchMode>[] = MATCH_MODES.map((value) => ({ value, label: words.modes[value] }));
   const id = useId();
   const [kind, setKind] = useState<RuleKind>("app");
   const [mode, setMode] = useState<TitleMatchMode>("contains");
@@ -110,12 +108,12 @@ export function RuleForm({ activities, apps, onSubmit, onDraftChange, preview, p
   const describedBy = [patternError ? patternErrorId : null, patternHintId].filter(Boolean).join(" ");
 
   return (
-    <form id={RULE_FORM_ID} onSubmit={submit} aria-label="Add rule" className="space-y-2.5 px-3 py-3">
+    <form id={RULE_FORM_ID} onSubmit={submit} aria-label={words.label} className="space-y-2.5 px-4 py-3">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <Segmented
-          aria-label="Rule type"
+          aria-label={words.type}
           value={kind}
-          options={KINDS}
+          options={kinds}
           onChange={(next) => {
             setKind(next);
             setPatternError(null);
@@ -123,14 +121,14 @@ export function RuleForm({ activities, apps, onSubmit, onDraftChange, preview, p
           }}
         />
         <span className="text-xs text-muted-foreground">
-          {kind === "app" ? "Everything you do in one app" : "Only when the window title matches"}
+          {words.kindHints[kind]}
         </span>
       </div>
 
       {kind === "app" ? (
         <div>
           <label htmlFor={`${id}-app`} className="mb-1 block text-xs font-medium text-muted-foreground">
-            App
+            {words.app}
           </label>
           <Select
             id={`${id}-app`}
@@ -138,7 +136,7 @@ export function RuleForm({ activities, apps, onSubmit, onDraftChange, preview, p
             onChange={(event) => setAppId(event.target.value)}
             className="w-full"
           >
-            <option value="">{apps.length === 0 ? "No apps seen yet" : "Choose an app…"}</option>
+            <option value="">{apps.length === 0 ? words.noApps : words.chooseApp}</option>
             {appOptionsList}
           </Select>
         </div>
@@ -146,30 +144,29 @@ export function RuleForm({ activities, apps, onSubmit, onDraftChange, preview, p
         <>
           <div className="flex flex-wrap items-center gap-2">
             <Segmented
-              aria-label="How to match the title"
+              aria-label={words.howToMatch}
               value={mode}
-              options={MATCH_MODES}
+              options={modes}
               onChange={(next) => {
                 setMode(next);
                 setPatternError(null);
               }}
             />
-            <HelpTip label="matching window titles">
+            <HelpTip label={words.matchHelpLabel}>
               <p>
-                <strong className="font-medium">Contains text</strong> matches when the window title includes your
-                words, in any upper or lower case. For example, YouTube matches a tab titled &ldquo;Lo-fi mix -
-                YouTube&rdquo;.
+                <strong className="font-medium">{words.containsHelpLead}</strong>
+                {words.containsHelp}
               </p>
               <p className="mt-1.5">
-                <strong className="font-medium">Pattern</strong> is for advanced users: a regular expression, like
-                Figma|Sketch to match either word. Most rules never need it.
+                <strong className="font-medium">{words.patternHelpLead}</strong>
+                {words.patternHelp}
               </p>
             </HelpTip>
           </div>
           <div className="grid gap-2.5 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
             <div>
               <label htmlFor={`${id}-pattern`} className="mb-1 block text-xs font-medium text-muted-foreground">
-                {contains ? "Title contains" : "Title pattern"}
+                {contains ? words.titleContains : words.titlePattern}
               </label>
               <Input
                 id={`${id}-pattern`}
@@ -180,16 +177,14 @@ export function RuleForm({ activities, apps, onSubmit, onDraftChange, preview, p
                 }}
                 aria-invalid={patternError ? true : undefined}
                 aria-describedby={describedBy}
-                placeholder={contains ? "For example, YouTube or Budget 2026" : "For example, Figma|Sketch"}
+                placeholder={contains ? words.containsPlaceholder : words.patternPlaceholder}
                 spellCheck={false}
                 autoCapitalize="off"
                 autoCorrect="off"
                 className={contains ? "w-full" : "w-full font-mono"}
               />
               <p id={patternHintId} className="mt-1 text-xs text-muted-foreground">
-                {contains
-                  ? "Plain words, upper or lower case does not matter."
-                  : "A regular expression; it is case-sensitive unless it starts with (?i)."}
+                {contains ? words.containsHint : words.patternHint}
               </p>
               {patternError && (
                 <p id={patternErrorId} role="alert" className="mt-1 text-xs text-destructive">
@@ -199,7 +194,7 @@ export function RuleForm({ activities, apps, onSubmit, onDraftChange, preview, p
             </div>
             <div>
               <label htmlFor={`${id}-limit`} className="mb-1 block text-xs font-medium text-muted-foreground">
-                Only in
+                {words.onlyIn}
               </label>
               <Select
                 id={`${id}-limit`}
@@ -207,7 +202,7 @@ export function RuleForm({ activities, apps, onSubmit, onDraftChange, preview, p
                 onChange={(event) => setLimitApp(event.target.value)}
                 className="w-full"
               >
-                <option value="">Any app</option>
+                <option value="">{words.anyApp}</option>
                 {appOptionsList}
               </Select>
             </div>
@@ -218,7 +213,7 @@ export function RuleForm({ activities, apps, onSubmit, onDraftChange, preview, p
       <div className="flex flex-wrap items-end gap-2">
         <div className="min-w-40 flex-1">
           <label htmlFor={`${id}-activity`} className="mb-1 block text-xs font-medium text-muted-foreground">
-            Activity
+            {words.activity}
           </label>
           <Select
             id={`${id}-activity`}
@@ -226,26 +221,22 @@ export function RuleForm({ activities, apps, onSubmit, onDraftChange, preview, p
             onChange={(event) => setActivityId(event.target.value === "" ? "" : Number(event.target.value))}
             className="w-full"
           >
-            <option value="">Choose an activity…</option>
+            <option value="">{words.chooseActivity}</option>
             {activities.map((activity) => (
               <option key={activity.id} value={activity.id}>
-                {activityLabel(activity.id, activity.name)}
+                {activityLabel(activity.id, activity.name, t)}
               </option>
             ))}
           </Select>
         </div>
         <Button type="submit" variant="primary" disabled={busy}>
-          Add rule
+          {words.add}
         </Button>
       </div>
       {preview && <RulePreview state={preview} days={previewDays} />}
       {missing && incomplete && (
         <p role="alert" className="text-xs text-destructive">
-          {kind === "app"
-            ? "Choose an app and an activity."
-            : contains
-              ? "Enter the text to look for and choose an activity."
-              : "Enter a pattern and choose an activity."}
+          {kind === "app" ? words.missing.app : contains ? words.missing.contains : words.missing.pattern}
         </p>
       )}
       {formError && (

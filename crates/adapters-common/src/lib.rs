@@ -8,6 +8,7 @@ pub mod diagnostics;
 pub mod fanout;
 pub mod files;
 pub mod idle;
+pub mod locale;
 pub mod permission;
 pub mod sampler;
 pub mod secrets;

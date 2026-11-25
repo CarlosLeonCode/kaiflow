@@ -19,7 +19,7 @@ describe("palette", () => {
   });
 
   it("recognizes a preset case-insensitively", () => {
-    expect(presetFor("#3B82F6")?.name).toBe("Blue");
+    expect(presetFor("#3B82F6")?.key).toBe("blue");
     expect(presetFor("#123456")).toBeUndefined();
   });
 });

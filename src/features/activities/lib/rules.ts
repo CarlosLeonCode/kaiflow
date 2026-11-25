@@ -1,3 +1,4 @@
+import type { Messages } from "@/shared/i18n";
 import type { RuleDto, RuleInputDto, RuleSpecDto } from "@/shared/ipc";
 import { UNASSIGNED_LABEL } from "@/shared/lib/labels";
 
@@ -71,13 +72,14 @@ export function nameProblem(
   return clash ? "duplicate" : null;
 }
 
-export function nameProblemMessage(problem: NameProblem): string {
+export function nameProblemMessage(problem: NameProblem, t: Messages): string {
+  const words = t.activities.form.problems;
   switch (problem) {
     case "empty":
-      return "Give the activity a name.";
+      return words.empty;
     case "too_long":
-      return `Use at most ${MAX_NAME_LENGTH} characters.`;
+      return words.tooLong(MAX_NAME_LENGTH);
     case "duplicate":
-      return "An activity with this name already exists.";
+      return words.duplicate;
   }
 }

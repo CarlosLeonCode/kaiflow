@@ -17,8 +17,8 @@ interface Props {
 export function EmptyState({ title, children, action, className }: Props) {
   return (
     <div className={cn("mx-auto mt-16 max-w-sm text-center", className)}>
-      <h2 className="text-lg font-semibold">{title}</h2>
-      {children && <p className="mt-1 text-muted-foreground">{children}</p>}
+      <h2 className="font-display text-xl font-extrabold tracking-[-0.02em]">{title}</h2>
+      {children && <p className="mt-1.5 text-muted-foreground">{children}</p>}
       {action && (
         <Button className="mt-4" variant="primary" onClick={action.onClick}>
           {action.label}

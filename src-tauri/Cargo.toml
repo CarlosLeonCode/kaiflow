@@ -32,6 +32,10 @@ tauri-plugin-notification = "2.7"
 # Stable 2.x line (3.x is alpha). Rust-only like every plugin: the frontend talks to the
 # `update_check` / `update_install` commands, never to the plugin.
 tauri-plugin-updater = "2.14"
+# The error dialog when Kaiflow cannot start. Tauri's dialog plugin cannot help there: it
+# shows dialogs through the event loop, which never runs when `setup` fails. Already in the
+# tree through tauri-plugin-dialog (same version and features), so nothing new is built.
+rfd = { version = "0.16", default-features = false, features = ["gtk3", "common-controls-v6"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # Local-day bounds for the tray text (the frontend computes its own in JS).

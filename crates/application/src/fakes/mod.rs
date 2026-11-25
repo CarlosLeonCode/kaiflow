@@ -9,7 +9,8 @@ use crossbeam_channel::Sender;
 use domain::{
     Activity, ActivityId, ActivityRule, AssignedSpan, EndReason, FocusEnd, FocusSnapshot,
     FocusSummary, GapId, GapStatus, Goal, GoalEventKind, IdleGap, PermissionState, PrivacyPolicy,
-    Productivity, SeenApp, Segment, SegmentId, SegmentSource, UtcMs,
+    Productivity, Seal, SeenApp, Segment, SegmentId, SegmentSource, StrokeAward, StrokeSource,
+    UtcMs,
 };
 
 use crate::ai::{
@@ -561,6 +562,38 @@ mod tests {
     }
 
     #[test]
+    fn progress_records_each_award_once_under_the_daily_cap() {
+        let progress = FakeProgress::default();
+        for goal in 1..=7 {
+            let award = StrokeAward::GoalMet { goal, day: 3 };
+            let expected = if goal < 7 { 15 } else { 10 };
+            assert_eq!(progress.record(award, 3, UtcMs(goal)), Ok(Some(expected)));
+        }
+        let block = StrokeAward::FocusCompleted { started: UtcMs(1) };
+        assert_eq!(progress.record(block, 3, UtcMs(9)), Ok(Some(0)));
+        assert_eq!(progress.record(block, 3, UtcMs(9)), Ok(None));
+        assert_eq!(progress.day_total(3), Ok(domain::DAILY_CAP));
+        assert_eq!(progress.source_count(StrokeSource::FocusCompleted), Ok(1));
+        progress
+            .record(StrokeAward::BreakTaken { started: UtcMs(2) }, 1, UtcMs(1))
+            .unwrap();
+        assert_eq!(progress.total(), Ok(103));
+        assert_eq!(progress.stroke_days(), Ok(vec![1, 3]));
+        assert_eq!(progress.full_days(), Ok(vec![3]));
+    }
+
+    #[test]
+    fn progress_seals_are_earned_once() {
+        let progress = FakeProgress::default();
+        assert_eq!(progress.add_seal(Seal::FirstFocus, UtcMs(5)), Ok(true));
+        assert_eq!(progress.add_seal(Seal::FirstFocus, UtcMs(6)), Ok(false));
+        progress.mark_seal_seen(Seal::FirstFocus).unwrap();
+        let seals = progress.seals().unwrap();
+        assert_eq!(seals.len(), 1);
+        assert!(seals[0].seen && seals[0].earned_at == UtcMs(5));
+    }
+
+    #[test]
     fn privacy_modes_are_exclusive_per_app() {
         let privacy = FakePrivacy::default();
         privacy.set_mode("x", Some(PrivacyMode::Exclude)).unwrap();
@@ -846,6 +879,136 @@ impl GoalRepository for FakeGoals {
         for e in &mut self.0.lock().unwrap().events {
             if e.goal_id == goal_id {
                 e.seen = true;
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Default)]
+struct Progress {
+    entries: Vec<StrokeEntry>,
+    seals: Vec<EarnedSeal>,
+}
+
+impl Progress {
+    fn day_total(&self, day: i64) -> u32 {
+        self.entries
+            .iter()
+            .filter(|e| e.day == day)
+            .map(|e| e.strokes)
+            .sum()
+    }
+
+    /// Days whose total is at least `min`, ascending.
+    fn days(&self, min: u32) -> Vec<i64> {
+        let mut days: Vec<i64> = self.entries.iter().map(|e| e.day).collect();
+        days.sort_unstable();
+        days.dedup();
+        days.retain(|&day| self.day_total(day) >= min);
+        days
+    }
+}
+
+/// In-memory strokes ledger and seals.
+#[derive(Clone, Default)]
+pub struct FakeProgress(Arc<Mutex<Progress>>);
+
+impl FakeProgress {
+    pub fn entries(&self) -> Vec<StrokeEntry> {
+        self.0.lock().unwrap().entries.clone()
+    }
+}
+
+impl ProgressRepository for FakeProgress {
+    fn record(&self, award: StrokeAward, day: i64, at: UtcMs) -> PortResult<Option<u32>> {
+        let mut p = self.0.lock().unwrap();
+        let key = award.key();
+        if p.entries.iter().any(|e| e.key == key) {
+            return Ok(None);
+        }
+        let strokes = domain::progress::grant(p.day_total(day), award.strokes());
+        p.entries.push(StrokeEntry {
+            key,
+            day,
+            source: award.source(),
+            strokes,
+            earned_at: at,
+        });
+        Ok(Some(strokes))
+    }
+
+    fn day_total(&self, day: i64) -> PortResult<u32> {
+        Ok(self.0.lock().unwrap().day_total(day))
+    }
+
+    fn day_entries(&self, day: i64) -> PortResult<Vec<StrokeEntry>> {
+        let mut entries: Vec<StrokeEntry> = self
+            .0
+            .lock()
+            .unwrap()
+            .entries
+            .iter()
+            .filter(|e| e.day == day)
+            .cloned()
+            .collect();
+        // Stable: insertion order breaks ties, like the row id does in SQLite.
+        entries.sort_by_key(|e| e.earned_at);
+        Ok(entries)
+    }
+
+    fn total(&self) -> PortResult<u64> {
+        Ok(self
+            .0
+            .lock()
+            .unwrap()
+            .entries
+            .iter()
+            .map(|e| u64::from(e.strokes))
+            .sum())
+    }
+
+    fn stroke_days(&self) -> PortResult<Vec<i64>> {
+        Ok(self.0.lock().unwrap().days(1))
+    }
+
+    fn full_days(&self) -> PortResult<Vec<i64>> {
+        Ok(self.0.lock().unwrap().days(domain::DAILY_CAP))
+    }
+
+    fn source_count(&self, source: StrokeSource) -> PortResult<u32> {
+        let p = self.0.lock().unwrap();
+        let n = p.entries.iter().filter(|e| e.source == source).count();
+        Ok(u32::try_from(n).unwrap_or(u32::MAX))
+    }
+
+    fn seals(&self) -> PortResult<Vec<EarnedSeal>> {
+        let mut seals = self.0.lock().unwrap().seals.clone();
+        seals.sort_by(|a, b| {
+            a.earned_at
+                .cmp(&b.earned_at)
+                .then(a.seal.as_str().cmp(b.seal.as_str()))
+        });
+        Ok(seals)
+    }
+
+    fn add_seal(&self, seal: Seal, at: UtcMs) -> PortResult<bool> {
+        let mut p = self.0.lock().unwrap();
+        if p.seals.iter().any(|s| s.seal == seal) {
+            return Ok(false);
+        }
+        p.seals.push(EarnedSeal {
+            seal,
+            earned_at: at,
+            seen: false,
+        });
+        Ok(true)
+    }
+
+    fn mark_seal_seen(&self, seal: Seal) -> PortResult<()> {
+        for s in &mut self.0.lock().unwrap().seals {
+            if s.seal == seal {
+                s.seen = true;
             }
         }
         Ok(())

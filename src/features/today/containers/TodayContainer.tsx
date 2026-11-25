@@ -15,6 +15,7 @@ import {
   useTimelineQuery,
   useTrackingCommandMutation,
 } from "@/shared/ipc";
+import { useT } from "@/shared/i18n";
 import { localDayRange } from "@/shared/lib/time";
 import { useIsDark } from "@/shared/lib/theme";
 
@@ -31,6 +32,7 @@ interface Props {
 /** Wires Today to the backend: report + timeline of the local day, live while recording. */
 export function TodayContainer({ onOpenGoals, onOpenActivities }: Props) {
   const intro = useSectionIntro("today");
+  const t = useT();
   const now = useNow();
   const dayStart = localDayRange(now).from;
   const range = useMemo(() => localDayRange(dayStart), [dayStart]);
@@ -49,8 +51,8 @@ export function TodayContainer({ onOpenGoals, onOpenActivities }: Props) {
   const totalMs = (report.data?.total_ms ?? 0) + elapsed;
 
   const titles = useMemo(() => titleBreakdown(items, range, now), [items, range, now]);
-  const apps = buildAppRows(report.data?.by_app ?? [], open, elapsed, titles);
-  const activities = buildActivityRows(report.data?.by_activity ?? [], open, elapsed, totalMs);
+  const apps = buildAppRows(report.data?.by_app ?? [], open, elapsed, titles, t);
+  const activities = buildActivityRows(report.data?.by_activity ?? [], open, elapsed, totalMs, t);
   const failure = report.error ?? timeline.error;
   const state = status.data?.state;
   const goalElapsed = goals.data ? elapsedSinceFetch(goals.dataUpdatedAt, now, accruing) : 0;
@@ -63,9 +65,9 @@ export function TodayContainer({ onOpenGoals, onOpenActivities }: Props) {
   );
   const emptyAction =
     state === "stopped"
-      ? { label: "Start tracking", onClick: () => tracking.mutate("start") }
+      ? { label: t.tracking.toggle.start, onClick: () => tracking.mutate("start") }
       : state === "paused"
-        ? { label: "Resume tracking", onClick: () => tracking.mutate("resume") }
+        ? { label: t.tracking.toggle.resume, onClick: () => tracking.mutate("resume") }
         : undefined;
 
   return (
@@ -88,7 +90,7 @@ export function TodayContainer({ onOpenGoals, onOpenActivities }: Props) {
       onOpenActivities={onOpenActivities}
       dark={dark}
       loading={report.isPending || timeline.isPending}
-      error={failure ? errorMessage(failure) : null}
+      error={failure ? errorMessage(failure, t) : null}
       items={items}
       apps={apps}
       activities={activities}

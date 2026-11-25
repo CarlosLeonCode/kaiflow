@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-take-main-section"
+description = "Enables the take_main_section command without any pre-configured scope."
+commands.allow = ["take_main_section"]
+
+[[permission]]
+identifier = "deny-take-main-section"
+description = "Denies the take_main_section command without any pre-configured scope."
+commands.deny = ["take_main_section"]

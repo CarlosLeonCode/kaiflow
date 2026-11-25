@@ -11,10 +11,12 @@ import {
   idleFocus,
   mockBackend,
   platform,
+  progress,
   renderWithProviders,
   report,
   status,
 } from "@/test/ipc";
+import { queryKeys } from "@/shared/ipc";
 
 import { TrackingPopoverContainer } from "./TrackingPopoverContainer";
 
@@ -111,7 +113,8 @@ describe("TrackingPopoverContainer", () => {
     renderWithProviders(<TrackingPopoverContainer />);
 
     await user.click(await screen.findByRole("button", { name: "Open dashboard" }));
-    await waitFor(() => expect(calls.some((c) => c.cmd === "open_main_window")).toBe(true));
+    // Where the main window was left: no section.
+    await waitFor(() => expect(calls.find((c) => c.cmd === "open_main_window")?.args).toEqual({ section: null }));
   });
 
   it("shows the degraded banner (R5.3) and opens System Settings from it", async () => {
@@ -182,6 +185,20 @@ describe("TrackingPopoverContainer", () => {
     expect(await screen.findByText("Shortcut Ctrl+Alt+Shift+K is unavailable")).toBeInTheDocument();
     expect(screen.getByText(/from the system tray/)).toBeInTheDocument();
     expect(screen.getByText("This computer is asleep.")).toBeInTheDocument();
+  });
+
+  it("explains that Wayland has no global shortcuts", async () => {
+    mockBackend({
+      platform_info: () => platform("linux", "wayland"),
+      get_status: () =>
+        status({ shortcut: { kind: "unavailable", shortcut: "⌃⌥⇧K", reason: "wayland_session" } }),
+      get_report: () => report(),
+    });
+    renderWithProviders(<TrackingPopoverContainer />);
+
+    expect(await screen.findByText("Shortcut Ctrl+Alt+Shift+K is unavailable")).toBeInTheDocument();
+    expect(screen.getByText(/Wayland sessions do not let apps use global shortcuts\. You can still/)).toBeInTheDocument();
+    expect(screen.queryByText(/wayland_session/)).not.toBeInTheDocument();
   });
 
   it("disables pause while idle or asleep", async () => {
@@ -348,7 +365,7 @@ describe("TrackingPopoverContainer", () => {
       await waitFor(() => expect(calls.map((c) => c.cmd).filter((c) => c.startsWith("focus_p") || c.startsWith("focus_r"))).toEqual(["focus_pause", "focus_resume"]));
     });
 
-    it("starts a timer in one click, with an optional task", async () => {
+    it("starts a timer in one click", async () => {
       const user = userEvent.setup();
       const { calls } = mockBackend({
         get_status: () => status(),
@@ -357,12 +374,11 @@ describe("TrackingPopoverContainer", () => {
       });
       renderWithProviders(<TrackingPopoverContainer />);
 
-      const start = await screen.findByRole("region", { name: "Start a timer" });
-      await user.type(within(start).getByRole("textbox", { name: "Task (optional)" }), "Read the doc");
+      const start = await screen.findByRole("region", { name: "Start focus" });
       await user.click(within(start).getByRole("button", { name: "50 min" }));
       await waitFor(() =>
         expect(calls.filter((c) => c.cmd === "focus_start").map((c) => c.args.start)).toEqual([
-          { kind: "timer", intent: "Read the doc", planned_minutes: 50, allowed: { activity_ids: [], app_ids: [] } },
+          { kind: "timer", intent: "", planned_minutes: 50, allowed: { activity_ids: [], app_ids: [] } },
         ]),
       );
       expect(await screen.findByRole("region", { name: "Active timer" })).toBeInTheDocument();
@@ -419,6 +435,89 @@ describe("TrackingPopoverContainer", () => {
       await screen.findByRole("region", { name: "Top apps today" });
       expect(screen.queryByRole("region", { name: "Active timer" })).not.toBeInTheDocument();
       expect(screen.queryByRole("region", { name: "Start a timer" })).not.toBeInTheDocument();
+    });
+  });
+
+  describe("progress", () => {
+    it("shows the strokes chip, Kai and the moment, and dismisses the moment", async () => {
+      const user = userEvent.setup();
+      let moment: ReturnType<typeof progress>["moment"] = { kind: "seal", seal: "ten_sessions" };
+      const { calls } = mockBackend({
+        get_status: () => status(),
+        get_report: () => report(),
+        get_progress: () => progress({ moment }),
+        dismiss_moment: () => {
+          moment = null;
+          return progress({ moment });
+        },
+        open_main_window: () => null,
+      });
+      const { container } = renderWithProviders(<TrackingPopoverContainer />);
+
+      const chip = await screen.findByRole("button", { name: "+35 today, open Goals" });
+      expect(chip).toHaveAccessibleDescription("35 of 100 strokes today");
+      const kai = container.querySelector("svg[data-pose]");
+      expect(kai).toHaveAttribute("data-pose", "hello");
+      expect(kai).toHaveAttribute("aria-hidden", "true");
+
+      const card = screen.getByRole("region", { name: "New seal: Ten sessions" });
+      expect(card).toHaveTextContent("Ten focus sessions finished.");
+      await user.click(within(card).getByRole("button", { name: "See your seals" }));
+      await waitFor(() => expect(calls.find((c) => c.cmd === "open_main_window")?.args).toEqual({ section: "goals" }));
+
+      await user.click(within(card).getByRole("button", { name: "Dismiss: New seal: Ten sessions" }));
+      await waitFor(() => expect(screen.queryByRole("region", { name: "New seal: Ten sessions" })).toBeNull());
+      expect(calls.find((c) => c.cmd === "dismiss_moment")?.args).toEqual({ moment: { kind: "seal", seal: "ten_sessions" } });
+
+      await user.click(chip);
+      await waitFor(() =>
+        expect(calls.filter((c) => c.cmd === "open_main_window").map((c) => c.args)).toEqual([
+          { section: "goals" },
+          { section: "goals" },
+        ]),
+      );
+    });
+
+    it("draws Kai focusing during a block, resting when paused and done with a full ensō", async () => {
+      mockBackend({
+        get_status: () => status(),
+        get_report: () => report(),
+        focus_status: () => idleFocus({ active: focusActive() }),
+      });
+      const { container, unmount } = renderWithProviders(<TrackingPopoverContainer />);
+      await waitFor(() => expect(container.querySelector("svg[data-pose]")).toHaveAttribute("data-pose", "focus"));
+      unmount();
+
+      mockBackend({ get_status: () => status({ state: "paused", current: null, since: null }), get_report: () => report() });
+      const paused = renderWithProviders(<TrackingPopoverContainer />);
+      await waitFor(() => expect(paused.container.querySelector("svg[data-pose]")).toHaveAttribute("data-pose", "rest"));
+      paused.unmount();
+
+      mockBackend({
+        get_status: () => status(),
+        get_report: () => report(),
+        get_progress: () => progress({ today: { ...progress().today, strokes: 100, done: true } }),
+      });
+      const done = renderWithProviders(<TrackingPopoverContainer />);
+      expect(await screen.findByRole("button", { name: "Done today, open Goals" })).toHaveAccessibleDescription(
+        "Today's ensō is done",
+      );
+      expect(done.container.querySelector("svg[data-pose]")).toHaveAttribute("data-pose", "done");
+    });
+
+    it("hides the chip, Kai and the moment while progress is off", async () => {
+      mockBackend({
+        get_status: () => status(),
+        get_report: () => report(),
+        get_progress: () => progress({ enabled: false, moment: { kind: "seal", seal: "ten_sessions" } }),
+      });
+      const { container, client } = renderWithProviders(<TrackingPopoverContainer />);
+
+      await screen.findByRole("region", { name: "Top apps today" });
+      await waitFor(() => expect(client.getQueryData(queryKeys.progress)).toBeDefined());
+      expect(screen.queryByRole("button", { name: /strokes today/ })).toBeNull();
+      expect(container.querySelector("svg[data-pose]")).toBeNull();
+      expect(screen.queryByRole("region", { name: /New seal/ })).toBeNull();
     });
   });
 });

@@ -3,14 +3,19 @@ import { type ReactNode, useMemo } from "react";
 import {
   errorMessage,
   useGoalsStatusQuery,
+  useFocusStatusQuery,
   useOpenAccessibilitySettingsMutation,
   useOpenMainWindowMutation,
   usePlatformQuery,
+  useProgressQuery,
   useReportQuery,
   useStatusQuery,
   useTrackingCommandMutation,
 } from "@/shared/ipc";
 import { FocusSessionContainer } from "@/features/focus/containers/FocusSessionContainer";
+import { MomentCardContainer } from "@/features/progress/containers/MomentCardContainer";
+import { kaiPose } from "@/features/progress/lib/kai";
+import { useT } from "@/shared/i18n";
 import { osOf } from "@/shared/lib/platform";
 import { localDayRange } from "@/shared/lib/time";
 import { withLiveTime } from "@/features/goals/lib/goals";
@@ -34,12 +39,15 @@ export function TrackingPopoverContainer({ notice }: { notice?: ReactNode }) {
   const openMain = useOpenMainWindowMutation();
   const openSettings = useOpenAccessibilitySettingsMutation();
   const platform = usePlatformQuery();
+  const progress = useProgressQuery();
+  const focusStatus = useFocusStatusQuery();
+  const t = useT();
 
   if (status.isError) {
     return (
       <Alert variant="warning" className="m-4">
         <AlertDescription>
-          Could not read the tracking status: {errorMessage(status.error)}
+          {t.tracking.statusError(errorMessage(status.error, t))}
         </AlertDescription>
       </Alert>
     );
@@ -48,6 +56,9 @@ export function TrackingPopoverContainer({ notice }: { notice?: ReactNode }) {
   const accruing = isAccruing(data?.state);
   const elapsed = report.data ? elapsedSinceFetch(report.dataUpdatedAt, now, accruing) : 0;
   const reportTotal = report.data?.total_ms;
+  const today = progress.data?.enabled ? progress.data.today : null;
+  // The strokes chip and the moment link open Goals, on the progress panel.
+  const openGoals = () => openMain.mutate("goals");
 
   return (
     <TrackingPopover
@@ -69,8 +80,18 @@ export function TrackingPopoverContainer({ notice }: { notice?: ReactNode }) {
       togglePending={toggle.isPending}
       notice={notice}
       focus={<FocusSessionContainer variant="popover" />}
+      progress={
+        today && {
+          strokes: today.strokes,
+          cap: today.cap,
+          done: today.done,
+          pose: kaiPose({ done: today.done, block: focusStatus.data?.active ?? null, tracking: data?.state ?? "stopped" }),
+        }
+      }
+      moment={<MomentCardContainer onOpen={openGoals} />}
+      onOpenGoals={openGoals}
       onToggle={(command) => toggle.mutate(command)}
-      onOpenDashboard={() => openMain.mutate()}
+      onOpenDashboard={() => openMain.mutate(null)}
       onOpenAccessibilitySettings={() => openSettings.mutate()}
     />
   );

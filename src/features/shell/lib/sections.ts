@@ -1,16 +1,23 @@
 import type { OsDto } from "@/shared/ipc";
 
-/** Dashboard sections in sidebar order; the digit is the ⌘ (Ctrl off macOS) shortcut. */
+/** Sidebar groups, in order: daily work first, looking back next, setup last. Labels live in `shell.groups`. */
+export const SECTION_GROUPS = ["daily", "look-back", "setup"] as const;
+
+export type SectionGroupId = (typeof SECTION_GROUPS)[number];
+
+/**
+ * Dashboard sections in sidebar order; the digit is the ⌘ (Ctrl off macOS) shortcut. Labels
+ * live in `shell.sections` of the UI messages.
+ */
 export const SECTIONS = [
-  { id: "today", label: "Today", digit: "1" },
-  { id: "overview", label: "Overview", digit: "2" },
-  { id: "goals", label: "Goals", digit: "3" },
-  { id: "focus", label: "Focus", digit: "4" },
-  { id: "review", label: "Review", digit: "5" },
-  { id: "activities", label: "Activities", digit: "6" },
-  { id: "privacy", label: "Privacy", digit: "7" },
-  { id: "settings", label: "Settings", digit: "8" },
-] as const;
+  { id: "today", digit: "1", group: "daily" },
+  { id: "focus", digit: "2", group: "daily" },
+  { id: "goals", digit: "3", group: "daily" },
+  { id: "insights", digit: "4", group: "look-back" },
+  { id: "activities", digit: "5", group: "setup" },
+  { id: "privacy", digit: "6", group: "setup" },
+  { id: "settings", digit: "7", group: "setup" },
+] as const satisfies readonly { id: string; digit: string; group: SectionGroupId }[];
 
 export type SectionId = (typeof SECTIONS)[number]["id"];
 
@@ -32,7 +39,7 @@ function plainCommand(event: ShortcutEvent, os: OsDto): boolean {
   return primary && !other && !event.altKey && !event.shiftKey;
 }
 
-/** ⌘1 to ⌘8 (Ctrl+1 to Ctrl+8 off macOS) select a section; any other key is not ours. */
+/** ⌘1 to ⌘7 (Ctrl+1 to Ctrl+7 off macOS) select a section; any other key is not ours. */
 export function sectionForShortcut(event: ShortcutEvent, os: OsDto = "macos"): SectionId | null {
   if (!plainCommand(event, os)) return null;
   return SECTIONS.find((section) => section.digit === event.key)?.id ?? null;

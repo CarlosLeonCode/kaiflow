@@ -10,7 +10,7 @@ checksum = "fe438c63458706e03479442743baae6c88256498e6431708f6dfc520a26515d3"
 
 [[package]]
 name = "adapters-ai"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "application",
  "reqwest",
@@ -20,13 +20,14 @@ dependencies = [
 
 [[package]]
 name = "adapters-common"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "apple-native-keyring-store",
  "application",
  "crossbeam-channel",
  "domain",
  "keyring-core",
+ "sys-locale",
  "tempfile",
  "windows-native-keyring-store",
  "zbus-secret-service-keyring-store",
@@ -34,7 +35,7 @@ dependencies = [
 
 [[package]]
 name = "adapters-linux"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "adapters-common",
  "application",
@@ -46,7 +47,7 @@ dependencies = [
 
 [[package]]
 name = "adapters-macos"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "adapters-common",
  "application",
@@ -64,7 +65,7 @@ dependencies = [
 
 [[package]]
 name = "adapters-sqlite"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "application",
  "domain",
@@ -75,7 +76,7 @@ dependencies = [
 
 [[package]]
 name = "adapters-windows"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "adapters-common",
  "application",
@@ -153,7 +154,7 @@ dependencies = [
 
 [[package]]
 name = "application"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "crossbeam-channel",
  "domain",
@@ -1181,7 +1182,7 @@ dependencies = [
 
 [[package]]
 name = "domain"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "proptest",
  "regex",
@@ -2424,7 +2425,7 @@ dependencies = [
 
 [[package]]
 name = "kaiflow"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "adapters-ai",
  "adapters-common",
@@ -2441,6 +2442,7 @@ dependencies = [
  "objc2-app-kit",
  "objc2-foundation",
  "objc2-user-notifications",
+ "rfd",
  "serde",
  "serde_json",
  "specta",
@@ -4503,6 +4505,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.9",
+]
+
+[[package]]
+name = "sys-locale"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8eab9a99a024a169fe8a903cf9d4a3b3601109bcc13bd9e3c6fff259138626c4"
+dependencies = [
+ "libc",
 ]
 
 [[package]]

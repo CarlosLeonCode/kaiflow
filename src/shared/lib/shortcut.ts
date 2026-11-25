@@ -1,3 +1,4 @@
+import { en, type Messages } from "@/shared/i18n/en";
 import type { OsDto } from "@/shared/ipc";
 
 /**
@@ -18,6 +19,17 @@ export const PC_DEFAULT_SHORTCUT = "⌃⌥⇧K";
 
 export function defaultShortcut(os: OsDto): string {
   return os === "macos" ? MACOS_DEFAULT_SHORTCUT : PC_DEFAULT_SHORTCUT;
+}
+
+/**
+ * Reason the backend gives when the session cannot have global shortcuts at all (Linux on
+ * Wayland). Mirrors `shortcuts::WAYLAND_SESSION`; every other reason is the OS's own text.
+ */
+export const SHORTCUT_REASON_WAYLAND = "wayland_session";
+
+/** Why a shortcut is unavailable, in the active language (`useT()`) when the backend gave a code. */
+export function shortcutReason(reason: string, t: Messages = en): string {
+  return reason === SHORTCUT_REASON_WAYLAND ? t.platform.waylandShortcut : reason;
 }
 
 export interface KeyLike {

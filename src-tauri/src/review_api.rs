@@ -1,7 +1,7 @@
 //! Use cases behind the weekly review and AI commands, expressed on `AppState` like `api.rs`.
 //! API keys only ever go in (`ai_set_key`); nothing here returns one.
 
-use application::review::MondayReview;
+use application::review::{MondayReview, ReviewError};
 
 use crate::composition::AppState;
 use crate::error::AppError;
@@ -45,13 +45,30 @@ impl AppState {
         Ok(self.review.has_key(provider.into())?)
     }
 
+    /// The error as the user reads it: a provider failure is worded in the interface
+    /// language (its `reason` stays a machine code); the rest maps as usual.
+    fn review_error(&self, error: ReviewError) -> AppError {
+        match error {
+            ReviewError::Ai(error) => AppError::Ai {
+                reason: (&error).into(),
+                message: (crate::i18n::messages(self.language.current()).ai_error)(&error),
+            },
+            other => other.into(),
+        }
+    }
+
     pub fn ai_test(&self, provider: AiProviderDto) -> Result<u32, AppError> {
-        let models = self.review.test(provider.into())?;
+        let models = self
+            .review
+            .test(provider.into())
+            .map_err(|e| self.review_error(e))?;
         Ok(u32::try_from(models).unwrap_or(u32::MAX))
     }
 
     pub fn ai_models_list(&self, provider: AiProviderDto) -> Result<Vec<String>, AppError> {
-        Ok(self.review.models(provider.into())?)
+        self.review
+            .models(provider.into())
+            .map_err(|e| self.review_error(e))
     }
 
     pub fn review_get(&self, weeks_ago: u32) -> Result<WeeklyReviewDto, AppError> {
@@ -75,7 +92,11 @@ impl AppState {
     }
 
     pub fn review_run(&self, preview_id: &str) -> Result<AiReviewDto, AppError> {
-        Ok(self.review.run(preview_id, self.now())?.into())
+        Ok(self
+            .review
+            .run(preview_id, self.now())
+            .map_err(|e| self.review_error(e))?
+            .into())
     }
 
     pub fn review_cancel(&self) {
@@ -99,9 +120,11 @@ impl AppState {
         Ok(u32::try_from(deleted).unwrap_or(u32::MAX))
     }
 
-    /// The scheduled Monday review (a no-op unless the user switched it on).
+    /// The scheduled Monday review (a no-op unless the user switched it on), written in the
+    /// interface language like the reviews the user runs from the window.
     pub fn run_monday_review(&self) -> MondayReview {
-        self.review.run_monday_review("English", self.now())
+        self.review
+            .run_monday_review(self.language.current().name(), self.now())
     }
 }
 
@@ -146,6 +169,7 @@ mod tests {
                 provider: Arc::new(ai.clone()),
                 secrets: Arc::new(secrets.clone()),
             },
+            application::language::UiLanguage::default(),
         )
         .unwrap();
         Rig {
@@ -374,6 +398,66 @@ mod tests {
         switch_on(&rig, AiProviderDto::Anthropic);
         assert_eq!(rig.state.run_monday_review(), MondayReview::NotDue);
         assert_eq!(rig.ai.traffic(), 0);
+        rig.state.shutdown();
+    }
+
+    #[test]
+    fn provider_failures_are_worded_in_the_interface_language() {
+        let rig = rig();
+        rig.state
+            .ai_set_key(AiProviderDto::OpenAi, "sk-openai-key-123")
+            .unwrap();
+        switch_on(&rig, AiProviderDto::OpenAi);
+        rig.ai
+            .answer_with(Err(application::ai::AiError::Unauthorized));
+        rig.state.language.set("es");
+        let preview = rig.state.review_preview(0, false, "Español").unwrap();
+        match rig.state.review_run(&preview.id) {
+            Err(AppError::Ai { reason, message }) => {
+                assert_eq!(reason, crate::ipc::ai_dto::AiFailureDto::Unauthorized);
+                assert_eq!(
+                    message,
+                    "El proveedor rechazó la clave de API. Revísala y vuelve a guardarla."
+                );
+            }
+            other => panic!("expected an AI failure, got {other:?}"),
+        }
+        rig.ai.list_with(Err(application::ai::AiError::Offline));
+        rig.state.language.set("en");
+        match rig.state.ai_models_list(AiProviderDto::OpenAi) {
+            Err(AppError::Ai { message, .. }) => {
+                assert_eq!(message, application::ai::AiError::Offline.to_string());
+            }
+            other => panic!("expected an AI failure, got {other:?}"),
+        }
+        rig.state.shutdown();
+    }
+
+    #[test]
+    fn the_monday_review_is_written_in_the_interface_language() {
+        let rig = rig();
+        rig.state
+            .ai_set_key(AiProviderDto::Anthropic, "sk-ant-api-key-123")
+            .unwrap();
+        switch_on(&rig, AiProviderDto::Anthropic);
+        rig.state
+            .ai_settings_update(AiSettingsPatchDto {
+                selected: None,
+                include_titles: None,
+                monday_review: Some(true),
+                provider: None,
+            })
+            .unwrap();
+        rig.ai.answer_with(Ok(ANSWER.into()));
+        rig.state.language.set("es");
+        assert!(matches!(
+            rig.state.run_monday_review(),
+            MondayReview::Done(_)
+        ));
+        let calls = rig.ai.calls();
+        let system = &calls[0].request.as_ref().unwrap().system;
+        assert!(system.contains("Write every text in Español."), "{system}");
+        assert!(!system.contains("English"), "{system}");
         rig.state.shutdown();
     }
 }
