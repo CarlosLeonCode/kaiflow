@@ -30,7 +30,7 @@ pub mod updater;
 pub mod windows;
 
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use specta_typescript::Typescript;
 use tauri::{AppHandle, Manager, RunEvent, Wry};
@@ -62,7 +62,10 @@ pub fn run() {
         eprintln!("could not export bindings.ts: {error}");
     }
 
-    let app = tauri::Builder::default()
+    // Where a failed `setup` was logged, for the error dialog.
+    let startup_log: Arc<OnceLock<PathBuf>> = Arc::default();
+    let setup_log = startup_log.clone();
+    let built = tauri::Builder::default()
         // Single-instance must be the first plugin (R6.4): a second launch focuses the
         // running app instead of starting another engine.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -80,82 +83,20 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(builder.invoke_handler())
         .setup(move |app| {
-            builder.mount_events(app);
-
-            // Menu-bar agent: no Dock icon (also set via `LSUIElement` in Info.plist).
-            #[cfg(target_os = "macos")]
-            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
-
-            let handle = app.handle().clone();
-            let data_dir = app.path().app_data_dir()?;
-            // Privacy-safe log (never window titles): `diagnostics.log` next to the DB. A
-            // Windows release has no console, so failures are written there too.
-            let diagnostics = adapters_common::diagnostics::Diagnostics::in_dir(&data_dir);
-            carry_over_legacy_data(&data_dir, &diagnostics);
-            let shortcut = AppState::default_shortcut();
-            // `setup` runs on the main thread, where the AppKit observers must be created.
-            let language = composition::native_language();
-            let providers = platform::providers(&handle, &diagnostics, &language);
-            let degraded_reason = providers.permission.degraded_reason().into();
-            let state = Arc::new(compose(
-                &data_dir.join(DB_FILE),
-                Box::new(event_sink::tauri_sink(
-                    &handle,
-                    shortcut.clone(),
-                    degraded_reason,
-                )),
-                shortcut.clone(),
-                providers,
-                AiPorts::native(),
-                language,
-            )?);
-            state.set_diagnostics(diagnostics);
-            let settings = state.commands.get_settings()?;
-            app.manage(state.clone());
-            app.manage(updater::UpdaterState::default());
-            app.manage(windows::PendingSection::default());
-
-            windows::create_all(
-                &handle,
-                !settings.onboarding_completed,
-                i18n::messages(state.language.current()),
-            )?;
-            tray::install(&handle)?;
-            let tray_text = tray_text::TrayText::spawn(&handle);
-            app.manage(tray_text.clone());
-            app.manage(backup_worker::BackupWorker::spawn(&handle, state.clone()));
-            app.manage(review_worker::ReviewWorker::spawn(&handle, state.clone()));
-            let goal_watcher = goal_watcher::GoalWatcher::spawn(&handle, state.language.clone());
-            app.manage(goal_watcher.clone());
-            let focus_watcher = focus_watcher::FocusWatcher::spawn(&handle, state.language.clone());
-            app.manage(focus_watcher.clone());
-            apply_outside_settings(
-                &handle,
-                &state,
-                &shortcut,
-                &settings,
-                tray_text,
-                goal_watcher,
-                focus_watcher,
-            );
-            updater::spawn_schedule(&handle);
-            #[cfg(debug_assertions)]
-            debug_focus::start_from_env(&handle, &state);
-
-            // Spec R6.3 scenario: after login the app registers on its own. Before the
-            // onboarding is done there is no permission yet, so tracking waits for it.
-            if settings.onboarding_completed
-                && let Err(error) = state.start()
+            let result = setup(app, &builder);
+            if let Err(error) = &result
+                && let Some(log) = record_startup_failure(app, error.as_ref())
             {
-                state.diagnostics().record_failure(
-                    "startup",
-                    &format!("could not start tracking at launch: {error}"),
-                );
+                let _ = setup_log.set(log);
             }
-            Ok(())
+            result
         })
-        .build(tauri::generate_context!())
-        .expect("error while building the Tauri application");
+        .build(tauri::generate_context!());
+    // Without a console (Windows release) a failed start would just vanish: say so instead.
+    let app = match built {
+        Ok(app) => app,
+        Err(error) => fail_to_start(&error, startup_log.get().map(PathBuf::as_path)),
+    };
 
     app.run(|handle, event| match event {
         // Closing every window must not quit a menu-bar app; only an explicit exit does.
@@ -184,6 +125,116 @@ pub fn run() {
         }
         _ => {}
     });
+}
+
+/// Composes the app: adapters, engine, state, windows, tray and background workers. Runs on
+/// the main thread, where the AppKit observers must be created. An error ends the startup
+/// (see [`fail_to_start`]).
+fn setup(
+    app: &mut tauri::App<Wry>,
+    builder: &tauri_specta::Builder<Wry>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    builder.mount_events(app);
+
+    // Menu-bar agent: no Dock icon (also set via `LSUIElement` in Info.plist).
+    #[cfg(target_os = "macos")]
+    app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+
+    let handle = app.handle().clone();
+    let data_dir = app.path().app_data_dir()?;
+    // Privacy-safe log (never window titles): `diagnostics.log` next to the DB. A
+    // Windows release has no console, so failures are written there too.
+    let diagnostics = adapters_common::diagnostics::Diagnostics::in_dir(&data_dir);
+    carry_over_legacy_data(&data_dir, &diagnostics);
+    let shortcut = AppState::default_shortcut();
+    // `setup` runs on the main thread, where the AppKit observers must be created.
+    let language = composition::native_language();
+    let providers = platform::providers(&handle, &diagnostics, &language);
+    let degraded_reason = providers.permission.degraded_reason().into();
+    let state = Arc::new(compose(
+        &data_dir.join(DB_FILE),
+        Box::new(event_sink::tauri_sink(
+            &handle,
+            shortcut.clone(),
+            degraded_reason,
+        )),
+        shortcut.clone(),
+        providers,
+        AiPorts::native(),
+        language,
+    )?);
+    state.set_diagnostics(diagnostics);
+    let settings = state.commands.get_settings()?;
+    app.manage(state.clone());
+    app.manage(updater::UpdaterState::default());
+    app.manage(windows::PendingSection::default());
+
+    windows::create_all(
+        &handle,
+        !settings.onboarding_completed,
+        i18n::messages(state.language.current()),
+    )?;
+    tray::install(&handle)?;
+    let tray_text = tray_text::TrayText::spawn(&handle);
+    app.manage(tray_text.clone());
+    app.manage(backup_worker::BackupWorker::spawn(&handle, state.clone()));
+    app.manage(review_worker::ReviewWorker::spawn(&handle, state.clone()));
+    let goal_watcher = goal_watcher::GoalWatcher::spawn(&handle, state.language.clone());
+    app.manage(goal_watcher.clone());
+    let focus_watcher = focus_watcher::FocusWatcher::spawn(&handle, state.language.clone());
+    app.manage(focus_watcher.clone());
+    apply_outside_settings(
+        &handle,
+        &state,
+        &shortcut,
+        &settings,
+        tray_text,
+        goal_watcher,
+        focus_watcher,
+    );
+    updater::spawn_schedule(&handle);
+    #[cfg(debug_assertions)]
+    debug_focus::start_from_env(&handle, &state);
+
+    // Spec R6.3 scenario: after login the app registers on its own. Before the
+    // onboarding is done there is no permission yet, so tracking waits for it.
+    if settings.onboarding_completed
+        && let Err(error) = state.start()
+    {
+        state.diagnostics().record_failure(
+            "startup",
+            &format!("could not start tracking at launch: {error}"),
+        );
+    }
+    Ok(())
+}
+
+/// Writes a failed startup to `diagnostics.log`; the path of the log when there is a data
+/// directory to hold it.
+fn record_startup_failure(app: &tauri::App<Wry>, error: &dyn std::error::Error) -> Option<PathBuf> {
+    let Ok(data_dir) = app.path().app_data_dir() else {
+        eprintln!("Kaiflow could not start: {error}");
+        return None;
+    };
+    let diagnostics = adapters_common::diagnostics::Diagnostics::in_dir(&data_dir);
+    diagnostics.record_failure("startup", &format!("Kaiflow could not start: {error}"));
+    diagnostics.path().map(std::path::Path::to_path_buf)
+}
+
+/// Kaiflow cannot run (the database, a window or the tray could not be created): a native
+/// dialog says so in plain words, in the system language, then the process exits with code 1.
+/// The dialog does not need the event loop, which never runs after a failed `setup`.
+fn fail_to_start(error: &tauri::Error, log: Option<&std::path::Path>) -> ! {
+    eprintln!("Kaiflow could not start: {error}");
+    let m = i18n::messages(composition::native_language().current());
+    let log = log.map(|path| path.display().to_string());
+    let _ = rfd::MessageDialog::new()
+        .set_level(rfd::MessageLevel::Error)
+        .set_title(m.startup_failed_title)
+        .set_description((m.startup_failed_body)(&error.to_string(), log.as_deref()))
+        .set_buttons(rfd::MessageButtons::Ok)
+        .show();
+    std::process::exit(1);
 }
 
 /// WebKitGTK's DMA-BUF renderer shows blank white windows with NVIDIA drivers and on some

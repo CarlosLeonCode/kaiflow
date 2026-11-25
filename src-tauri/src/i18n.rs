@@ -26,6 +26,10 @@ pub struct Messages {
     pub onboarding_window_title: &'static str,
     /// File type shown in the open dialog of a restore.
     pub restore_file_filter: &'static str,
+    /// Title of the error dialog shown when Kaiflow cannot start.
+    pub startup_failed_title: &'static str,
+    /// Its text: the error `details` and, when it could be written, the `log` file path.
+    pub startup_failed_body: fn(details: &str, log: Option<&str>) -> String,
 
     // ---- idle return ----
     pub idle_title: &'static str,
@@ -84,6 +88,17 @@ pub static EN: Messages = Messages {
 
     onboarding_window_title: "Welcome to Kaiflow",
     restore_file_filter: "Kaiflow backup or export",
+    startup_failed_title: "Kaiflow could not start",
+    startup_failed_body: |details, log| {
+        let mut text = format!(
+            "Something went wrong while Kaiflow was starting, so it will close. Try opening it \
+             again; if this keeps happening, report it with these details.\n\nDetails: {details}"
+        );
+        if let Some(log) = log {
+            text.push_str(&format!("\n\nThe details were also saved to {log}."));
+        }
+        text
+    },
 
     idle_title: "Welcome back",
     idle_body: |minutes| {
@@ -144,6 +159,17 @@ pub static ES: Messages = Messages {
 
     onboarding_window_title: "Te damos la bienvenida a Kaiflow",
     restore_file_filter: "Copia de seguridad o exportación de Kaiflow",
+    startup_failed_title: "Kaiflow no pudo iniciarse",
+    startup_failed_body: |details, log| {
+        let mut text = format!(
+            "Algo falló mientras Kaiflow se iniciaba, así que se cerrará. Vuelve a abrirlo; si \
+             sigue pasando, repórtalo con estos detalles.\n\nDetalles: {details}"
+        );
+        if let Some(log) = log {
+            text.push_str(&format!("\n\nLos detalles también se guardaron en {log}."));
+        }
+        text
+    },
 
     idle_title: "Hola de nuevo",
     idle_body: |minutes| {
@@ -282,6 +308,11 @@ mod tests {
                 m.onboarding_window_title.to_owned(),
             ),
             ("restore_file_filter", m.restore_file_filter.to_owned()),
+            ("startup_failed_title", m.startup_failed_title.to_owned()),
+            (
+                "startup_failed_body",
+                (m.startup_failed_body)("database: disk I/O error", Some("/data/diagnostics.log")),
+            ),
             ("idle_title", m.idle_title.to_owned()),
             ("idle_body", (m.idle_body)(7)),
             ("revoked_title", m.revoked_title.to_owned()),
@@ -316,6 +347,18 @@ mod tests {
                 .map(|error| ("ai_error", (m.ai_error)(error))),
         );
         all
+    }
+
+    #[test]
+    fn the_startup_failure_shows_the_details_and_the_log_only_when_it_was_written() {
+        for m in [&EN, &ES] {
+            let with_log = (m.startup_failed_body)("database: locked", Some("/d/diagnostics.log"));
+            assert!(with_log.contains("database: locked"), "{with_log}");
+            assert!(with_log.contains("/d/diagnostics.log"), "{with_log}");
+            let without = (m.startup_failed_body)("database: locked", None);
+            assert!(without.contains("database: locked"), "{without}");
+            assert!(!without.contains("diagnostics"), "{without}");
+        }
     }
 
     #[test]
