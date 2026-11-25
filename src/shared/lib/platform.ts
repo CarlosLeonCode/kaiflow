@@ -15,6 +15,14 @@ export function osOf(platform: PlatformInfoDto | undefined): OsDto {
   return platform?.os ?? DEFAULT_PLATFORM.os;
 }
 
+/**
+ * macOS gives the dashboard an overlay title bar (traffic lights over the sidebar, headers as
+ * the drag area); Windows and Linux keep their native title bar.
+ */
+export function hasOverlayTitleBar(os: OsDto): boolean {
+  return os === "macos";
+}
+
 /** Linux on Wayland: the active window cannot be observed (idle, lock and sleep still work). */
 export function isWayland(platform: PlatformInfoDto | undefined): boolean {
   return platform?.os === "linux" && platform.session === "wayland";

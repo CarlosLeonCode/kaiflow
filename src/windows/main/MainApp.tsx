@@ -15,7 +15,8 @@ import { TodayContainer } from "@/features/today/containers/TodayContainer";
 import { degradedLabel, stateLabel } from "@/features/tracking/lib/derive";
 import { useT } from "@/shared/i18n";
 import { usePlatformQuery, useStatusQuery } from "@/shared/ipc";
-import { osOf } from "@/shared/lib/platform";
+import { hasOverlayTitleBar, osOf } from "@/shared/lib/platform";
+import { OverlayTitleBarContext } from "@/shared/ui/title-bar";
 
 interface SectionViewProps {
   section: SectionId;
@@ -72,27 +73,30 @@ export function MainApp() {
   const t = useT();
 
   return (
-    <div className="flex h-full">
-      <Sidebar
-        active={section}
-        onSelect={select}
-        os={os}
-        status={
-          status.data
-            ? {
-                label: status.data.degraded ? degradedLabel(status.data.degraded_reason, t) : stateLabel(status.data.state, t),
-                running: status.data.state === "running",
-                degraded: status.data.degraded,
-              }
-            : null
-        }
-      />
-      <main aria-label={t.shell.dashboard} className="flex min-w-0 flex-1 flex-col bg-background">
-        <BackupNoticeContainer />
-        <div className="min-h-0 flex-1">
-          <SectionView section={section} onNavigate={select} revealProgress={revealProgress} />
-        </div>
-      </main>
-    </div>
+    // Page headers are the drag area only under macOS's overlay title bar.
+    <OverlayTitleBarContext value={hasOverlayTitleBar(os)}>
+      <div className="flex h-full">
+        <Sidebar
+          active={section}
+          onSelect={select}
+          os={os}
+          status={
+            status.data
+              ? {
+                  label: status.data.degraded ? degradedLabel(status.data.degraded_reason, t) : stateLabel(status.data.state, t),
+                  running: status.data.state === "running",
+                  degraded: status.data.degraded,
+                }
+              : null
+          }
+        />
+        <main aria-label={t.shell.dashboard} className="flex min-w-0 flex-1 flex-col bg-background">
+          <BackupNoticeContainer />
+          <div className="min-h-0 flex-1">
+            <SectionView section={section} onNavigate={select} revealProgress={revealProgress} />
+          </div>
+        </main>
+      </div>
+    </OverlayTitleBarContext>
   );
 }

@@ -35,6 +35,19 @@ test.describe("main window shell", () => {
     await expectNoA11yViolations(page);
   });
 
+  test("only macOS reserves a title strip and drag regions for its overlay title bar", async ({ page }) => {
+    await openWindow(page, "main");
+    await expect(page.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
+    await expect(page.locator("header[data-tauri-drag-region]")).toHaveCount(1);
+    await expect(page.getByTestId("title-bar-strip")).toHaveCount(1);
+
+    // Windows and Linux draw a native title bar: no empty strip, and the header does not drag.
+    await openWindow(page, "main", "?os=windows");
+    await expect(page.getByRole("heading", { level: 1, name: "Today" })).toBeVisible();
+    await expect(page.getByTestId("title-bar-strip")).toHaveCount(0);
+    await expect(page.locator("[data-tauri-drag-region]")).toHaveCount(0);
+  });
+
   test("a dismissed section intro stays dismissed and does not affect other sections", async ({ page }) => {
     await openWindow(page, "main");
     const todayIntro = page.getByRole("complementary", { name: "About Your day so far" });

@@ -2,6 +2,7 @@ import { CalendarDays, ChartNoAxesColumn, Settings, ShieldCheck, Tags, Target, T
 
 import { useT } from "@/shared/i18n";
 import type { OsDto } from "@/shared/ipc";
+import { hasOverlayTitleBar } from "@/shared/lib/platform";
 import { cn } from "@/shared/lib/utils";
 import { Kbd } from "@/shared/ui/kbd";
 
@@ -27,14 +28,20 @@ interface Props {
 }
 
 /**
- * Left navigation, in three labelled groups (Daily, Look back, Setup). The top strip is the draggable title area: the traffic lights float over
- * it (overlay title bar), so it is 44 px tall and carries no controls.
+ * Left navigation, in three labelled groups (Daily, Look back, Setup). On macOS the top strip is
+ * the draggable title area: the traffic lights float over it (overlay title bar), so it is 44 px
+ * tall and carries no controls. Windows and Linux have a native title bar above the sidebar, so
+ * the strip is only a small top margin there.
  */
 export function Sidebar({ active, onSelect, status, os = "macos" }: Props) {
   const t = useT();
   return (
     <aside className="flex h-full w-52 shrink-0 flex-col border-r border-border bg-paper-surface">
-      <div data-tauri-drag-region className="h-11 shrink-0" />
+      {hasOverlayTitleBar(os) ? (
+        <div data-tauri-drag-region data-testid="title-bar-strip" className="h-11 shrink-0" />
+      ) : (
+        <div className="h-3 shrink-0" />
+      )}
       <nav aria-label={t.shell.nav} className="flex-1 space-y-3 px-2">
         {SECTION_GROUPS.map((group) => {
           const headingId = `sidebar-group-${group}`;
